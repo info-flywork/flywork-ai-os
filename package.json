@@ -1,0 +1,51 @@
+{
+  "name": "flywork-ai-os-clean",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start -H 127.0.0.1 -p 3010",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:status": "prisma migrate status",
+    "db:deploy": "prisma migrate deploy",
+    "backup": "sh scripts/backup-database.sh",
+    "check:production": "JITI_TSCONFIG_PATHS=true jiti scripts/checkProductionEnv.ts",
+    "admin:create": "JITI_TSCONFIG_PATHS=true jiti scripts/createAdmin.ts",
+    "automation:worker": "JITI_TSCONFIG_PATHS=true jiti scripts/automationWorker.ts",
+    "telegram:webhook": "JITI_TSCONFIG_PATHS=true jiti scripts/registerTelegramWebhook.ts"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.100",
+    "@prisma/adapter-mariadb": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "exceljs": "^4.4.0",
+    "jose": "^6.2.13",
+    "lucide-react": "^1.61.0",
+    "mariadb": "^3.5.4",
+    "next": "16.4.2",
+    "pdfjs-dist": "^5.4.296",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.2",
+    "jiti": "^2.7.0",
+    "jsdom": "^30.1.3",
+    "prisma": "^7.10.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5",
+    "vitest": "^5.0.4"
+  }
+}

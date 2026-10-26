@@ -1,0 +1,930 @@
+{
+  "sourceSite": "https://adilesultanevyemekleri.com/",
+  "menuSite": "https://siparis.adilesultanevyemekleri.com/",
+  "dishes": [
+    "KURU FASULYE",
+    "NOHUT",
+    "TÜRLÜ",
+    "BEZELYE",
+    "TEREYAĞLI İSPİR KURU FASULYE",
+    "BEĞENDİ YATAĞINDA MANGALDA TAVUK",
+    "BULGUR PİLAVI ÜSTÜ MANGALDA TAVUK",
+    "IZGARA TAVUK VE KARIŞIK SEBZE",
+    "MANGALDA TAVUK VE PİRİNÇ PİLAVI",
+    "IZGARA TAVUK VE SEBZE SOTE",
+    "MANGALDA TAVUK VE KÖZ DOMATES SOSLU PENNE",
+    "ACI SOSLU TAVUK VE PENNE MAKARNA (+19,90)",
+    "ADİLE SULTANDAN ÖZEL SOSLU TAVUK VE PENNE MAKARNA (+19,90)",
+    "ADİLE SULTANDAN ÖZEL SOSLU TAVUK VE ISPANAK KAVURMA (+19,90)",
+    "BAHARATLI TEREYAĞLI TAVUK VE PATATES PÜRESİ (+19,90)",
+    "KÖRİ SOSLU TAVUK VE PENNE MAKARNA (+19,90)",
+    "MANTAR SOSLU TAVUK VE PENNE MAKARNA (+19,90)",
+    "TAVUK SOTE VE KAŞARLI PATATES PÜRESİ (+19,90)",
+    "TAVUK SOTE VE ŞEHRİYELİ PİRİNÇ PİLAVI (+19,90)",
+    "DUBLE IZGARA TAVUK VE KARIŞIK SEBZE",
+    "DUBLE IZGARA TAVUK VE SEBZE SOTE",
+    "BULGUR PİLAV ÜSTÜ MANGALDA DUBLE TAVUK",
+    "MANGALDA DUBLE TAVUK VE PİRİNÇ PİLAVI",
+    "HİNDİ TANDIR VE BUHARDA SEBZE",
+    "BEĞENDİ YATAĞINDA HİNDİ TANDIR",
+    "BEĞENDİLİ MANGALDA KÖFTE",
+    "PÜRE YATAĞINDA KADINBUDU KÖFTE",
+    "IZGARA KÖFTE VE BUHARDA SEBZELER",
+    "MANGALDA KÖFTE VE KÖZ DOMATES SOSLU PENNE",
+    "KIYMALI LAZANYA",
+    "MANGALDA KÖFTE VE ŞEHRİYELİ PİRİNÇ PİLAVI",
+    "PÜRE YATAĞINDA MANGALDA KÖFTE",
+    "İZMİR KÖFTE",
+    "KARIŞIK IZGARA VE BULGUR PİLAVI",
+    "ORMAN KEBABI",
+    "ÖZBEK EV MANTISI + YOĞURT",
+    "KAYSERİ EV MANTISI + YOĞURT",
+    "ISPANAKLI ÖZBEK MANTI",
+    "MERCİMEKLİ ÖZBEK MANTI",
+    "ETLİ BİBER DOLMA",
+    "ADİLE SULTAN USULÜ ETLİ YAPRAK SARMA",
+    "ETLİ LAHANA SARMA (6 ADET)",
+    "FIRINDA KARNIYARIK",
+    "FIRINLANMIŞ KABAK DOLMASI",
+    "KIYMALI ISPANAK",
+    "PATLICAN MUSAKKA",
+    "KIYMALI KAPUSKA",
+    "KIYMALI YEŞİL MERCİMEK",
+    "PATATES OTURTMA",
+    "BUHARDA KARIŞIK SEBZE (250 GR.)",
+    "ISPANAK KAVURMA",
+    "ZERDEÇAL SOSLU KARIŞIK SEBZE (250 GR.)",
+    "ACI SOSLU PENNE (400 GR.)",
+    "DOMATES SOSLU PENNE (425 GR.)",
+    "TAVUK IZGARA DİLİMLİ KREMALI MANTARLI PENNE (500 GR.)",
+    "BOLONEZ SOSLU SPAGETTİ (450 GR.)",
+    "PİLAV ÜSTÜ ETSİZ PATLICAN MUSAKKA (+19.90)",
+    "PİLAV ÜSTÜ KIYMALI PATLICAN MUSAKKA (+59.90)",
+    "PİLAV ÜSTÜ KURU FASULYE",
+    "PİLAV ÜSTÜ NOHUT",
+    "CACIK",
+    "HUMUSLU MİNİ İÇLİ KÖFTE (3 ADET)",
+    "ISPANAKLI MİNİ İÇLİ KÖFTE (3 ADET)",
+    "KARIŞIK TURŞU",
+    "KAŞARLI PATATES PÜRESİ",
+    "KIYMALI MİNİ İÇLİ KÖFTE (3 ADET)",
+    "MEVSİM SALATA",
+    "PATATESLİ MİNİ İÇLİ KÖFTE (3 ADET)",
+    "PATLICAN SALATASI",
+    "SİYEZ UNLU FIRIN MÜCVER",
+    "ÇİĞ KÖFTE (5 ADET)",
+    "ADİLE SULTA USULÜ ZEYTİNYAĞLI YAPRAK SARMA (5 ADET)",
+    "ADİLE SULTAN USULÜ ZEYTİNYAĞLI LAHANA SARMA (4 ADET)",
+    "BUHARDA SEBZE",
+    "ELMALI PANCARLI KİNOA SALATASI",
+    "MAŞ FASULYESİ SALATASI",
+    "MISIRLI SEBZE MÜCVER",
+    "ZERDEÇAL SOSLU KARIŞIK SEBZE (160 GR.)",
+    "ZEYTİNYAĞLI BARBUNYA",
+    "ZEYTİNYAĞLI BROKOLİ",
+    "ZEYTİNYAĞLI BİBER DOLMASI (2 ADET)",
+    "ZEYTİNYAĞLI PIRASA",
+    "ŞAKŞUKA",
+    "BADEMLİ KAVALA KURABİYESİ",
+    "BOL ÇİKOLATALI CEVİZLİ BROWNİE",
+    "HURMALI BADEMLİ KAVALA KURABİYESİ (ŞEKER İLAVESİZ)",
+    "KARAMELLİ BALKAN PASTASI",
+    "MEYVE KOMPOSTOSU",
+    "PORTAKALLI KAKAO TOPLARI (ŞEKER İLAVESİZ)",
+    "TRAKYA PEYNİR HELVASI",
+    "ZEREŞK ÜZÜMLÜ BİTTER ÇİKOLATALI KAKAO TOPLARI",
+    "ÇİKOLATALI VİŞNELİ PASTA",
+    "İRMİK HELVASI",
+    "İZMİR BOMBA",
+    "KABAK TATLISI",
+    "ÇİKOLATA SOSLU KAŞIK TATLISI",
+    "PEYNİRLİ SU BÖREĞİ",
+    "KAZANDİBİ",
+    "PORTAKALLI REVANİ",
+    "EKMEK KADAYIFI (KAYMAKLI)",
+    "HAŞHAŞLI LİMONLU KEK",
+    "KEMALPAŞA PEYNİR TATLISI",
+    "FIRIN SÜTLAÇ",
+    "AŞURE",
+    "ÇİLEKLİ VE BİSKÜVİLİ MUHALLEBİ",
+    "ADİLE SULTAN USULÜ SEBZE ÇORBASI",
+    "ADİLE SULTAN USULÜ YOĞURT ÇORBASI",
+    "EZOGELİN ÇORBASI",
+    "FIRINLANMIŞ MERCİMEK ÇORBASI",
+    "KAŞARLI DOMATES ÇORBASI",
+    "KÖZ PATLICAN ÇORBASI",
+    "TARHANA ÇORBASI (EGE USULÜ)",
+    "TERBİYELİ TAVUK SUYU ÇORBASI (19.9)",
+    "BULGUR PİLAVI",
+    "ŞEHRİYELİ PİRİNÇ PİLAVI",
+    "TEREYAĞLI ERİŞTE",
+    "KÖZ DOMATES SOSLU PENNE MAKARNA",
+    "NOHUTLU PİRİNÇ PİLAVI"
+  ],
+  "products": [
+    {
+      "name": "Ayran Aşı Çorbası",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/ayran-asi-corbasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f19fea3ba8369867c3eaa964010d2ca6.jpg"
+    },
+    {
+      "name": "Terbiyeli Tavuk Suyu Çorbası",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/terbiyeli-tavuk-suyu-corbasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/825dda439df46e87ceae7fe620a2450f.jpg"
+    },
+    {
+      "name": "Adile Sultan Usulü Sebze Çorbası",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/adile-sultan-usulu-sebze-corbasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2a704b77d9d64dc0e1e5b6f92475da77.jpg"
+    },
+    {
+      "name": "Köz Patlıcan Çorbası",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/koz-patlican-corbasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/1c6d690a25dfc1c45afca97fcc8121aa.jpg"
+    },
+    {
+      "name": "Adile Sultan Usulü Yoğurt Çorbası",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/adile-sultan-usulu-yogurt-corbasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/672042099662762890e93be32e6eae4c.jpg"
+    },
+    {
+      "name": "Ezogelin Çorbası",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/ezogelin-corbasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f4a4a707bbfabef7f23070bc9d72d3b2.jpg"
+    },
+    {
+      "name": "Fırınlanmış Mercimek Çorbası",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/firinlanmis-mercimek-corbasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/4eded0cda3c49fd15f9e4662df0dea53.jpg"
+    },
+    {
+      "name": "Kaşarlı Domates Çorbası",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kasarli-domates-corbasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/6cce03b4f8f190073d30715af9ba2702.jpg"
+    },
+    {
+      "name": "Kelle Paça Çorbası (Antep Usulü)",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kelle-paca-corbasi-antep-usulu",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/4b65d8d3ee7e2bf4075aa4227ec73b4e.jpg"
+    },
+    {
+      "name": "Tarhana Çorbası (Ege Usulü)",
+      "category": "Çorbalar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/tarhana-corbasi-ege-usulu",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/7749196ae355195e31da53f763bdfde4.jpg"
+    },
+    {
+      "name": "Bulgur Pilav Üstü Mangalda Duble Tavuk",
+      "category": "Etibol Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/bulgur-pilav-ustu-mangalda-duble-tavuk",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/73c5a5f6ac57c6c12fc2ebdd6e692cae.jpg"
+    },
+    {
+      "name": "Duble Izgara Tavuk ve Karışık Sebze",
+      "category": "Etibol Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/duble-izgara-tavuk-ve-karisik-sebze",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/1d9de0d074e252376b09c3a7851108e7.jpg"
+    },
+    {
+      "name": "Mangalda Duble Tavuk ve Pirinç Pilavı",
+      "category": "Etibol Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mangalda-duble-tavuk-ve-pirinc-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/806d398e2ea151f9041a70cc99a7442e.jpg"
+    },
+    {
+      "name": "Duble Izgara Tavuk ve Sebze Sote",
+      "category": "Etibol Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/duble-izgara-tavuk-ve-sebze-sote",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/e995acc487fd0fe6c7239269a7a119b0.jpg"
+    },
+    {
+      "name": "Adile Sultan Usulü Etli Yaprak Sarma (10 Adet)",
+      "category": "Etli Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/adile-sultan-usulu-etli-yaprak-sarma-10-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/fa1432d073350d0ce718ad79ae745a77.jpg"
+    },
+    {
+      "name": "Adile Sultan Usulü Etli Yaprak Sarma (7 Adet)",
+      "category": "Etli Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/adile-sultan-usulu-etli-yaprak-sarma-7-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/9c5d7dedfc1c0c718ccd5b0cc9d4edf8.jpg"
+    },
+    {
+      "name": "Patates Oturtma",
+      "category": "Etli Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/patates-oturtma",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/fb154c2f3d493c43ac77ef8509a48a41.jpg"
+    },
+    {
+      "name": "Kıymalı Ispanak",
+      "category": "Etli Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kiymali-ispanak",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f96fdbf2ce769a415b23d7e39fc9df59.jpg"
+    },
+    {
+      "name": "Patlıcan Musakka",
+      "category": "Etli Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/patlican-musakka",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/5679f1e64a0a1ee172fff8ef4c198e42.jpg"
+    },
+    {
+      "name": "Fırında Karnıyarık",
+      "category": "Etli Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/firinda-karniyarik",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/fcac05fc6c3c65d1caa1af0e754cbcdc.jpg"
+    },
+    {
+      "name": "Etli Biber Dolma",
+      "category": "Etli Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/etli-biber-dolma",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/20a6ddfbe351fa7d79c28f5477de2aa0.jpg"
+    },
+    {
+      "name": "Fırınlanmış Kabak Dolması",
+      "category": "Etli Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/firinlanmis-kabak-dolmasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2782d5077faa3b4e4299a3b47592da38.jpg"
+    },
+    {
+      "name": "Beğendili Mangalda Köfte",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/begendili-mangalda-kofte",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/ed263caacdbebc890d522f7663b47c81.jpg"
+    },
+    {
+      "name": "Mangalda Köfte ve Şehriyeli Pirinç Pilavı",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mangalda-kofte-ve-sehriyeli-pirinc-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/1ecd3297180f614974acdb6f89577fa0.jpg"
+    },
+    {
+      "name": "Orman Kebabı",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/orman-kebabi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2b466abc5d019aadf204c543bed47f63.jpg"
+    },
+    {
+      "name": "Püre Yatağında Kadınbudu Köfte",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/pure-yataginda-kadinbudu-kofte",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f3836319bea1734a407aa4b092458fc8.jpg"
+    },
+    {
+      "name": "Püre Yatağında Mangalda Köfte",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/pure-yataginda-mangalda-kofte",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/3da6ef01bd8c6f5c65309e52b34dd290.jpg"
+    },
+    {
+      "name": "Hünkarbeğendi",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/hunkarbegendi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/20d14002eede2281a69b034f37e3a42c.jpg"
+    },
+    {
+      "name": "İzmir Köfte",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/izmir-kofte",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/02637b0508af7a5bdb21e6512933f878.jpg"
+    },
+    {
+      "name": "Özbek Ev Mantısı",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/ozbek-ev-mantisi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/0ed3bcda32ef3a8056b30970db92d4af.jpg"
+    },
+    {
+      "name": "Kayseri Ev Mantısı",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kayseri-ev-mantisi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/7d0b0b4f654e978e99997a4e49e849c4.jpg"
+    },
+    {
+      "name": "Et Sote ve Kaşarlı Patates Püresi",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/et-sote-ve-kasarli-patates-puresi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f9758a055b4366912c794674a1f4c9a5.jpg"
+    },
+    {
+      "name": "Dana Kavurma ve Pirinç Pilavı",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/dana-kavurma-ve-pirinc-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/7d55314328570ceab8e28c3e9e414e48.jpg"
+    },
+    {
+      "name": "Karışık Izgara ve Bulgur Pilavı",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/karisik-izgara-ve-bulgur-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/8b5ffd569b40863415c3b4e4c903550e.jpg"
+    },
+    {
+      "name": "Kuzu Tandır ve İç Pilav",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kuzu-tandir-ve-ic-pilav",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/43ce9ea9c361fd356fbeb4307e8d6b1d.jpg"
+    },
+    {
+      "name": "Mangalda Köfte ve Köz Domates Soslu Penne",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mangalda-kofte-ve-koz-domates-soslu-penne",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/6ec4e172a303be15d8d5cf1de37ee2a7.jpg"
+    },
+    {
+      "name": "Etli Mantar Sote",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/etli-mantar-sote",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/ef65993e099c977a91ff011980f758a2.jpg"
+    },
+    {
+      "name": "Kıymalı Lazanya",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kiymali-lazanya",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/87675529ac8d84648943a2c1729565ab.jpg"
+    },
+    {
+      "name": "Fırında Hasanpaşa Köfte",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/firinda-hasanpasa-kofte",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/82acb56e743d6dcfcd7608cde1f5aab6.jpeg"
+    },
+    {
+      "name": "Izgara Köfte ve Karışık Sebze",
+      "category": "Etli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/izgara-kofte-ve-karisik-sebze",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/489ca1a87e67de174e7a5fc3c3307121.jpeg"
+    },
+    {
+      "name": "Bolonez Soslu Spagetti (450 gr.)",
+      "category": "Makarna Yemekleri",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/bolonez-soslu-spagetti-450-gr",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/516f6a3d28469be58bff1df8f2c66cba.jpg"
+    },
+    {
+      "name": "Tavuk Izgara Dilimli Kremalı Mantarlı Penne (500 gr.)",
+      "category": "Makarna Yemekleri",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/tavuk-izgara-dilimli-kremali-mantarli-penne-500-gr",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/8047e5e1b36b81f3160ac29f37e2868a.jpg"
+    },
+    {
+      "name": "Domates Soslu Penne (425 gr.)",
+      "category": "Makarna Yemekleri",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/domates-soslu-penne-425-gr",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/7e58d2c0fea0b7ea0b9d4c7a2938c897.jpg"
+    },
+    {
+      "name": "Acı Soslu Penne (400 gr.)",
+      "category": "Makarna Yemekleri",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/aci-soslu-penne-400-gr",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/e009db33f4abdb7fc0515e54d77659cb.jpg"
+    },
+    {
+      "name": "Parmesanlı Peynir Soslu Penne",
+      "category": "Makarna Yemekleri",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/parmesanli-peynir-soslu-penne",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/16ed90f84ea0128d7a58d56d84d79305.jpeg"
+    },
+    {
+      "name": "Arpa Şehriye Pilavı",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/arpa-sehriye-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/a654fed1e0c70bfe93f12dd165bfcaff.jpg"
+    },
+    {
+      "name": "Penne Makarna",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/penne-makarna",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/5e73a9bf3b337dffbdfb69b0b77518fc.jpg"
+    },
+    {
+      "name": "Nohutlu Pirinç Pilavı",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/nohutlu-pirinc-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/772d587f17937dc0d4d0c829b2cb6bfd.jpg"
+    },
+    {
+      "name": "Şehriyeli Pirinç Pilavı",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/sehriyeli-pirinc-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/5265d54cae0c51db4e9027457adc1fdd.jpg"
+    },
+    {
+      "name": "Tereyağlı Erişte",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/tereyagli-eriste",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/3ba4958938ab379dde518c9e13a2be78.jpg"
+    },
+    {
+      "name": "Fırın Makarna",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/firin-makarna",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f78cb1bb692dd56d37fe0fe1916f2578.jpg"
+    },
+    {
+      "name": "Bulgur Pilavı",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/bulgur-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/116a8bcea5bdc7aa98fbcce8be7fe674.jpg"
+    },
+    {
+      "name": "Basmati Pirinç Pilavı",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/basmati-pirinc-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/7be344bc15810dcf4e321718b9a217ad.jpg"
+    },
+    {
+      "name": "Köz Domates Soslu Penne Makarna",
+      "category": "Makarnalar ve Pilavlar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/koz-domates-soslu-penne-makarna",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2dba8868a3dc90f0485a123516f8d686.jpg"
+    },
+    {
+      "name": "Pilav Üstü Kıymalı Patlıcan Musakka",
+      "category": "Pilav Üstü Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/pilav-ustu-kiymali-patlican-musakka",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/e65d227cfc81a66602395526547576b2.jpg"
+    },
+    {
+      "name": "Pilav Üstü Etsiz Patlıcan Musakka",
+      "category": "Pilav Üstü Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/pilav-ustu-etsiz-patlican-musakka",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/8628f0ef397f6c2809a5afe0c5204df3.jpg"
+    },
+    {
+      "name": "Pilav Üstü Kuru Fasulye",
+      "category": "Pilav Üstü Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/pilav-ustu-kuru-fasulye",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/19623a71530868254d9a763324bf4ce9.jpg"
+    },
+    {
+      "name": "Pilav Üstü Nohut",
+      "category": "Pilav Üstü Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/pilav-ustu-nohut",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/713e509564dbe711fe4929b14ae953ad.jpg"
+    },
+    {
+      "name": "Bezelye",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/bezelye",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/00192fc882220870382ccd92ec74e110.jpg"
+    },
+    {
+      "name": "Buharda Karışık Sebze (250 gr.)",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/buharda-karisik-sebze-250-gr",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/ab08c61df9228537867c45e8850fcf37.jpg"
+    },
+    {
+      "name": "Kuru Fasulye",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kuru-fasulye",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/265598ed9d865e131dfa5858e0064978.jpg"
+    },
+    {
+      "name": "Zerdeçal Soslu Karışık Sebze (250 gr.)",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/zerdecal-soslu-karisik-sebze-250-gr",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/1889329db2d5321605181d801a1e05f7.jpg"
+    },
+    {
+      "name": "Ispanak Kavurma",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/ispanak-kavurma",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/b473f00bc5327381862ac21a1bbda58e.jpg"
+    },
+    {
+      "name": "Nohut",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/nohut",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/766e839b63b885b4e03d03c9a373d65d.jpg"
+    },
+    {
+      "name": "Tereyağlı İspir Kuru Fasulye",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/tereyagli-ispir-kuru-fasulye",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f91f1253da0215e6b84b3dfd17dfaae9.jpg"
+    },
+    {
+      "name": "Türlü",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/turlu",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/789d6e8172f1b289f0276fdba3e7ddf8.jpg"
+    },
+    {
+      "name": "Mercimekli Özbek Mantı",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mercimekli-ozbek-manti",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f50fcf73ec6fe14dea97f6b9ff11f0ed.jpg"
+    },
+    {
+      "name": "Ispanaklı Özbek Mantı",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/ispanakli-ozbek-manti",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/53fa5f4878c4cb80fd165bf5663ecdc7.jpg"
+    },
+    {
+      "name": "Beğendi Yatağında Sebzeli Falafel",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/begendi-yataginda-sebzeli-falafel",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/652ba2d8b30f1bffd3db2dc24c3b1ad6.jpg"
+    },
+    {
+      "name": "Taze Fasulye",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/taze-fasulye",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2046f42bdddf463c011d390bcd63505a.jpeg"
+    },
+    {
+      "name": "Yeşil Mercimek",
+      "category": "Sebzeli Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/yesil-mercimek",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/d34a75380c2fb8d9ec4f9346f4950fd7.jpeg"
+    },
+    {
+      "name": "Çilekli ve Bisküvili Muhallebi",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/cilekli-ve-biskuvili-muhallebi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/8ba6654ee63d48c3bb10697af42fc4d4.jpg"
+    },
+    {
+      "name": "Aşure",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/asure",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/5be6752b6cd596da33affcea6868ce3a.jpg"
+    },
+    {
+      "name": "Kazandibi",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kazandibi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/fefc48793857c48ec823b51db697184e.jpg"
+    },
+    {
+      "name": "Fırın Sütlaç",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/firin-sutlac",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f5893329b51181eaaad8e82f0f1223b1.jpg"
+    },
+    {
+      "name": "Portakallı Revani",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/portakalli-revani",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/85309d2d384156ec190209bd76e97c5a.jpg"
+    },
+    {
+      "name": "Kemalpaşa Peynir Tatlısı",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kemalpasa-peynir-tatlisi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2c866c2b1dae4e38d52a59e1f96683e5.jpg"
+    },
+    {
+      "name": "İrmik Helvası",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/irmik-helvasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/54c28a413af0d122988c036a94ec661f.jpg"
+    },
+    {
+      "name": "Meyve Kompostosu",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/meyve-kompostosu",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2a0b514a4941da0ae26c433d07f36645.jpg"
+    },
+    {
+      "name": "Trakya Peynir Helvası",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/trakya-peynir-helvasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/22d5a54d0d0f67be4826c96f3f47fb3b.jpg"
+    },
+    {
+      "name": "Ekmek Kadayıfı (Kaymaklı)",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/ekmek-kadayifi-kaymakli",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2c34c3a9b5a80acb1bd6b8361e16b4c9.jpg"
+    },
+    {
+      "name": "İzmir Bomba",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/izmir-bomba",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/7c822a657fbde5e100e53f332b982990.jpg"
+    },
+    {
+      "name": "Karamelli Balkan Pastası",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/karamelli-balkan-pastasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/3fd1a585735008c20f120037cd85fc3c.jpg"
+    },
+    {
+      "name": "Bol Çikolatalı Cevizli Brownie",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/bol-cikolatali-cevizli-brownie",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/63781dfeb8df899d51ee2f9eadd94f17.jpg"
+    },
+    {
+      "name": "Bademli Kavala Kurabiyesi",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/bademli-kavala-kurabiyesi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/ffdf3aae5d280183c5b8ddcfa806e4f3.jpg"
+    },
+    {
+      "name": "Hurmalı Bademli Kavala Kurabiyesi (Şeker ilavesiz)",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/hurmali-bademli-kavala-kurabiyesi-seker-ilavesiz",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/391052e6f3372ba543f2831daca20442.jpg"
+    },
+    {
+      "name": "Çikolatalı Vişneli Pasta",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/cikolatali-visneli-pasta",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/e75c69de3489e72c5b440b1e9bf6eb65.jpg"
+    },
+    {
+      "name": "Portakallı Kakao Topları (Şeker İlavesiz)",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/portakalli-kakao-toplari-seker-ilavesiz",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/68986820e4f526e1d01376c1dae635ff.jpg"
+    },
+    {
+      "name": "Tahinli İzmir Bomba",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/tahinli-izmir-bomba",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/144020f1e5584f3855a61c62484fa863.jpg"
+    },
+    {
+      "name": "Çikolata Soslu Kaşık Tatlısı",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/cikolata-soslu-kasik-tatlisi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/9b11505874fe15f515092b9a53a57162.jpg"
+    },
+    {
+      "name": "Haşhaşlı Limonlu Kek",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/hashasli-limonlu-kek",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/4ec0d98866b9e29898e93f5e82125bb9.jpg"
+    },
+    {
+      "name": "Zereşk Üzümlü Bitter Çikolatalı Kakao Topları (Şeker İlavesiz)",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/zeresk-uzumlu-bitter-cikolatali-kakao-toplari-seker-ilavesiz",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/91f824187576b3677bd1e3d02839b34b.jpg"
+    },
+    {
+      "name": "Elmalı Cevizli Tart",
+      "category": "Tatlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/elmali-cevizli-tart",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/5c212755115e7881b4f18b706435a263.jpeg"
+    },
+    {
+      "name": "Adile Sultandan Özel Soslu Tavuk ve Penne Makarna",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/adile-sultandan-ozel-soslu-tavuk-ve-penne-makarna",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/1639f2b588f0cea41bb8206d29a9c2b5.jpg"
+    },
+    {
+      "name": "Adile Sultandan Özel Soslu Tavuk ve Ispanak Kavurma",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/adile-sultandan-ozel-soslu-tavuk-ve-ispanak-kavurma",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/91cf7a279a66bbab930ae453d9024ba0.jpg"
+    },
+    {
+      "name": "Beğendi Yatağında Mangalda Tavuk",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/begendi-yataginda-mangalda-tavuk",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/30f08b7c0a08c3922f482c51e0f5f882.jpg"
+    },
+    {
+      "name": "Beğendi Yatağında Hindi Tandır",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/begendi-yataginda-hindi-tandir",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/9c8b314eb5bf4c73a12c9773cae27195.jpg"
+    },
+    {
+      "name": "Hindi Tandır ve Buharda Sebze",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/hindi-tandir-ve-buharda-sebze",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/3d67bbf95205f8e0393ddc8d191981d9.jpg"
+    },
+    {
+      "name": "Izgara Tavuk ve Karışık Sebze",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/izgara-tavuk-ve-karisik-sebze",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/76cbf18c74316d8dae2a30d046f053c9.jpg"
+    },
+    {
+      "name": "Bulgur Pilavı Üstü Mangalda Tavuk",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/bulgur-pilavi-ustu-mangalda-tavuk",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/61fa2fd9773c29f7ed6cb1875b2a918b.jpg"
+    },
+    {
+      "name": "Mangalda Tavuk ve Pirinç Pilavı",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mangalda-tavuk-ve-pirinc-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/165c2f23f5566407ac6e11355c53fed5.jpg"
+    },
+    {
+      "name": "Köri Soslu Tavuk ve Penne Makarna",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kori-soslu-tavuk-ve-penne-makarna",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/fb68bcba3eb8f82af888afc6e2804d69.jpg"
+    },
+    {
+      "name": "Tavuk Sote ve Şehriyeli Pirinç Pilavı",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/tavuk-sote-ve-sehriyeli-pirinc-pilavi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/62a423192d24ca384a3464d524c7af7e.jpg"
+    },
+    {
+      "name": "Tavuk Sote ve Kaşarlı Patates Püresi",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/tavuk-sote-ve-kasarli-patates-puresi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/33fd05eab0c7897c4b8df90ca8ea5b0f.jpg"
+    },
+    {
+      "name": "Mantar Soslu Tavuk ve Penne Makarna",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mantar-soslu-tavuk-ve-penne-makarna",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/49d7f9041e0c2afcc9c20b8a8d78ae8c.jpg"
+    },
+    {
+      "name": "Baharatlı Tereyağlı Tavuk ve Patates Püresi",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/baharatli-tereyagli-tavuk-ve-patates-puresi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/bbb91cf10288bcc562559f18aa2ea1bb.jpg"
+    },
+    {
+      "name": "Izgara Tavuk ve Sebze Sote",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/izgara-tavuk-ve-sebze-sote",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/28e6b675ecd5ffd8e3fe8e7f399367ba.jpg"
+    },
+    {
+      "name": "Mangalda Tavuk ve Köz Domates Soslu Penne",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mangalda-tavuk-ve-koz-domates-soslu-penne",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/66da30f245d0524f453519f5e7d4156a.jpg"
+    },
+    {
+      "name": "Tereyağlı Penne Eşliğinde Soslu Tavuk Izgara Dilimleri",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/tereyagli-penne-esliginde-soslu-tavuk-izgara-dilimleri",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/c6e7323e72820e78e46e33c5dba23885.jpg"
+    },
+    {
+      "name": "Kremalı Domates Soslu Tavuk ve Penne Makarna",
+      "category": "Tavuklu Yemekler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kremali-domates-soslu-tavuk-ve-penne-makarna",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/6e7a864323346e10731c6637d1705949.jpeg"
+    },
+    {
+      "name": "Yoğurt (150 gr.)",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/yogurt-150-gr",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/861287f498acbeea27d1608ae6bac2ff.jpg"
+    },
+    {
+      "name": "Karışık Turşu",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/karisik-tursu",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/ea1afe41c1b1a61d6f5e73fcf33534da.jpg"
+    },
+    {
+      "name": "Çiğ Köfte (5 adet)",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/cig-kofte-5-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/8fa1ad1652b37c95a4c12a2f40f825f4.jpg"
+    },
+    {
+      "name": "Cacık",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/cacik",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/40bbf958e632d576ea4a1928e788ec7c.jpg"
+    },
+    {
+      "name": "Mevsim Salata",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mevsim-salata",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/41bcdf384227452d0bb4b6cd1c9f58e8.jpg"
+    },
+    {
+      "name": "Peynirli Su Böreği",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/peynirli-su-boregi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/d6c21e2f26d9baad932fc8d452408801.jpg"
+    },
+    {
+      "name": "Patlıcan Salatası",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/patlican-salatasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/70795b1a388b9f51ca51aa1a0abb39b2.jpg"
+    },
+    {
+      "name": "Kaşarlı Patates Püresi",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kasarli-patates-puresi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/de07e64ba8ea5062e2b49b483d69751a.jpg"
+    },
+    {
+      "name": "Kıymalı Mini İçli Köfte (3 Adet)",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/kiymali-mini-icli-kofte-3-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/2e92f26d120b76aa6e36428abd66bab2.jpg"
+    },
+    {
+      "name": "Humuslu Mini İçli Köfte (3 adet)",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/humuslu-mini-icli-kofte-3-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/8f6a0297f2ecceae6cba34ba0d7521fa.jpg"
+    },
+    {
+      "name": "Ispanaklı Mini İçli Köfte (3 Adet)",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/ispanakli-mini-icli-kofte-3-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/c0fbaeaa31eeabad15ef7bff5d815e24.jpg"
+    },
+    {
+      "name": "Patatesli Mini İçli Köfte (3 adet)",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/patatesli-mini-icli-kofte-3-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/8f6a0297f2ecceae6cba34ba0d7521fa.jpg"
+    },
+    {
+      "name": "Siyez Unlu Fırın Mücver",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/siyez-unlu-firin-mucver",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/c71d34e98a4bd82b126826b25c577cd3.jpg"
+    },
+    {
+      "name": "Elmalı Pancarlı Kinoa Salatası",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/elmali-pancarli-kinoa-salatasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/d8f17e5d2805c3746831040d43db6252.jpg"
+    },
+    {
+      "name": "Maş Fasulyesi Salatası",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/mas-fasulyesi-salatasi",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/fe792dd3f9b9de826eaa4bb2ded734c9.jpg"
+    },
+    {
+      "name": "Mısırlı Sebze Mücver",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/misirli-sebze-mucver",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/52172acbc777e76203f5cd33c5d7682d.jpg"
+    },
+    {
+      "name": "Pancarlı Humus",
+      "category": "Yan Ürünler",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/pancarli-humus",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f5d29cd31ea986bdd53613c270342142.jpg"
+    },
+    {
+      "name": "Buharda Sebze",
+      "category": "Zeytinyağlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/buharda-sebze",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/3b009e768d9eeef5d32e78745d099160.jpg"
+    },
+    {
+      "name": "Şakşuka",
+      "category": "Zeytinyağlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/saksuka",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/30b669efdcc3c7239a558efa8e3cefc4.jpg"
+    },
+    {
+      "name": "Zeytinyağlı Brokoli",
+      "category": "Zeytinyağlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/zeytinyagli-brokoli",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/a6b5b8d992075cfee9e09cfbf5b67215.jpg"
+    },
+    {
+      "name": "Adile Sultan Usulü Zeytinyağlı Yaprak Sarma (5 Adet)",
+      "category": "Zeytinyağlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/adile-sultan-usulu-zeytinyagli-yaprak-sarma-5-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/c4c77c424d11dbe32dc090038357672d.jpg"
+    },
+    {
+      "name": "Zeytinyağlı Biber Dolması (2 Adet)",
+      "category": "Zeytinyağlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/zeytinyagli-biber-dolmasi-2-adet",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/f3d09d09c2d803510e6dea63f0b387de.jpg"
+    },
+    {
+      "name": "Zerdeçal Soslu Karışık Sebze (160 gr.)",
+      "category": "Zeytinyağlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/zerdecal-soslu-karisik-sebze-160-gr",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/fee5dc978080659f15c6b6afe3f641cb.jpg"
+    },
+    {
+      "name": "Zeytinyağlı Barbunya",
+      "category": "Zeytinyağlılar",
+      "pageUrl": "https://siparis.adilesultanevyemekleri.com/product/zeytinyagli-barbunya",
+      "imageUrl": "https://adilesultan.restapp.com/uploads/95539/9b59b57b92ca069ba8317071b6864cdd.jpg"
+    }
+  ]
+}

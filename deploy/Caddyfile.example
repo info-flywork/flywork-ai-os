@@ -1,0 +1,5 @@
+# Alan adını kendi panel adresinizle değiştirin.
+# Caddy sertifikayı alır. Uygulama yalnızca bu makinede 3010 portunu dinler.
+panel.ornek-alan.example {
+	reverse_proxy 127.0.0.1:3010
+}

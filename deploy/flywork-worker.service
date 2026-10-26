@@ -1,0 +1,17 @@
+[Unit]
+Description=Flywork AI OS automation worker
+After=network-online.target flywork-web.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/flywork-ai-os
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/flywork-ai-os/.env
+ExecStart=/usr/bin/npm run automation:worker
+Restart=on-failure
+RestartPreventExitStatus=0
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

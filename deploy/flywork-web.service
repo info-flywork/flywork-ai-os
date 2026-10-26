@@ -1,0 +1,17 @@
+[Unit]
+Description=Flywork AI OS web
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/flywork-ai-os
+Environment=NODE_ENV=production
+Environment=PORT=3010
+EnvironmentFile=/opt/flywork-ai-os/.env
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

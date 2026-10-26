@@ -1,0 +1,1091 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum MealOrderStatus {
+  RECEIVED
+  PREPARING
+  DELIVERED
+  CANCELLED
+}
+
+enum MealSlot {
+  MAIN
+  SOUP
+  SIDE
+  DESSERT
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  EXCUSE
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LeaveDuration {
+  FULL_DAY
+  MULTI_DAY
+  HOURLY
+}
+
+enum LeaveAuditAction {
+  REQUESTED
+  CANCELLED
+  APPROVED
+  REJECTED
+  REVERSED
+  BALANCE_SET
+  BALANCE_DEDUCTED
+  BALANCE_RESTORED
+  SALARY_SETTLED
+  ANNUAL_SETTLED
+}
+
+enum LeaveSettlement {
+  OPEN
+  SALARY
+  ANNUAL
+}
+
+enum ExpenseScope {
+  EMPLOYEE
+  COMPANY
+  OFFICE
+}
+
+enum ExpenseStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum ExpenseCategory {
+  TRANSPORT
+  MEAL
+  LODGING
+  SUPPLIES
+  SOFTWARE
+  SERVICE
+  SUBSCRIPTION
+  OPERATIONS
+  CLEANING
+  RENT
+  ELECTRICITY
+  INTERNET
+  EQUIPMENT
+  MARKET
+  WATER
+  OTHER
+}
+
+enum PaymentMethod {
+  CARD
+  TRANSFER
+  CASH
+  OTHER
+}
+
+enum ReimbursementState {
+  NOT_REQUIRED
+  PENDING
+  PAID
+}
+
+enum RecordSource {
+  MANUAL
+  UPLOAD
+}
+
+enum InvoiceStatus {
+  ISSUED
+  PAID
+  CANCELLED
+}
+
+enum SubscriptionKind {
+  DOMAIN
+  SOFTWARE
+  HOSTING
+  API
+  SSL
+  OTHER
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+  CUSTOM
+}
+
+enum ServiceStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+}
+
+enum NoticeSubject {
+  BILLING
+  DOMAIN
+  SSL
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role
+  mealOnly     Boolean  @default(false)
+  approver     Boolean  @default(false)
+  active       Boolean  @default(true)
+  startedOn    DateTime? @db.Date
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions              Session[]
+  mealOrders            MealOrder[]
+  leaveRequests         LeaveRequest[]
+  leaveBalances         LeaveBalance[]
+  expenses              Expense[]
+  reviewedLeaveRequests LeaveRequest[] @relation("LeaveReviewer")
+  reviewedExpenses      Expense[]      @relation("ExpenseReviewer")
+  leaveAuditsAsSubject  LeaveAudit[]   @relation("LeaveAuditSubject")
+  leaveAuditsAsActor    LeaveAudit[]   @relation("LeaveAuditActor")
+  ownedSubscriptions    TechnologySubscription[] @relation("TechnologyOwner")
+  agentDecisions        AgentActionRequest[]
+  googleConnections     GoogleAccount[]
+  invoiceReviewAudits   InvoiceReviewAudit[]
+  expenseAudits         ExpenseAudit[] @relation("ExpenseAuditActor")
+  alertReads            PanelAlertRead[]
+  telegramLink          TelegramLink?
+  telegramPairingCodes  TelegramPairingCode[]
+  telegramLinkRequests  TelegramLinkRequest[]
+  photoReviews          MealPhotoReview[]
+  guestMealOrders       MealGuestOrder[] @relation("MealGuestCreator")
+  mealOrderAudits       MealOrderAudit[] @relation("MealOrderAuditActor")
+  bonusRecipients       BonusRecipient[]
+  workTasksCreated      WorkTask[]         @relation("WorkTaskCreator")
+  workAssignments       WorkTaskAssignee[]
+  workComments          WorkTaskComment[]  @relation("WorkCommentAuthor")
+  workMentions          WorkTaskMention[]
+  feedbackNotes         FeedbackNote[]     @relation("FeedbackAuthor")
+  feedbackReviews       FeedbackNote[]     @relation("FeedbackReviewer")
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+}
+
+model MealMenu {
+  id        String         @id @default(cuid())
+  date      DateTime       @db.Date
+  note      String?        @db.Text
+  published Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  items       MealMenuItem[]
+  orders      MealOrder[]
+  guestOrders MealGuestOrder[]
+
+  @@unique([date])
+}
+
+model MealCategory {
+  id        String     @id
+  name      String     @unique
+  sortOrder Int
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  dishes    MealDish[]
+}
+
+model MealDish {
+  id         String       @id @default(cuid())
+  name       String
+  categoryId String
+  category   MealCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  slot        MealSlot
+  active      Boolean      @default(true)
+  price       Decimal?     @db.Decimal(12, 2)
+  choiceKey   String?
+  description String? @db.Text
+  photoKey    String?
+  photoType   String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  items      MealMenuItem[]
+  photoLink  MealPhotoLink?
+
+  @@index([categoryId, active])
+}
+
+model MealPhotoReview {
+  id          String   @id @default(cuid())
+  dishKey     String   @unique
+  dishName    String
+  decision    String
+  imageUrl    String?  @db.Text
+  pageUrl     String?  @db.Text
+  decidedById String
+  decidedBy   User     @relation(fields: [decidedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([decidedById])
+}
+
+model MealPhotoLink {
+  id             String   @id @default(cuid())
+  dishId         String   @unique
+  dish           MealDish @relation(fields: [dishId], references: [id], onDelete: Restrict)
+  list           String
+  imageUrl       String?  @db.Text
+  pageUrl        String?  @db.Text
+  sources        Json
+  sourceSite     String
+  rightsVerified Boolean  @default(false)
+  reason         String   @db.Text
+  sharedImage    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([list])
+}
+
+model MealMenuItem {
+  id         String      @id @default(cuid())
+  menuId     String
+  menu       MealMenu    @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  dishId     String?
+  dish       MealDish?   @relation(fields: [dishId], references: [id], onDelete: Restrict)
+  name         String
+  slot         MealSlot?
+  price        Decimal?    @db.Decimal(12, 2)
+  choiceKey    String?
+  description  String? @db.Text
+  sortOrder    Int
+  available    Boolean     @default(true)
+  orders             MealOrder[]      @relation("MealMain")
+  soupOrders         MealOrder[]      @relation("MealSoup")
+  sideOrders         MealOrder[]      @relation("MealSide")
+  dessertOrders      MealOrder[]      @relation("MealDessert")
+  guestOrders        MealGuestOrder[] @relation("GuestMain")
+  guestSoupOrders    MealGuestOrder[] @relation("GuestSoup")
+  guestSideOrders    MealGuestOrder[] @relation("GuestSide")
+  guestDessertOrders MealGuestOrder[] @relation("GuestDessert")
+
+  @@index([menuId])
+  @@index([dishId])
+}
+
+model MealOrder {
+  id         String          @id @default(cuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  menuId     String
+  menu       MealMenu        @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  itemId     String?
+  item       MealMenuItem?   @relation("MealMain", fields: [itemId], references: [id], onDelete: Restrict)
+  soupItemId String?
+  soupItem   MealMenuItem?   @relation("MealSoup", fields: [soupItemId], references: [id], onDelete: Restrict)
+  sideItemId    String?
+  sideItem      MealMenuItem?   @relation("MealSide", fields: [sideItemId], references: [id], onDelete: Restrict)
+  dessertItemId String?
+  dessertItem   MealMenuItem?   @relation("MealDessert", fields: [dessertItemId], references: [id], onDelete: Restrict)
+  absent        Boolean         @default(false)
+  note       String? @db.Text
+  status     MealOrderStatus @default(RECEIVED)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([userId, menuId])
+  @@index([menuId, status])
+  @@index([soupItemId])
+  @@index([sideItemId])
+  @@index([dessertItemId])
+}
+
+model MealGuestOrder {
+  id            String        @id @default(cuid())
+  menuId        String
+  menu          MealMenu      @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  guestName     String
+  itemId        String?
+  item          MealMenuItem? @relation("GuestMain", fields: [itemId], references: [id], onDelete: Restrict)
+  soupItemId    String?
+  soupItem      MealMenuItem? @relation("GuestSoup", fields: [soupItemId], references: [id], onDelete: Restrict)
+  sideItemId    String?
+  sideItem      MealMenuItem? @relation("GuestSide", fields: [sideItemId], references: [id], onDelete: Restrict)
+  dessertItemId String?
+  dessertItem   MealMenuItem? @relation("GuestDessert", fields: [dessertItemId], references: [id], onDelete: Restrict)
+  note          String?       @db.Text
+  createdById   String
+  createdBy     User          @relation("MealGuestCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([menuId])
+  @@index([createdById])
+}
+
+model MealOrderAudit {
+  id            String   @id @default(cuid())
+  actorId       String
+  actor         User     @relation("MealOrderAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  action        String
+  orderId       String?
+  guestOrderId  String?
+  subjectUserId String?
+  subjectName   String
+  changes       Json
+  createdAt     DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([orderId])
+}
+
+model LeaveBalance {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  year          Int
+  type          LeaveType
+  allocatedDays Decimal   @db.Decimal(6, 2)
+  usedDays      Decimal   @default(0) @db.Decimal(6, 2)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, year, type])
+}
+
+model LeaveSettings {
+  id          String   @id
+  hoursPerDay Decimal  @db.Decimal(4, 2)
+  weekendDays Json @default("[]")
+  updatedAt   DateTime @updatedAt
+}
+
+model LeaveHoliday {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([date])
+}
+
+model LeaveRequest {
+  id                 String        @id @default(cuid())
+  userId             String
+  user               User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type               LeaveType
+  duration           LeaveDuration
+  startDate          DateTime      @db.Date
+  endDate            DateTime      @db.Date
+  startsAt           DateTime
+  endsAt             DateTime
+  dayCount           Decimal       @db.Decimal(6, 2)
+  hourCount          Decimal?      @db.Decimal(6, 2)
+  reason             String?        @db.Text
+  status             LeaveStatus   @default(PENDING)
+  settlement         LeaveSettlement @default(OPEN)
+  reviewNote         String?        @db.Text
+  balanceException   Boolean       @default(false)
+  reviewerId         String?
+  reviewer           User?         @relation("LeaveReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewedAt         DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  document           LeaveDocument?
+  audits             LeaveAudit[]
+
+  @@index([userId, status])
+  @@index([startDate, endDate])
+  @@index([startsAt, endsAt])
+}
+
+model LeaveDocument {
+  id          String       @id @default(cuid())
+  requestId   String       @unique
+  request     LeaveRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  storageKey  String       @unique
+  fileName    String       @db.Text
+  contentType String
+  sizeBytes   Int
+  createdAt   DateTime     @default(now())
+}
+
+model LeaveAudit {
+  id        String           @id @default(cuid())
+  requestId String?
+  request   LeaveRequest?    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  userId    String
+  subject   User             @relation("LeaveAuditSubject", fields: [userId], references: [id], onDelete: Restrict)
+  actorId   String
+  actor     User             @relation("LeaveAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  action    LeaveAuditAction
+  dayDelta  Decimal?         @db.Decimal(6, 2)
+  note      String?          @db.Text
+  createdAt DateTime         @default(now())
+
+  @@index([requestId])
+  @@index([userId, createdAt])
+}
+
+model Expense {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  scope           ExpenseScope
+  category        ExpenseCategory     @default(OTHER)
+  title           String
+  vendor          String?
+  amount          Decimal             @db.Decimal(12, 2)
+  currency        String              @default("TRY")
+  paymentMethod   PaymentMethod       @default(OTHER)
+  accountLabel    String?
+  spentOn         DateTime            @db.Date
+  status          ExpenseStatus       @default(SUBMITTED)
+  reimbursement   ReimbursementState  @default(NOT_REQUIRED)
+  source          RecordSource        @default(MANUAL)
+  note            String?             @db.Text
+  reviewNote      String?             @db.Text
+  invoiceId       String?             @unique
+  invoice         Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  reviewerId      String?
+  reviewer        User?               @relation("ExpenseReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  document        ExpenseDocument?
+  renewal         SubscriptionRenewal?
+  audits          ExpenseAudit[]
+
+  @@index([userId, scope])
+  @@index([scope, status, spentOn])
+}
+
+model ExpenseAudit {
+  id        String   @id @default(cuid())
+  expenseId String
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User     @relation("ExpenseAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  action    String
+  changes   Json
+  createdAt DateTime @default(now())
+
+  @@index([expenseId, createdAt])
+}
+
+model ExpenseDocument {
+  id          String   @id @default(cuid())
+  expenseId   String   @unique
+  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  storageKey  String   @unique
+  fileName    String   @db.Text
+  contentType String
+  sizeBytes   Int
+  createdAt   DateTime @default(now())
+}
+
+model Invoice {
+  id         String         @id @default(cuid())
+  number     String
+  vendor     String
+  vendorKey  String
+  scope      ExpenseScope
+  amount     Decimal        @db.Decimal(12, 2)
+  currency   String         @default("TRY")
+  quantity   Int            @default(1)
+  issuedOn   DateTime       @db.Date
+  dueOn      DateTime?      @db.Date
+  status     InvoiceStatus  @default(ISSUED)
+  source     RecordSource   @default(MANUAL)
+  tax           Decimal?       @db.Decimal(12, 2)
+  note          String?        @db.Text
+  paymentMethod PaymentMethod?
+  accountLabel  String?
+  spenderName   String?
+  createdAt     DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  expenses   Expense[]
+  document   InvoiceDocument?
+  review     InvoiceReview?
+
+  @@unique([vendorKey, number])
+  @@index([issuedOn, scope])
+}
+
+model InvoiceDocument {
+  id          String   @id @default(cuid())
+  invoiceId   String   @unique
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  storageKey  String   @unique
+  fileName    String   @db.Text
+  contentType String
+  sizeBytes   Int
+  contentHash String?  @unique
+  createdAt   DateTime @default(now())
+}
+
+enum InvoiceReviewStatus {
+  PENDING
+  HELD
+  REJECTED
+  APPROVED
+  DRIVE_FAILED
+}
+
+enum DocumentKind {
+  INVOICE
+  RECEIPT
+  NOT_INVOICE
+  UNKNOWN
+  STATEMENT
+}
+
+model InvoiceReview {
+  id              String              @id @default(cuid())
+  status          InvoiceReviewStatus @default(PENDING)
+  contentHash     String              @unique
+  storageKey      String              @unique
+  fileName        String              @db.Text
+  sizeBytes       Int
+  vendor          String?
+  number          String?
+  issuedOn        DateTime?           @db.Date
+  amount          Decimal?            @db.Decimal(12, 2)
+  currency        String?
+  tax             Decimal?            @db.Decimal(12, 2)
+  documentType    DocumentKind        @default(UNKNOWN)
+  missingFields   Json @default("[]")
+  uncertainFields Json @default("[]")
+  aiSnapshot      Json
+  invoiceId       String?             @unique
+  invoice         Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  driveFileId     String?
+  driveError      String?             @db.Text
+  archived        Boolean             @default(false)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  audits          InvoiceReviewAudit[]
+
+  @@index([status, createdAt])
+}
+
+model InvoiceReviewAudit {
+  id          String        @id @default(cuid())
+  reviewId    String
+  review      InvoiceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  actorId     String
+  actor       User          @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action      String
+  corrections Json?
+  createdAt   DateTime      @default(now())
+
+  @@index([reviewId, createdAt])
+}
+
+model MealSettings {
+  id            String   @id
+  opensAt       String
+  closesAt      String
+  weekdays      Json @default("[]")
+  catererPhone  String?
+  updatedAt     DateTime @updatedAt
+}
+
+model TechnologySubscription {
+  id                 String           @id @default(cuid())
+  name               String
+  vendor             String
+  kind               SubscriptionKind
+  description        String?          @db.Text
+  project            String?
+  ownerId            String?
+  owner              User?            @relation("TechnologyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  status             ServiceStatus    @default(ACTIVE)
+  websiteUrl         String?          @db.Text
+  panelUrl           String?          @db.Text
+  amount             Decimal          @db.Decimal(12, 2)
+  currency           String           @default("TRY")
+  billingCycle       BillingCycle
+  customIntervalDays Int?
+  renewsOn           DateTime         @db.Date
+  lastPaidOn         DateTime?        @db.Date
+  paymentMethod      PaymentMethod    @default(OTHER)
+  cardLast4          String?
+  autoRenew          Boolean          @default(false)
+  active             Boolean          @default(true)
+  domainName         String?
+  registrar          String?
+  domainExpiresOn    DateTime?        @db.Date
+  dnsProvider        String?
+  sslIssuer          String?
+  sslExpiresOn       DateTime?        @db.Date
+  note               String?          @db.Text
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  renewals           SubscriptionRenewal[]
+  notices            SubscriptionNotice[]
+
+  @@index([active, renewsOn])
+  @@index([status, kind])
+}
+
+model SubscriptionRenewal {
+  id             String                 @id @default(cuid())
+  subscriptionId String
+  subscription   TechnologySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  paidOn         DateTime               @db.Date
+  periodEnd      DateTime               @db.Date
+  amount         Decimal                @db.Decimal(12, 2)
+  currency       String
+  expenseId      String?                @unique
+  expense        Expense?               @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  note           String?                @db.Text
+  createdAt      DateTime               @default(now())
+
+  @@unique([subscriptionId, periodEnd])
+  @@index([paidOn])
+}
+
+model SubscriptionNotice {
+  id             String                 @id @default(cuid())
+  subscriptionId String
+  subscription   TechnologySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subject        NoticeSubject
+  dueOn          DateTime               @db.Date
+  thresholdDays  Int
+  createdAt      DateTime               @default(now())
+
+  @@unique([subscriptionId, subject, dueOn, thresholdDays], map: "notice_subject_due")
+  @@index([dueOn])
+}
+
+enum AutomationJobState {
+  ACTIVE
+  PAUSED
+  WAITING_CONNECTION
+}
+
+enum AutomationRunState {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  WAITING_CONNECTION
+}
+
+enum AgentActionKind {
+  GMAIL_SEND
+  GMAIL_DELETE
+}
+
+enum AgentActionState {
+  PENDING
+  APPROVED
+  REJECTED
+  BLOCKED
+}
+
+model AutomationJob {
+  id             String              @id @default(cuid())
+  key            String              @unique
+  name           String
+  agent          String
+  timezone       String              @default("Europe/Istanbul")
+  weekdays       Json @default("[]")
+  hour           Int
+  minute         Int
+  state          AutomationJobState  @default(ACTIVE)
+  nextRunAt      DateTime
+  scheduledFor   DateTime
+  lastStartedAt  DateTime?
+  lastFinishedAt DateTime?
+  lastSuccessAt  DateTime?
+  lastError      String?             @db.Text
+  retryCount     Int                 @default(0)
+  maxRetries     Int                 @default(3)
+  lockToken      String?
+  lockedUntil    DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  runs           AutomationRun[]
+
+  @@index([state, nextRunAt])
+}
+
+model AutomationRun {
+  id         String             @id @default(cuid())
+  jobId      String
+  job        AutomationJob      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  windowKey  String
+  attempt    Int
+  state      AutomationRunState
+  startedAt  DateTime
+  finishedAt DateTime?
+  error      String?            @db.Text
+  summary    String             @db.Text
+  report     Json?
+  createdAt  DateTime           @default(now())
+
+  @@unique([jobId, windowKey])
+  @@index([startedAt])
+}
+
+model PanelAlertRead {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dedupeKey String
+  readAt    DateTime @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId])
+}
+
+model TelegramLink {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  telegramUserId String    @unique
+  chatId         String
+  linkedAt       DateTime  @default(now())
+  revokedAt      DateTime?
+}
+
+enum TelegramLinkRequestStatus {
+  AWAITING_EMAIL
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model TelegramLinkRequest {
+  id             String                    @id @default(cuid())
+  telegramUserId String
+  chatId         String
+  userId         String?
+  user           User?                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         TelegramLinkRequestStatus
+  createdAt      DateTime                  @default(now())
+  expiresAt      DateTime
+  decidedAt      DateTime?
+
+  @@index([telegramUserId, status])
+  @@index([userId])
+}
+
+model TelegramPairingCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model TelegramUpdateReceipt {
+  updateId  String   @id
+  createdAt DateTime @default(now())
+}
+
+model TelegramDispatch {
+  id        String   @id @default(cuid())
+  dedupeKey String   @unique
+  kind      String
+  status    String
+  error     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PanelNotice {
+  id        String   @id @default(cuid())
+  dedupeKey String   @unique
+  title     String   @db.Text
+  body      String   @db.Text
+  channel   String   @default("PANEL")
+  delivered Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+enum GoogleLinkStatus {
+  CONNECTED
+  ERROR
+}
+
+enum GmailProcessPurpose {
+  ANALYSIS
+  INVOICE
+}
+
+model GoogleAccount {
+  id                   String           @id @default("default")
+  email                String
+  scopes               Json @default("[]")
+  refreshTokenCipher   String           @db.Text
+  accessTokenCipher    String?          @db.Text
+  accessTokenExpiresAt DateTime?
+  status               GoogleLinkStatus @default(CONNECTED)
+  lastError            String?          @db.Text
+  connectedById        String?
+  connectedBy          User?            @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  connectedAt          DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model GmailProcessedItem {
+  id             String              @id @default(cuid())
+  gmailMessageId String
+  attachmentId   String              @default("")
+  purpose        GmailProcessPurpose
+  threadId       String?
+  outcome        String
+  invoiceId      String?
+  driveFileId    String?
+  createdAt      DateTime            @default(now())
+
+  @@unique([gmailMessageId, attachmentId, purpose])
+  @@index([purpose, createdAt])
+}
+
+model DriveFolder {
+  path      String   @id @db.VarChar(512)
+  driveId   String
+  updatedAt DateTime @updatedAt
+}
+
+model AgentActionRequest {
+  id           String           @id @default(cuid())
+  kind         AgentActionKind
+  state        AgentActionState @default(PENDING)
+  summary      String           @db.Text
+  decidedById  String?
+  decidedBy    User?            @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  decisionNote String?          @db.Text
+  createdAt    DateTime         @default(now())
+
+  @@index([state, createdAt])
+}
+
+model BonusCriterion {
+  id            String       @id @default(cuid())
+  name          String       @unique
+  defaultAmount Decimal      @db.Decimal(12, 2)
+  active        Boolean      @default(true)
+  sortOrder     Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  awards        BonusAward[]
+}
+
+model BonusAward {
+  id          String          @id @default(cuid())
+  criterionId String
+  criterion   BonusCriterion  @relation(fields: [criterionId], references: [id], onDelete: Restrict)
+  title       String
+  month       DateTime        @db.Date
+  amount      Decimal         @db.Decimal(12, 2)
+  paid        Boolean         @default(false)
+  days        Int?
+  note        String?         @db.Text
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  recipients  BonusRecipient[]
+
+  @@index([month])
+}
+
+model BonusRecipient {
+  id      String     @id @default(cuid())
+  awardId String
+  award   BonusAward @relation(fields: [awardId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([awardId, userId])
+}
+
+enum PaidSubscriptionCycle {
+  MONTHLY
+  YEARLY
+  USAGE
+}
+
+model PaidSubscription {
+  id         String                @id @default(cuid())
+  name       String                @unique
+  startedOn  DateTime?             @db.Date
+  lastPaidOn DateTime?             @db.Date
+  cycle      PaidSubscriptionCycle
+  amount     Decimal?              @db.Decimal(12, 2)
+  currency   String?
+  sortOrder  Int                   @default(0)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+}
+
+enum WorkColumn {
+  POOL
+  DOING
+  REVIEW
+  REVISION
+  DONE
+}
+
+enum WorkPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model WorkSpace {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  sortOrder Int        @default(0)
+  createdAt DateTime   @default(now())
+  tasks     WorkTask[]
+}
+
+model WorkTask {
+  id          String             @id @default(cuid())
+  spaceId     String
+  space       WorkSpace          @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  title       String             @db.VarChar(255)
+  detail      String?            @db.Text
+  column      WorkColumn         @default(POOL)
+  priority    WorkPriority       @default(NORMAL)
+  startsOn    DateTime?          @db.Date
+  startsAt    String?
+  endsAt      String?
+  dueOn       DateTime?          @db.Date
+  completed   Boolean            @default(false)
+  sortOrder   Int                @default(0)
+  createdById String
+  createdBy   User               @relation("WorkTaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  assignees   WorkTaskAssignee[]
+  comments    WorkTaskComment[]
+  links       WorkTaskLink[]
+  images      WorkTaskImage[]
+
+  @@index([spaceId, column, sortOrder])
+}
+
+model WorkTaskComment {
+  id        String            @id @default(cuid())
+  taskId    String
+  task      WorkTask          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User              @relation("WorkCommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  body      String            @db.Text
+  createdAt DateTime          @default(now())
+  mentions  WorkTaskMention[]
+
+  @@index([taskId, createdAt])
+}
+
+model WorkTaskMention {
+  id        String          @id @default(cuid())
+  commentId String
+  comment   WorkTaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([commentId, userId])
+}
+
+model WorkTaskLink {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  url       String   @db.Text
+  label     String?
+  createdAt DateTime @default(now())
+}
+
+model WorkTaskImage {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  storageKey  String   @unique
+  contentType String
+  createdAt   DateTime @default(now())
+}
+
+enum FeedbackKind {
+  SUGGESTION
+  COMPLAINT
+}
+
+enum FeedbackStatus {
+  OPEN
+  REVIEWED
+}
+
+model FeedbackNote {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation("FeedbackAuthor", fields: [userId], references: [id], onDelete: Restrict)
+  kind         FeedbackKind
+  body         String         @db.Text
+  status       FeedbackStatus @default(OPEN)
+  createdAt    DateTime       @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewedBy   User?          @relation("FeedbackReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model WorkTaskAssignee {
+  id     String   @id @default(cuid())
+  taskId String
+  task   WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([taskId, userId])
+}
