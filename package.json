@@ -13,10 +13,10 @@
     "db:status": "prisma migrate status",
     "db:deploy": "prisma migrate deploy",
     "backup": "sh scripts/backup-database.sh",
-    "check:production": "JITI_TSCONFIG_PATHS=true jiti scripts/checkProductionEnv.ts",
-    "admin:create": "JITI_TSCONFIG_PATHS=true jiti scripts/createAdmin.ts",
-    "automation:worker": "JITI_TSCONFIG_PATHS=true jiti scripts/automationWorker.ts",
-    "telegram:webhook": "JITI_TSCONFIG_PATHS=true jiti scripts/registerTelegramWebhook.ts"
+    "check:production": "JITI_TSCONFIG_PATHS=true jiti scripts/checkProductionEnv.js",
+    "admin:create": "JITI_TSCONFIG_PATHS=true jiti scripts/createAdmin.js",
+    "automation:worker": "JITI_TSCONFIG_PATHS=true jiti scripts/automationWorker.js",
+    "telegram:webhook": "JITI_TSCONFIG_PATHS=true jiti scripts/registerTelegramWebhook.js"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",
