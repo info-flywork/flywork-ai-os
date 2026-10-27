@@ -3,6 +3,7 @@ import { redirectEmployeeFromAdminPages, redirectMealOnlyUser } from "@/server/a
 import { toIsoDate } from "@/server/dates";
 import { requireUser } from "@/server/auth/session";
 import { listUsers } from "@/server/services/users";
+export const instant = false;
 
 export default async function KullanicilarPage() {
   const user = await requireUser();

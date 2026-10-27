@@ -58,7 +58,14 @@ export async function writeMealPhoto(storageKey, bytes) {
 }
 
 export async function readMealPhoto(storageKey) {
-  return readFile(resolveKey(storageKey));
+  try {
+    return await readFile(resolveKey(storageKey));
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      throw new AppError("Fotoğraf bulunamadı.", "NOT_FOUND", 404);
+    }
+    throw error;
+  }
 }
 
 export async function removeMealPhoto(storageKey) {

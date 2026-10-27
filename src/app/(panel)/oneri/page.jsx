@@ -3,6 +3,7 @@ import { redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { listFeedback } from "@/server/services/feedback";
+export const instant = false;
 
 export default async function FeedbackPage() {
   const user = await requireUser();

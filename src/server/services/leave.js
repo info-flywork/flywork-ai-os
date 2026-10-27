@@ -7,6 +7,7 @@ import { assertCan } from "@/server/auth/permissions";
 import { dateOnly, istanbulToday, toIsoDate } from "@/server/dates";
 import { annualAllocationForYear } from "@/server/leave/entitlement";
 import { withDatabase } from "@/server/db";
+import { invalidate, remember } from "@/server/readCache";
 import { numberList } from "@/server/jsonList";
 import { notifyLeaveDecision, notifyLeaveRequested } from "@/server/telegram/leavePush";
 import { AppError } from "@/server/errors";
@@ -68,6 +69,47 @@ async function approvedBalanceCharge(db, userId, year) {
   return total._sum.dayCount ?? new Prisma.Decimal(0);
 }
 
+async function ensureAnnualBalances(db, people, fromYear, toYear, today = istanbulToday(), known) {
+  const years = [];
+  for (let year = fromYear; year <= toYear && year - fromYear < 20; year += 1) {
+    years.push(year);
+  }
+  if (years.length === 0 || people.length === 0) {
+    return 0;
+  }
+  const existing = known ?? await db.leaveBalance.findMany({
+    where: { type: "ANNUAL", year: { in: years }, userId: { in: people.map((person) => person.id) } },
+  });
+  const byKey = new Map(existing.map((row) => [`${row.userId}:${row.year}`, row]));
+  const writes = [];
+  for (const year of years) {
+    for (const person of people) {
+      const startedOn = person.startedOn ? toIsoDate(person.startedOn) : null;
+      const allocated = annualAllocationForYear(startedOn, year, today);
+      if (!allocated) {
+        continue;
+      }
+      const row = byKey.get(`${person.id}:${year}`);
+      if (row) {
+        if (row.allocatedDays.toFixed(2) !== allocated) {
+          writes.push(db.leaveBalance.update({ where: { id: row.id }, data: { allocatedDays: allocated } }));
+        }
+        continue;
+      }
+      writes.push((async () => {
+        const usedDays = await approvedBalanceCharge(db, person.id, year);
+        await db.leaveBalance.upsert({
+          where: { userId_year_type: { userId: person.id, year, type: "ANNUAL" } },
+          create: { userId: person.id, year, type: "ANNUAL", allocatedDays: allocated, usedDays },
+          update: { allocatedDays: allocated },
+        });
+      })());
+    }
+  }
+  await Promise.all(writes);
+  return writes.length;
+}
+
 async function ensureAnnualBalance(db, userId, year, today = istanbulToday()) {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -95,6 +137,13 @@ async function ensureAnnualBalance(db, userId, year, today = istanbulToday()) {
     create: { userId, year, type: "ANNUAL", allocatedDays: allocated, usedDays },
     update: { allocatedDays: allocated },
   });
+}
+
+function readSettings(row) {
+  if (!row) {
+    return { hoursPerDay: new Prisma.Decimal("9.00"), weekendDays: [] };
+  }
+  return { ...row, weekendDays: numberList(row.weekendDays) };
 }
 
 async function ensureSettings(db) {
@@ -135,23 +184,128 @@ function calculated(input, calendar) {
   }
 }
 
-const requestInclude = {
-  user: { select: { id: true, name: true } },
-  reviewer: { select: { id: true, name: true } },
-  document: { select: { id: true, fileName: true, sizeBytes: true } },
-  audits: {
-    orderBy: { createdAt: "desc"  },
-    take: 8,
-    select: {
-      id: true,
-      action: true,
-      note: true,
-      dayDelta: true,
-      createdAt: true,
-      actor: { select: { name: true } },
-    },
-  },
-};
+function sqlBool(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "bigint") {
+    return Number(value) !== 0;
+  }
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) {
+    return value.length > 0 && value[0] !== 0;
+  }
+  return value === "1" || value === "true";
+}
+
+function sqlDate(value) {
+  if (value instanceof Date) {
+    return value;
+  }
+  return new Date(value);
+}
+
+async function loadJoinedLeaveRequests(db, filter = {}) {
+  const take = Math.min(Math.max(Number(filter.take) || 400, 1), 400);
+  const parts = [];
+  if (filter.userId) {
+    parts.push(Prisma.sql`userId = ${filter.userId}`);
+  }
+  if (filter.type) {
+    parts.push(Prisma.sql`type = ${filter.type}`);
+  }
+  if (filter.to) {
+    parts.push(Prisma.sql`startDate <= ${dateOnly(filter.to)}`);
+  }
+  if (filter.from) {
+    parts.push(Prisma.sql`endDate >= ${dateOnly(filter.from)}`);
+  }
+  const where = parts.length ? Prisma.join(parts, " AND ") : Prisma.sql`1=1`;
+  const rows = await db.$queryRaw`
+    SELECT
+      r.id AS requestId,
+      r.userId AS userId,
+      r.type AS type,
+      r.duration AS duration,
+      DATE_FORMAT(r.startDate, '%Y-%m-%d') AS startDate,
+      DATE_FORMAT(r.endDate, '%Y-%m-%d') AS endDate,
+      r.startsAt AS startsAt,
+      r.endsAt AS endsAt,
+      r.dayCount AS dayCount,
+      r.hourCount AS hourCount,
+      r.reason AS reason,
+      r.status AS status,
+      r.settlement AS settlement,
+      r.reviewNote AS reviewNote,
+      r.balanceException AS balanceException,
+      r.reviewedAt AS reviewedAt,
+      r.createdAt AS createdAt,
+      u.name AS employeeName,
+      reviewer.name AS reviewerName,
+      doc.id AS documentId,
+      doc.fileName AS fileName,
+      doc.sizeBytes AS sizeBytes,
+      a.id AS auditId,
+      a.action AS auditAction,
+      a.note AS auditNote,
+      a.dayDelta AS dayDelta,
+      a.createdAt AS auditAt,
+      actor.name AS actorName
+    FROM (
+      SELECT * FROM \`LeaveRequest\`
+      WHERE ${where}
+      ORDER BY createdAt DESC
+      LIMIT ${Prisma.raw(String(take))}
+    ) r
+    JOIN \`User\` u ON u.id = r.userId
+    LEFT JOIN \`User\` reviewer ON reviewer.id = r.reviewerId
+    LEFT JOIN \`LeaveDocument\` doc ON doc.requestId = r.id
+    LEFT JOIN \`LeaveAudit\` a ON a.requestId = r.id
+    LEFT JOIN \`User\` actor ON actor.id = a.actorId
+    ORDER BY r.createdAt DESC, a.createdAt DESC
+  `;
+  const grouped = new Map();
+  for (const row of rows) {
+    let request = grouped.get(row.requestId);
+    if (!request) {
+      request = {
+        id: row.requestId,
+        user: { id: row.userId, name: row.employeeName },
+        type: row.type,
+        duration: row.duration,
+        startDate: dateOnly(String(row.startDate).slice(0, 10)),
+        endDate: dateOnly(String(row.endDate).slice(0, 10)),
+        startsAt: sqlDate(row.startsAt),
+        endsAt: sqlDate(row.endsAt),
+        dayCount: new Prisma.Decimal(String(row.dayCount)),
+        hourCount: row.hourCount == null ? null : new Prisma.Decimal(String(row.hourCount)),
+        reason: row.reason,
+        status: row.status,
+        settlement: row.settlement,
+        reviewNote: row.reviewNote,
+        balanceException: sqlBool(row.balanceException),
+        reviewedAt: row.reviewedAt ? sqlDate(row.reviewedAt) : null,
+        reviewer: row.reviewerName ? { name: row.reviewerName } : null,
+        createdAt: sqlDate(row.createdAt),
+        document: row.documentId
+          ? { id: row.documentId, fileName: row.fileName, sizeBytes: Number(row.sizeBytes) }
+          : null,
+        audits: [],
+      };
+      grouped.set(row.requestId, request);
+    }
+    if (row.auditId && request.audits.length < 8) {
+      request.audits.push({
+        id: row.auditId,
+        action: row.auditAction,
+        note: row.auditNote,
+        dayDelta: row.dayDelta == null ? null : new Prisma.Decimal(String(row.dayDelta)),
+        createdAt: sqlDate(row.auditAt),
+        actor: { name: row.actorName ?? "" },
+      });
+    }
+  }
+  return [...grouped.values()];
+}
 
 function serializeRequest(request
 
@@ -233,18 +387,30 @@ export async function getEmployeeLeaveView(actor) {
   assertCan(actor, "leaveRequest:read:own");
   const year = Number(istanbulToday().slice(0, 4));
 
-  return withDatabase(async (db) => {
-    const settings = await ensureSettings(db);
-    const holidays = await db.leaveHoliday.findMany({ orderBy: { date: "asc" } });
-    await ensureAnnualBalance(db, actor.id, year);
-    const balance = await db.leaveBalance.findUnique({
-      where: { userId_year_type: { userId: actor.id, year, type: "ANNUAL" } },
-    });
-    const requests = await db.leaveRequest.findMany({
-      where: { userId: actor.id },
-      orderBy: { createdAt: "desc" },
-      include: requestInclude,
-    });
+  return remember(`leave:own:${actor.id}:${year}`, () => withDatabase(async (db) => {
+    const [settings, holidays, person, balance, requests] = await Promise.all([
+      db.leaveSettings.findUnique({ where: { id: SETTINGS_ID } }).then(readSettings),
+      db.leaveHoliday.findMany({ orderBy: { date: "asc" } }),
+      db.user.findUnique({ where: { id: actor.id }, select: { startedOn: true } }),
+      db.leaveBalance.findUnique({
+        where: { userId_year_type: { userId: actor.id, year, type: "ANNUAL" } },
+      }),
+      loadJoinedLeaveRequests(db, { userId: actor.id }),
+    ]);
+    const allocated = annualAllocationForYear(
+      person?.startedOn ? toIsoDate(person.startedOn) : null,
+      year,
+      istanbulToday(),
+    );
+    let current = balance;
+    if (allocated && (!current || current.allocatedDays.toFixed(2) !== allocated)) {
+      const usedDays = current ? current.usedDays : await approvedBalanceCharge(db, actor.id, year);
+      current = await db.leaveBalance.upsert({
+        where: { userId_year_type: { userId: actor.id, year, type: "ANNUAL" } },
+        create: { userId: actor.id, year, type: "ANNUAL", allocatedDays: allocated, usedDays },
+        update: { allocatedDays: allocated },
+      });
+    }
     const counted = requests.filter((request) => {
       const starts = toIsoDate(request.startDate);
       return request.status === "APPROVED" && request.settlement !== "SALARY" && starts >= "2025-01-01" && starts <= `${year}-12-31`;
@@ -254,26 +420,26 @@ export async function getEmployeeLeaveView(actor) {
       .filter((request) => request.type === "EXCUSE")
       .reduce((sum, request) => sum.plus(request.dayCount), new Prisma.Decimal(0));
     const againstAnnual = used.minus(excuse);
-    if (balance && new Prisma.Decimal(balance.usedDays).lessThan(againstAnnual)) {
-      await db.leaveBalance.update({
-        where: { id: balance.id },
+    if (current && new Prisma.Decimal(current.usedDays).lessThan(againstAnnual)) {
+      void db.leaveBalance.update({
+        where: { id: current.id },
         data: { usedDays: againstAnnual },
-      });
+      }).catch(() => undefined);
     }
 
     return {
       year,
-      balance: balance
+      balance: current
         ? {
-            allocatedDays: balance.allocatedDays.toFixed(2),
+            allocatedDays: current.allocatedDays.toFixed(2),
             usedDays: againstAnnual.toFixed(2),
-            remainingDays: new Prisma.Decimal(balance.allocatedDays).minus(againstAnnual).toFixed(2),
+            remainingDays: new Prisma.Decimal(current.allocatedDays).minus(againstAnnual).toFixed(2),
           }
         : null,
       calendar: serializeCalendar(settings, holidays.filter((holiday) => holiday.active)),
       requests: requests.map(serializeRequest),
     };
-  });
+  }));
 }
 
  
@@ -289,54 +455,90 @@ export async function getAdminLeaveView(actor, filters) {
   assertCan(actor, "leaveRequest:read:all");
   const period = reportWindow(filters.report, filters.period);
 
-  return withDatabase(async (db) => {
-    const settings = await ensureSettings(db);
-    const holidays = await db.leaveHoliday.findMany({ orderBy: { date: "asc" } });
-    const people = await db.user.findMany({
-      where: {
-        active: true,
-        mealOnly: false,
-        NOT: { role: "ADMIN", approver: false },
-      },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, active: true, startedOn: true },
-    });
+  return remember(`leave:admin:${actor.id}:${JSON.stringify(filters)}`, () => withDatabase(async (db) => {
+    const spanFrom = filters.from ?? period.from;
+    const spanTo = filters.to ?? period.to;
+    const firstYear = Number(spanFrom.slice(0, 4));
+    const lastYear = Number(spanTo.slice(0, 4));
+    const today = istanbulToday();
+    const reportFilter = [
+      Prisma.sql`r.startDate <= ${dateOnly(period.to)}`,
+      Prisma.sql`r.endDate >= ${dateOnly(period.from)}`,
+    ];
+    if (filters.employeeId) {
+      reportFilter.push(Prisma.sql`r.userId = ${filters.employeeId}`);
+    }
+    if (filters.type) {
+      reportFilter.push(Prisma.sql`r.type = ${filters.type}`);
+    }
+    const [settings, holidays, people, requests, reportRows, usage, balances] = await Promise.all([
+      db.leaveSettings.findUnique({ where: { id: SETTINGS_ID } }).then(readSettings),
+      db.leaveHoliday.findMany({ orderBy: { date: "asc" } }),
+      db.user.findMany({
+        where: {
+          active: true,
+          mealOnly: false,
+          NOT: { role: "ADMIN", approver: false },
+        },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, active: true, startedOn: true },
+      }),
+      loadJoinedLeaveRequests(db, {
+        userId: filters.employeeId,
+        type: filters.type,
+        from: filters.from,
+        to: filters.to,
+        take: 200,
+      }),
+      db.$queryRaw`
+        SELECT r.type AS type, r.status AS status, r.dayCount AS dayCount, u.name AS employeeName
+        FROM \`LeaveRequest\` r
+        JOIN \`User\` u ON u.id = r.userId
+        WHERE ${Prisma.join(reportFilter, " AND ")}
+      `.then((rows) => rows.map((row) => ({
+        type: row.type,
+        status: row.status,
+        dayCount: new Prisma.Decimal(String(row.dayCount)),
+        user: { name: row.employeeName },
+      }))),
+      db.$queryRaw`
+        SELECT userId AS userId, type AS type, dayCount AS dayCount
+        FROM \`LeaveRequest\`
+        WHERE status = 'APPROVED'
+          AND settlement <> 'SALARY'
+          AND startDate >= ${dateOnly(spanFrom)}
+          AND startDate <= ${dateOnly(spanTo)}
+      `.then((rows) => rows.map((row) => ({
+        userId: row.userId,
+        type: row.type,
+        dayCount: new Prisma.Decimal(String(row.dayCount)),
+      }))),
+      db.$queryRaw`
+        SELECT
+          b.id AS id,
+          b.year AS year,
+          b.allocatedDays AS allocatedDays,
+          b.usedDays AS usedDays,
+          u.id AS userId,
+          u.name AS employeeName
+        FROM \`LeaveBalance\` b
+        JOIN \`User\` u ON u.id = b.userId
+        WHERE b.type = 'ANNUAL' AND b.year >= ${firstYear} AND b.year <= ${lastYear}
+        ORDER BY b.year ASC, u.name ASC
+      `.then((rows) => rows.map((row) => ({
+        id: row.id,
+        year: Number(row.year),
+        allocatedDays: new Prisma.Decimal(String(row.allocatedDays)),
+        usedDays: new Prisma.Decimal(String(row.usedDays)),
+        user: { id: row.userId, name: row.employeeName },
+      }))),
+    ]);
     const employees = people.map((person) => ({
       id: person.id,
       name: person.name,
       active: person.active,
       startedOn: person.startedOn ? toIsoDate(person.startedOn) : null,
     }));
-    const where = {
-      ...(filters.employeeId ? { userId: filters.employeeId } : {}),
-      ...(filters.type ? { type: filters.type } : {}),
-      ...(filters.from || filters.to
-        ? {
-            startDate: filters.to ? { lte: dateOnly(filters.to) } : undefined,
-            endDate: filters.from ? { gte: dateOnly(filters.from) } : undefined,
-          }
-        : {}),
-    };
-    const requests = await db.leaveRequest.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      include: requestInclude,
-    });
-    const reportRows = await db.leaveRequest.findMany({
-      where: {
-        ...(filters.employeeId ? { userId: filters.employeeId } : {}),
-        ...(filters.type ? { type: filters.type } : {}),
-        startDate: { lte: dateOnly(period.to) },
-        endDate: { gte: dateOnly(period.from) },
-      },
-      select: {
-        type: true,
-        status: true,
-        dayCount: true,
-        user: { select: { name: true } },
-      },
-    });
 
     const byType = new Map();
     const byEmployee = new Map();
@@ -361,24 +563,32 @@ export async function getAdminLeaveView(actor, filters) {
     }
 
     const year = Number(period.from.slice(0, 4));
-    const spanFrom = filters.from ?? period.from;
-    const spanTo = filters.to ?? period.to;
-    const firstYear = Number(spanFrom.slice(0, 4));
-    const lastYear = Number(spanTo.slice(0, 4));
-    const today = istanbulToday();
-    for (let balanceYear = firstYear; balanceYear <= lastYear && balanceYear - firstYear < 20; balanceYear += 1) {
-      for (const person of people) {
-        await ensureAnnualBalance(db, person.id, balanceYear, today);
-      }
-    }
-    const usage = await db.leaveRequest.findMany({
-      where: {
-        status: "APPROVED",
-        settlement: { not: "SALARY" },
-        startDate: { gte: dateOnly(spanFrom), lte: dateOnly(spanTo) },
-      },
-      select: { userId: true, type: true, dayCount: true },
-    });
+    const wrote = await ensureAnnualBalances(
+      db,
+      people,
+      firstYear,
+      lastYear,
+      today,
+      balances.map((row) => ({
+        id: row.id,
+        userId: row.user.id,
+        year: row.year,
+        allocatedDays: row.allocatedDays,
+      })),
+    );
+    const settledBalances = wrote
+      ? await db.leaveBalance.findMany({
+          where: { type: "ANNUAL", year: { gte: firstYear, lte: lastYear } },
+          orderBy: [{ year: "asc" }, { user: { name: "asc" } }],
+          select: {
+            id: true,
+            year: true,
+            allocatedDays: true,
+            usedDays: true,
+            user: { select: { id: true, name: true } },
+          },
+        })
+      : balances;
     const daysByUser = new Map();
     for (const row of usage) {
       const current = daysByUser.get(row.userId) ?? {
@@ -392,20 +602,8 @@ export async function getAdminLeaveView(actor, filters) {
       daysByUser.set(row.userId, current);
     }
 
-    const balances = await db.leaveBalance.findMany({
-      where: { type: "ANNUAL", year: { gte: firstYear, lte: lastYear } },
-      orderBy: [{ year: "asc" }, { user: { name: "asc" } }],
-      select: {
-        id: true,
-        year: true,
-        allocatedDays: true,
-        usedDays: true,
-        user: { select: { id: true, name: true } },
-      },
-    });
-
     const balanceByUser = new Map();
-    for (const balance of balances) {
+    for (const balance of settledBalances) {
       const current = balanceByUser.get(balance.user.id) ?? {
         allocated: new Prisma.Decimal(0),
         rows: [],
@@ -414,15 +612,20 @@ export async function getAdminLeaveView(actor, filters) {
       current.rows.push(balance);
       balanceByUser.set(balance.user.id, current);
     }
+    const repairs = [];
     for (const [userId, balance] of balanceByUser) {
       const days = daysByUser.get(userId);
       const againstAnnual = (days?.used ?? new Prisma.Decimal(0)).minus(days?.excuse ?? new Prisma.Decimal(0));
       if (balance.rows.length === 1 && new Prisma.Decimal(balance.rows[0].usedDays).lessThan(againstAnnual)) {
-        await db.leaveBalance.update({
+        balance.rows[0].usedDays = againstAnnual;
+        repairs.push(db.leaveBalance.update({
           where: { id: balance.rows[0].id },
           data: { usedDays: againstAnnual },
-        });
+        }));
       }
+    }
+    if (repairs.length) {
+      void Promise.all(repairs).catch(() => undefined);
     }
     const cardOrder = ["emrah doğan", "sena özyiğit", "furkan kazım çam", "tunahan avşar"];
     const roster = employees
@@ -456,7 +659,7 @@ export async function getAdminLeaveView(actor, filters) {
       roster,
       employees,
       calendar: serializeCalendar(settings, holidays),
-      balances: balances.map((balance) => ({
+      balances: settledBalances.map((balance) => ({
         id: balance.id,
         userId: balance.user.id,
         employeeName: balance.user.name,
@@ -487,10 +690,11 @@ export async function getAdminLeaveView(actor, filters) {
           .sort((left, right) => left.name.localeCompare(right.name, "tr")),
       },
     };
-  });
+  }));
 }
 
 export async function createLeaveRequest(actor, input, file) {
+  invalidate("leave");
   assertNotMealOnly(actor);
   assertCan(actor, "leaveRequest:create:own");
   const attachment = file && file.bytes.length > 0 ? inspectLeaveFile(file) : null;
@@ -576,6 +780,7 @@ export async function createLeaveRequest(actor, input, file) {
 }
 
 export async function cancelOwnLeaveRequest(actor, requestId) {
+  invalidate("leave");
   assertNotMealOnly(actor);
   assertCan(actor, "leaveRequest:create:own");
 
@@ -608,6 +813,7 @@ export async function cancelOwnLeaveRequest(actor, requestId) {
 }
 
 export async function reviewLeaveRequest(actor, requestId, input) {
+  invalidate("leave");
   assertCan(actor, "leaveRequest:review");
   const data = parseInput(leaveReviewSchema, input);
 
@@ -714,6 +920,7 @@ export async function reviewLeaveRequest(actor, requestId, input) {
 }
 
 export async function reverseLeaveApproval(actor, requestId, note) {
+  invalidate("leave");
   assertCan(actor, "leaveRequest:review");
   const cleanNote = note?.trim() || undefined;
 
@@ -787,6 +994,7 @@ export async function reverseLeaveApproval(actor, requestId, note) {
 }
 
 export async function settleLeaveRequest(actor, requestId, settlement) {
+  invalidate("leave");
   assertCan(actor, "leaveRequest:review");
 
   return withDatabase((db) =>
@@ -852,6 +1060,7 @@ export async function settleLeaveRequest(actor, requestId, settlement) {
 }
 
 export async function setLeaveBalance(actor, input) {
+  invalidate("leave");
   assertCan(actor, "leaveBalance:write");
   const data = parseInput(leaveBalanceSchema, input);
 
@@ -917,6 +1126,7 @@ export async function setLeaveBalance(actor, input) {
 }
 
 export async function updateLeaveCalendar(actor, input) {
+  invalidate("leave");
   assertCan(actor, "leaveBalance:write");
   const data = parseInput(leaveCalendarSchema, input);
   const weekendDays = [...new Set(data.weekendDays)].sort((left, right) => left - right);
@@ -942,6 +1152,7 @@ export async function updateLeaveCalendar(actor, input) {
 }
 
 export async function addLeaveHoliday(actor, input) {
+  invalidate("leave");
   assertCan(actor, "leaveBalance:write");
   const data = parseInput(leaveHolidaySchema, input);
   try {
@@ -963,6 +1174,7 @@ export async function addLeaveHoliday(actor, input) {
 }
 
 export async function setLeaveHolidayActive(actor, holidayId, active) {
+  invalidate("leave");
   assertCan(actor, "leaveBalance:write");
   try {
     return await withDatabase((db) =>

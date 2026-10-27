@@ -2,6 +2,7 @@ import "server-only";
 import { assertNotMealOnly } from "@/server/auth/mealAccess";
 import { assertCan } from "@/server/auth/permissions";
 import { withDatabase } from "@/server/db";
+import { invalidate, remember } from "@/server/readCache";
 import { AppError } from "@/server/errors";
 import { notifyFeedback } from "@/server/telegram/feedbackPush";
 import { feedbackReviewSchema, feedbackSchema, parseInput } from "@/server/validation/schemas";
@@ -29,7 +30,7 @@ function whenLabel(value) {
 
 export async function listFeedback(actor) {
   assertCan(actor, "feedback:read");
-  return withDatabase(async (db) => {
+  return remember("feedback:list", () => withDatabase(async (db) => {
     const rows = await db.feedbackNote.findMany({
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -55,10 +56,11 @@ export async function listFeedback(actor) {
         authorName: row.user.name,
       })),
     };
-  });
+  }));
 }
 
 export async function createFeedback(actor, input) {
+  invalidate("feedback");
   assertCan(actor, "feedback:create");
   assertNotMealOnly(actor);
   const data = parseInput(feedbackSchema, input);
@@ -77,6 +79,7 @@ export async function createFeedback(actor, input) {
 }
 
 export async function deleteFeedback(actor, input) {
+  invalidate("feedback");
   assertCan(actor, "feedback:review");
   const data = parseInput(feedbackReviewSchema, input);
   return withDatabase(async (db) => {
@@ -93,6 +96,7 @@ export async function deleteFeedback(actor, input) {
 }
 
 export async function reviewFeedback(actor, input) {
+  invalidate("feedback");
   assertCan(actor, "feedback:review");
   const data = parseInput(feedbackReviewSchema, input);
   return withDatabase(async (db) => {

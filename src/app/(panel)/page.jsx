@@ -19,6 +19,7 @@ import { toPublicError } from "@/server/errors";
 import { listAlerts } from "@/server/services/alerts";
 import { syncTechnologyNotices } from "@/server/services/technology";
 import { TECHNOLOGY_DRAFTS } from "@/server/technology/drafts";
+export const instant = false;
 
 const LEAVE_LABELS = {
   ANNUAL: "Yıllık izin",

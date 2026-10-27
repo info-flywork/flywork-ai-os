@@ -60,8 +60,6 @@ const PRIORITY = {
   LOW: { label: "P3 — Düşük", className: "bg-slate-200 text-slate-600" },
 };
 
-const AVATAR = ["#03624c", "#0f766e", "#b45309", "#be123c", "#1d4ed8", "#6d28d9"];
-
 function initials(name) {
   const parts = name.trim().split(/\s+/);
   const first = parts[0]?.[0] ?? "";
@@ -69,9 +67,37 @@ function initials(name) {
   return `${first}${last}`.toLocaleUpperCase("tr");
 }
 
-function avatarColor(name) {
-  const total = [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return AVATAR[total % AVATAR.length];
+function personColors(people) {
+  const blue = 217;
+  const used = [blue];
+  const colors = new Map();
+  const ordered = [...people].sort((left, right) => left.id.localeCompare(right.id));
+  for (const person of ordered) {
+    if (person.name.toLocaleLowerCase("tr").includes("emrah")) {
+      colors.set(person.id, `hsl(${blue} 78% 42%)`);
+      continue;
+    }
+    let hash = 2166136261;
+    for (const char of person.id) {
+      hash ^= char.charCodeAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    let hue = (hash >>> 0) % 360;
+    let guard = 0;
+    while (
+      used.some((taken) => {
+        const gap = Math.abs(taken - hue);
+        return Math.min(gap, 360 - gap) < 32;
+      }) &&
+      guard < 12
+    ) {
+      hue = (hue + 32) % 360;
+      guard += 1;
+    }
+    used.push(hue);
+    colors.set(person.id, `hsl(${hue} 64% 34%)`);
+  }
+  return colors;
 }
 
 function dueLabel(value) {
@@ -141,6 +167,7 @@ function TaskDialog({
 
 
 ) {
+  const router = useRouter();
   const [title, setTitle] = useState(task?.title ?? "");
   const [detail, setDetail] = useState(task?.detail ?? "");
   const [priority, setPriority] = useState(task?.priority ?? "NORMAL");
@@ -196,7 +223,10 @@ function TaskDialog({
     const result = await addCommentAction({ taskId: task.id, body: comment });
     setPending(false);
     setState(result);
-    if (result.ok) setComment("");
+    if (result.ok) {
+      setComment("");
+      router.refresh();
+    }
   }
 
   async function sendLink() {
@@ -208,6 +238,7 @@ function TaskDialog({
     if (result.ok) {
       setLinkUrl("");
       setLinkLabel("");
+      router.refresh();
     }
   }
 
@@ -220,6 +251,7 @@ function TaskDialog({
     const result = await addImageAction(form);
     setPending(false);
     setState(result);
+    if (result.ok) router.refresh();
   }
 
   return (
@@ -373,7 +405,16 @@ export default function WorkBoard({
     }
   }, [data.spaces, spaceId]);
 
+  useEffect(() => {
+    if (!editor?.id) {
+      return undefined;
+    }
+    const timer = setInterval(() => router.refresh(), 5000);
+    return () => clearInterval(timer);
+  }, [editor?.id, router]);
+
   const names = new Map(data.people.map((person) => [person.id, person.name]));
+  const colors = personColors(data.people);
   const openTask = editor?.id ? tasks.find((task) => task.id === editor.id) ?? null : null;
 
   function columnTasks(column) {
@@ -587,7 +628,7 @@ export default function WorkBoard({
                           {task.assigneeIds.map((id) => {
                             const name = names.get(id) ?? "";
                             return (
-                              <span key={id} title={name} className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-semibold text-white" style={{ background: avatarColor(name) }}>
+                              <span key={id} title={name} className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-semibold text-white" style={{ background: colors.get(id) ?? "#03624c" }}>
                                 {initials(name)}
                               </span>
                             );

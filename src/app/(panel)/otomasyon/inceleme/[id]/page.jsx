@@ -13,6 +13,7 @@ import {
 
 } from "@/server/finance/reviewRules";
 import { getInvoiceReview } from "@/server/services/invoiceReview";
+export const instant = false;
 
 const MESSAGES = {
   onay: "Belge onaylandı ve Flywork/Faturalar klasörüne yüklendi.",

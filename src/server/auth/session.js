@@ -1,4 +1,5 @@
 import "server-only";
+import { io } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { openSessionToken, sealSessionToken } from "@/server/auth/cookieSeal";
@@ -12,6 +13,8 @@ import { loginSchema, parseInput } from "@/server/validation/schemas";
 
 const SESSION_COOKIE = "flywork_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const USER_CACHE_MS = 60_000;
+const userCache = new Map();
 const DUMMY_PASSWORD_HASH =
   "scrypt$5px7oVC-ovQfA-k4h4e9_g$YDeumFaCrMAmROdaQpHNpZxRI8werQE_GjzaamaQGOgBSXB3fChfU6V8DXw-yBV_jJPKEAg8bGE8_MpvyOHVtQ";
 
@@ -66,14 +69,20 @@ export async function createSession(
 }
 
 export async function readCurrentUser() {
+  await io();
   const token = await readRawToken();
   if (!token) {
     return null;
   }
+  const cacheKey = hashSessionToken(token);
+  const cached = userCache.get(cacheKey);
+  if (cached && cached.until > Date.now()) {
+    return cached.user;
+  }
 
   const session = await withDatabase((db) =>
     db.session.findUnique({
-      where: { tokenHash: hashSessionToken(token) },
+      where: { tokenHash: cacheKey },
       include: {
         user: {
           select: { id: true, email: true, name: true, role: true, active: true, mealOnly: true, approver: true },
@@ -91,7 +100,7 @@ export async function readCurrentUser() {
     return null;
   }
 
-  return {
+  const user = {
     id: session.user.id,
     email: session.user.email,
     name: session.user.name,
@@ -99,6 +108,8 @@ export async function readCurrentUser() {
     mealOnly: session.user.mealOnly,
     approver: session.user.approver,
   };
+  userCache.set(cacheKey, { user, until: Date.now() + USER_CACHE_MS });
+  return user;
 }
 
 export async function requireUser() {
@@ -146,9 +157,11 @@ export async function changeOwnPasswordFromSession(input) {
 export async function logout() {
   const token = await readRawToken();
   if (token) {
+    const cacheKey = hashSessionToken(token);
+    userCache.delete(cacheKey);
     await withDatabase((db) =>
       db.session.updateMany({
-        where: { tokenHash: hashSessionToken(token), revokedAt: null },
+        where: { tokenHash: cacheKey, revokedAt: null },
         data: { revokedAt: new Date() },
       }),
     );

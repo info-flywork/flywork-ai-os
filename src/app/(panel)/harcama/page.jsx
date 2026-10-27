@@ -6,6 +6,7 @@ import { requireUser } from "@/server/auth/session";
 import { istanbulToday } from "@/server/dates";
 import { toPublicError } from "@/server/errors";
 import { getExpensePage, getInvoicePage } from "@/server/services/finance";
+export const instant = false;
 
 const WEEKDAYS = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];

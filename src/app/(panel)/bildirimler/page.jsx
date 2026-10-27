@@ -5,6 +5,7 @@ import { redirectEmployeeFromAdminPages, redirectMealOnlyUser } from "@/server/a
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { listAlerts } from "@/server/services/alerts";
+export const instant = false;
 
 export default async function AlertsPage() {
   const user = await requireUser();

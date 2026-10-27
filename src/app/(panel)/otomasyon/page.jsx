@@ -7,6 +7,7 @@ import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { REVIEW_STATUS_LABELS } from "@/server/finance/reviewRules";
 import { getAutomationPage } from "@/server/services/automation";
+export const instant = false;
 
 const STATE_LABELS = {
   ACTIVE: "Aktif",

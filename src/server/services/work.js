@@ -5,6 +5,7 @@ import { assertNotMealOnly } from "@/server/auth/mealAccess";
 import { randomBytes } from "node:crypto";
 import { dateOnly, formatIstanbulDateTime, istanbulToday, toIsoDate } from "@/server/dates";
 import { withDatabase } from "@/server/db";
+import { invalidate, remember } from "@/server/readCache";
 import { AppError } from "@/server/errors";
 import { inspectWorkImage, readWorkImage, removeWorkImage, writeWorkImage } from "@/server/work/images";
 import { pushWorkNotice, workAssignNotice, workCardNotice, workCommentNotice, workNoticeRecipients } from "@/server/work/notify";
@@ -46,7 +47,7 @@ const assignableUser = {
 
 export async function getWorkBoard(actor) {
   guard(actor, "task:read");
-  return withDatabase(async (db) => {
+  return remember("work:board", () => withDatabase(async (db) => {
     const [tasks, people, spaces] = await Promise.all([
       db.workTask.findMany({
         include: {
@@ -97,7 +98,7 @@ export async function getWorkBoard(actor) {
         images: task.images.map((image) => ({ id: image.id })),
       })),
     };
-  });
+  }));
 }
 
 async function eligibleIds(db, ids) {
@@ -113,6 +114,7 @@ async function eligibleIds(db, ids) {
 }
 
 export async function createWorkSpace(actor, input) {
+  invalidate("work");
   guard(actor, "task:write");
   const data = parseInput(workSpaceSchema, input);
   const name = data.name.replace(/\s+/g, " ");
@@ -127,6 +129,7 @@ export async function createWorkSpace(actor, input) {
 }
 
 export async function saveWorkTask(actor, input) {
+  invalidate("work");
   guard(actor, "task:write");
   const data = parseInput(workTaskSchema, input);
   return withDatabase(async (db) => {
@@ -188,6 +191,7 @@ export async function saveWorkTask(actor, input) {
 }
 
 export async function moveWorkTask(actor, input) {
+  invalidate("work");
   guard(actor, "task:write");
   const data = parseInput(moveWorkTaskSchema, input);
   if (!data.orderedIds.includes(data.taskId)) {
@@ -214,6 +218,7 @@ export async function moveWorkTask(actor, input) {
 }
 
 export async function deleteWorkTask(actor, id) {
+  invalidate("work");
   guard(actor, "task:write");
   return withDatabase(async (db) => {
     const current = await db.workTask.findUnique({
@@ -234,6 +239,7 @@ function mentionedIds(body, people) {
 }
 
 export async function setWorkTaskCompleted(actor, input) {
+  invalidate("work");
   guard(actor, "task:write");
   const data = parseInput(workCompletedSchema, input);
   return withDatabase(async (db) => {
@@ -250,6 +256,7 @@ export async function setWorkTaskCompleted(actor, input) {
 }
 
 export async function addWorkComment(actor, input) {
+  invalidate("work");
   guard(actor, "task:write");
   const data = parseInput(workCommentSchema, input);
   return withDatabase(async (db) => {
@@ -288,6 +295,7 @@ export async function addWorkComment(actor, input) {
 }
 
 export async function addWorkLink(actor, input) {
+  invalidate("work");
   guard(actor, "task:write");
   const data = parseInput(workLinkSchema, input);
   return withDatabase(async (db) => {
@@ -302,6 +310,7 @@ export async function addWorkLink(actor, input) {
 }
 
 export async function addWorkImage(actor, taskId, bytes) {
+  invalidate("work");
   guard(actor, "task:write");
   const image = inspectWorkImage(bytes);
   const storageKey = randomBytes(16).toString("hex");
@@ -321,6 +330,7 @@ export async function addWorkImage(actor, taskId, bytes) {
 }
 
 export async function deleteWorkLink(actor, id) {
+  invalidate("work");
   guard(actor, "task:write");
   return withDatabase(async (db) => {
     const current = await db.workTaskLink.findUnique({ where: { id }, select: { id: true } });
@@ -330,6 +340,7 @@ export async function deleteWorkLink(actor, id) {
 }
 
 export async function deleteWorkImage(actor, id) {
+  invalidate("work");
   guard(actor, "task:write");
   return withDatabase(async (db) => {
     const current = await db.workTaskImage.findUnique({ where: { id }, select: { id: true, storageKey: true } });

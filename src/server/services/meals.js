@@ -3,6 +3,7 @@ import "server-only";
 import { assertCan } from "@/server/auth/permissions";
 import { dateOnly, toIsoDate } from "@/server/dates";
 import { withDatabase } from "@/server/db";
+import { invalidate, remember } from "@/server/readCache";
 import { AppError } from "@/server/errors";
 import {
   DEFAULT_CLOSES_AT,
@@ -113,7 +114,7 @@ function serializeMenu(menu
         choiceKey: item.choiceKey ?? null,
         description: item.description ?? null,
         categoryName: item.dish?.category.name ?? null,
-        photoUrl: item.dish?.photoKey ? `/api/yemek-foto/${item.dish.id}` : null,
+        photoUrl: item.dish?.photoKey ? `/api/yemek-foto/${item.dish.id}?v=${item.dish.photoKey.slice(0, 12)}` : null,
       };
       if (!prices) {
         return row;
@@ -159,6 +160,7 @@ export async function getMealSchedule(actor) {
 }
 
 export async function updateClosingTime(actor, input) {
+  invalidate("meal");
   assertCan(actor, "mealMenu:write");
   const data = parseInput(closingTimeSchema, input);
 
@@ -187,6 +189,7 @@ const catererPhoneSchema = z.object({
 });
 
 export async function updateCatererPhone(actor, input) {
+  invalidate("meal");
   assertCan(actor, "mealMenu:write");
   const data = parseInput(catererPhoneSchema, input);
   const phone = data.catererPhone.replace(/\s+/g, "");
@@ -204,6 +207,7 @@ export async function updateCatererPhone(actor, input) {
 }
 
 export async function saveMealMenu(actor, input) {
+  invalidate("meal");
   assertCan(actor, "mealMenu:write");
   const data = parseInput(mealMenuSchema, input);
   const weekday = istanbulClock(new Date(`${data.date}T12:00:00+03:00`)).weekday;
@@ -287,6 +291,7 @@ export async function saveOwnMealOrder(
   input,
   now = new Date(),
 ) {
+  invalidate("meal");
   assertCan(actor, "mealOrder:create:own");
   const data = parseInput(mealOrderSchema, input);
 
@@ -339,6 +344,7 @@ export async function saveOwnMealOrder(
 }
 
 export async function clearOwnMealAbsence(actor, menuId, now = new Date()) {
+  invalidate("meal");
   assertCan(actor, "mealOrder:create:own");
   if (!menuId.trim()) {
     throw new AppError("Menü bulunamadı.", "VALIDATION", 400);
@@ -366,6 +372,7 @@ export async function clearOwnMealAbsence(actor, menuId, now = new Date()) {
 }
 
 export async function cancelOwnMealOrder(actor, menuId, now = new Date()) {
+  invalidate("meal");
   assertCan(actor, "mealOrder:create:own");
   if (!menuId.trim()) {
     throw new AppError("Menü bulunamadı.", "VALIDATION", 400);
@@ -437,36 +444,150 @@ const menuItemInclude = {
   include: { dish: { include: { category: { select: { name: true } } } } },
 };
 
+function sqlBool(value, fallback = false) {
+  if (value == null) {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "bigint") {
+    return Number(value) !== 0;
+  }
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) {
+    return value.length > 0 && value[0] !== 0;
+  }
+  return value === "1" || value === "true";
+}
+
+function groupMealMenus(rows) {
+  const menus = new Map();
+  for (const row of rows) {
+    let menu = menus.get(row.menuId);
+    if (!menu) {
+      menu = {
+        id: row.menuId,
+        date: dateOnly(String(row.menuDate).slice(0, 10)),
+        note: row.menuNote,
+        published: sqlBool(row.published, true),
+        items: [],
+      };
+      menus.set(row.menuId, menu);
+    }
+    if (!row.itemId) {
+      continue;
+    }
+    menu.items.push({
+      id: row.itemId,
+      dishId: row.dishId,
+      name: row.itemName,
+      sortOrder: Number(row.sortOrder ?? 0),
+      slot: row.slot,
+      available: sqlBool(row.available, true),
+      choiceKey: row.choiceKey,
+      description: row.description,
+      price: row.price,
+      dish: row.dishId
+        ? { id: row.dishId, photoKey: row.photoKey, category: { name: row.categoryName ?? null } }
+        : null,
+    });
+  }
+  return [...menus.values()];
+}
+
+function groupMealOrders(rows) {
+  return rows.map((row) => ({
+    id: row.orderId,
+    status: row.status,
+    absent: sqlBool(row.absent),
+    note: row.note,
+    menuId: row.menuId,
+    itemId: row.itemId,
+    soupItemId: row.soupItemId,
+    sideItemId: row.sideItemId,
+    dessertItemId: row.dessertItemId,
+    item: row.itemName ? { name: row.itemName } : null,
+    soupItem: row.soupName ? { name: row.soupName } : null,
+    sideItem: row.sideName ? { name: row.sideName } : null,
+    dessertItem: row.dessertName ? { name: row.dessertName } : null,
+    menu: { date: dateOnly(String(row.menuDate).slice(0, 10)) },
+  }));
+}
+
 export async function getEmployeeMealView(actor, now = new Date()) {
   assertCan(actor, "mealMenu:read");
   const clock = istanbulClock(now);
 
-  return withDatabase(async (db) => {
-    const settings = await ensureSettings(db);
+  return remember(`meal:employee:${actor.id}:${clock.date}`, () => withDatabase(async (db) => {
+    const from = dateOnly(clock.date);
+    const to = dateOnly(addIsoDays(clock.date, 14));
+    const [settingsRow, menuRows, orderRows] = await Promise.all([
+      db.mealSettings.findUnique({ where: { id: MEAL_SETTINGS_ID } }),
+      db.$queryRaw`
+        SELECT
+          m.id AS menuId,
+          DATE_FORMAT(m.date, '%Y-%m-%d') AS menuDate,
+          m.note AS menuNote,
+          m.published AS published,
+          i.id AS itemId,
+          i.dishId AS dishId,
+          i.name AS itemName,
+          i.sortOrder AS sortOrder,
+          i.slot AS slot,
+          i.available AS available,
+          i.choiceKey AS choiceKey,
+          i.description AS description,
+          i.price AS price,
+          d.photoKey AS photoKey,
+          c.name AS categoryName
+        FROM \`MealMenu\` m
+        LEFT JOIN \`MealMenuItem\` i ON i.menuId = m.id
+        LEFT JOIN \`MealDish\` d ON d.id = i.dishId
+        LEFT JOIN \`MealCategory\` c ON c.id = d.categoryId
+        WHERE m.published = 1 AND m.date >= ${from} AND m.date <= ${to}
+        ORDER BY m.date ASC, i.sortOrder ASC
+      `,
+      db.$queryRaw`
+        SELECT
+          o.id AS orderId,
+          o.status AS status,
+          o.absent AS absent,
+          o.note AS note,
+          o.menuId AS menuId,
+          o.itemId AS itemId,
+          o.soupItemId AS soupItemId,
+          o.sideItemId AS sideItemId,
+          o.dessertItemId AS dessertItemId,
+          DATE_FORMAT(m.date, '%Y-%m-%d') AS menuDate,
+          i.name AS itemName,
+          s.name AS soupName,
+          sd.name AS sideName,
+          de.name AS dessertName
+        FROM \`MealOrder\` o
+        JOIN \`MealMenu\` m ON m.id = o.menuId
+        LEFT JOIN \`MealMenuItem\` i ON i.id = o.itemId
+        LEFT JOIN \`MealMenuItem\` s ON s.id = o.soupItemId
+        LEFT JOIN \`MealMenuItem\` sd ON sd.id = o.sideItemId
+        LEFT JOIN \`MealMenuItem\` de ON de.id = o.dessertItemId
+        WHERE o.userId = ${actor.id}
+        ORDER BY m.date DESC
+        LIMIT 40
+      `,
+    ]);
+    const settings = settingsRow
+      ? { ...settingsRow, weekdays: numberList(settingsRow.weekdays) }
+      : {
+          opensAt: DEFAULT_OPENS_AT,
+          closesAt: DEFAULT_CLOSES_AT,
+          weekdays: [...DEFAULT_MEAL_WEEKDAYS],
+          catererPhone: null,
+        };
     const dates = orderableMealDates(now, settings, 6);
-    const menus = await db.mealMenu.findMany({
-      where: { date: { in: dates.map((value) => dateOnly(value)) }, published: true },
-      include: { items: menuItemInclude },
-    });
-    const orders = await db.mealOrder.findMany({
-      where: { userId: actor.id, menuId: { in: menus.map((menu) => menu.id) } },
-      select: orderSelect,
-    });
-    const history = await db.mealOrder.findMany({
-      where: { userId: actor.id },
-      orderBy: { menu: { date: "desc" } },
-      take: 30,
-      select: {
-        id: true,
-        status: true,
-        absent: true,
-        item: { select: { name: true } },
-        soupItem: { select: { name: true } },
-        sideItem: { select: { name: true } },
-        dessertItem: { select: { name: true } },
-        menu: { select: { date: true } },
-      },
-    });
+    const menus = groupMealMenus(menuRows).filter((menu) => dates.includes(toIsoDate(menu.date)));
+    const allOrders = groupMealOrders(orderRows);
+    const history = allOrders.slice(0, 30);
+    const menuIds = new Set(menus.map((menu) => menu.id));
+    const orders = allOrders.filter((order) => menuIds.has(order.menuId));
     const menuByDate = new Map(menus.map((menu) => [toIsoDate(menu.date), menu]));
     const orderByMenu = new Map(orders.map((order) => [order.menuId, order]));
     const days = dates.map((date) => {
@@ -535,7 +656,7 @@ export async function getEmployeeMealView(actor, now = new Date()) {
         date: toIsoDate(order.menu.date),
       })),
     };
-  }).then((view) => (actor.role === "ADMIN" ? view : scrubPrices(view)));
+  })).then((view) => (actor.role === "ADMIN" ? view : scrubPrices(view)));
 }
 
  
@@ -551,16 +672,17 @@ export async function getAdminMealView(
   const range = reportRange(mode, date);
   const dayEnd = addIsoDays(date, 1);
 
-  return withDatabase(async (db) => {
-    const settings = await ensureSettings(db);
-    const menu = await db.mealMenu.findUnique({
-      where: { date: dateOnly(date) },
-      include: { items: menuItemInclude, orders: { select: { id: true } } },
-    });
-    const [people, guestOrders] = await Promise.all([
+  return remember(`meal:admin:${actor.id}:${date}:${mode}`, () => withDatabase(async (db) => {
+    const day = dateOnly(date);
+    const [settingsRow, menu, people, guestOrders, dayOrders, reportOrders] = await Promise.all([
+      db.mealSettings.findUnique({ where: { id: MEAL_SETTINGS_ID } }),
+      db.mealMenu.findUnique({
+        where: { date: day },
+        include: { items: menuItemInclude, orders: { select: { id: true } } },
+      }),
       db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
       db.mealGuestOrder.findMany({
-        where: { menu: { date: dateOnly(date) } },
+        where: { menu: { date: day } },
         orderBy: { guestName: "asc" },
         select: {
           id: true,
@@ -572,38 +694,46 @@ export async function getAdminMealView(
           dessertItem: { select: { id: true, name: true } },
         },
       }),
+      db.mealOrder.findMany({
+        where: { menu: { date: day } },
+        orderBy: { user: { name: "asc" } },
+        select: {
+          id: true,
+          status: true,
+          absent: true,
+          note: true,
+          user: { select: { id: true, name: true } },
+          item: { select: { id: true, name: true, available: true } },
+          soupItem: { select: { id: true, name: true, available: true } },
+          sideItem: { select: { id: true, name: true, available: true } },
+          dessertItem: { select: { id: true, name: true, available: true } },
+        },
+      }),
+      db.mealOrder.findMany({
+        where: {
+          status: { not: "CANCELLED" },
+          menu: { date: { gte: dateOnly(range.from), lte: dateOnly(range.to) } },
+        },
+        select: {
+          absent: true,
+          status: true,
+          item: { select: { name: true } },
+          soupItem: { select: { name: true } },
+          sideItem: { select: { name: true } },
+          dessertItem: { select: { name: true } },
+          user: { select: { name: true } },
+          menu: { select: { date: true } },
+        },
+      }),
     ]);
-    const dayOrders = await db.mealOrder.findMany({
-      where: { menu: { date: dateOnly(date) } },
-      orderBy: { user: { name: "asc" } },
-      select: {
-        id: true,
-        status: true,
-        absent: true,
-        note: true,
-        user: { select: { id: true, name: true } },
-        item: { select: { id: true, name: true, available: true } },
-        soupItem: { select: { id: true, name: true, available: true } },
-        sideItem: { select: { id: true, name: true, available: true } },
-        dessertItem: { select: { id: true, name: true, available: true } },
-      },
-    });
-    const reportOrders = await db.mealOrder.findMany({
-      where: {
-        status: { not: "CANCELLED" },
-        menu: { date: { gte: dateOnly(range.from), lte: dateOnly(range.to) } },
-      },
-      select: {
-        absent: true,
-        status: true,
-        item: { select: { name: true } },
-        soupItem: { select: { name: true } },
-        sideItem: { select: { name: true } },
-        dessertItem: { select: { name: true } },
-        user: { select: { name: true } },
-        menu: { select: { date: true } },
-      },
-    });
+    const settings = settingsRow
+      ? { ...settingsRow, weekdays: numberList(settingsRow.weekdays) }
+      : {
+          opensAt: DEFAULT_OPENS_AT,
+          closesAt: DEFAULT_CLOSES_AT,
+          weekdays: [...DEFAULT_MEAL_WEEKDAYS],
+          catererPhone: null,
+        };
 
     const byItem = new Map();
     const byEmployee = new Map();
@@ -721,7 +851,7 @@ export async function getAdminMealView(
           .sort((left, right) => left.name.localeCompare(right.name, "tr")),
       },
     };
-  });
+  }));
 }
 
 export async function updateMealOrderStatus(
@@ -729,6 +859,7 @@ export async function updateMealOrderStatus(
   orderId,
   input,
 ) {
+  invalidate("meal");
   assertCan(actor, "mealOrder:updateStatus");
   const data = parseInput(mealOrderStatusSchema, input);
 
@@ -743,7 +874,7 @@ export async function updateMealOrderStatus(
 
 export async function listMealCatalog(actor) {
   assertCan(actor, "mealMenu:read");
-  return withDatabase(async (db) => {
+  return remember("meal:catalog", () => withDatabase(async (db) => {
     const categories = await db.mealCategory.findMany({
       orderBy: { sortOrder: "asc" },
       include: { dishes: { orderBy: { name: "asc" } } },
@@ -759,14 +890,15 @@ export async function listMealCatalog(actor) {
         active: dish.active,
         description: dish.description,
         ...(actor.role === "ADMIN" ? { priceLabel: priceLabel(dish.price) } : {}),
-        photoUrl: dish.photoKey ? `/api/yemek-foto/${dish.id}` : null,
+        photoUrl: dish.photoKey ? `/api/yemek-foto/${dish.id}?v=${dish.photoKey.slice(0, 12)}` : null,
       })),
     }));
     return actor.role === "ADMIN" ? visible : scrubPrices(visible);
-  });
+  }));
 }
 
 export async function saveMealCategory(actor, input) {
+  invalidate("meal");
   assertCan(actor, "mealMenu:write");
   const data = parseInput(mealCategorySchema, input);
   return withDatabase((db) =>
@@ -786,6 +918,7 @@ export async function saveMealDish(
   input,
   photo,
 ) {
+  invalidate("meal");
   assertCan(actor, "mealMenu:write");
   const data = parseInput(mealDishSchema, input);
   const priced = parseCatalogPrice(data.price ?? "");
@@ -856,16 +989,19 @@ export async function saveMealDish(
 
 export async function openMealPhoto(actor, dishId) {
   assertCan(actor, "mealMenu:read");
-  return withDatabase(async (db) => {
-    const dish = await db.mealDish.findUnique({ where: { id: dishId } });
-    if (!dish?.photoKey || !dish.photoType) {
-      throw new AppError("Fotoğraf bulunamadı.", "NOT_FOUND", 404);
-    }
-    return {
-      bytes: await readMealPhoto(dish.photoKey),
-      contentType: dish.photoType,
-    };
-  });
+  const dish = await withDatabase((db) =>
+    db.mealDish.findUnique({
+      where: { id: dishId },
+      select: { photoKey: true, photoType: true },
+    }),
+  );
+  if (!dish?.photoKey || !dish.photoType) {
+    throw new AppError("Fotoğraf bulunamadı.", "NOT_FOUND", 404);
+  }
+  return {
+    bytes: await readMealPhoto(dish.photoKey),
+    contentType: dish.photoType,
+  };
 }
 
 function menuItemData(
@@ -892,6 +1028,7 @@ function menuItemData(
 }
 
 export async function publishCatalogMenu(actor, input, now = new Date()) {
+  invalidate("meal");
   assertCan(actor, "mealMenu:write");
   const data = parseInput(catalogMenuSchema, input);
   const settings = await withDatabase(ensureSettings);
@@ -1073,6 +1210,7 @@ async function requireOpenMenu(db, menuId, now, manager = false) {
 }
 
 export async function saveManagedMealOrder(actor, input, now = new Date()) {
+  invalidate("meal");
   assertCan(actor, "mealOrder:updateStatus");
   const data = parseInput(managedMealOrderSchema, input);
   return withDatabase(async (db) => {
@@ -1119,6 +1257,7 @@ export async function saveManagedMealOrder(actor, input, now = new Date()) {
 }
 
 export async function saveGuestMealOrder(actor, input, now = new Date()) {
+  invalidate("meal");
   assertCan(actor, "mealOrder:updateStatus");
   const data = parseInput(guestMealOrderSchema, input);
   return withDatabase(async (db) => {
@@ -1229,7 +1368,7 @@ export async function getMealSpendReport(actor, year) {
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
     throw new AppError("Yıl geçersiz.", "VALIDATION", 400);
   }
-  return withDatabase(async (db) => {
+  return remember(`meal:spend:${year}`, () => withDatabase(async (db) => {
     const menus = await db.mealMenu.findMany({
       where: { date: { gte: dateOnly(`${year}-01-01`), lte: dateOnly(`${year}-12-31`) } },
       orderBy: { date: "asc" },
@@ -1329,5 +1468,5 @@ export async function getMealSpendReport(actor, year) {
         };
       });
     return { year, months };
-  });
+  }));
 }

@@ -13,6 +13,7 @@ import {
 
 } from "@/server/services/meals";
 import { listMealPhotoReviews } from "@/server/services/photoReview";
+export const instant = false;
 
 function selectedDate(value, fallback) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -74,17 +75,39 @@ export default async function YemekYonetimiPage({
   const upcoming = upcomingMealDates(today, [...DEFAULT_MEAL_WEEKDAYS], 6);
   const date = upcoming.includes(requested) ? requested : (upcoming[0] ?? requested);
   const year = selectedYear(params.yil, today);
+  const needsOrder = tab === "siparis";
+  const needsAdmin = tab === "bugun" || tab === "plan";
+  const needsCatalog = tab === "plan" || tab === "katalog" || params.sekme === "fotograflar";
+  const needsSpend = tab === "gunluk" || tab === "aylik";
   const [view, catalog, orderView, spend, photoReview] = await Promise.all([
-    getAdminMealView(user, date, selectedMode(params.rapor)),
-    listMealCatalog(user),
-    getEmployeeMealView(user),
-    getMealSpendReport(user, year),
+    needsAdmin ? getAdminMealView(user, date, selectedMode(params.rapor)) : Promise.resolve(null),
+    needsCatalog ? listMealCatalog(user) : Promise.resolve([]),
+    needsOrder ? getEmployeeMealView(user) : Promise.resolve(null),
+    needsSpend ? getMealSpendReport(user, year) : Promise.resolve(null),
     params.sekme === "fotograflar" ? listMealPhotoReviews(user) : Promise.resolve(null),
   ]);
+  const mealView = view ?? {
+    today,
+    selectedDate: date,
+    schedule: {
+      opensAt: "",
+      closesAt: "",
+      weekdays: [...DEFAULT_MEAL_WEEKDAYS],
+      weekdayLabels: [],
+      catererPhone: null,
+    },
+    window: { allowed: false, message: "" },
+    menu: null,
+    orders: [],
+    guests: [],
+    people: [],
+    pending: [],
+    away: [],
+  };
 
   return (
     <AdminMeal
-      view={view}
+      view={mealView}
       tab={params.sekme === "fotograflar" ? "katalog" : tab}
       catalog={catalog.map((category) => ({
         ...category,

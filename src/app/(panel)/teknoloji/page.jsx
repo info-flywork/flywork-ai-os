@@ -5,6 +5,7 @@ import { toPublicError } from "@/server/errors";
 import { listPaidSubscriptions } from "@/server/services/paidSubscriptions";
 import { getTechnologyPage } from "@/server/services/technology";
 import { technologyDraft } from "@/server/technology/drafts";
+export const instant = false;
 
 function one(value) {
   const picked = Array.isArray(value) ? value[0] : value;

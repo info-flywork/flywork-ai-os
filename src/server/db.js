@@ -1,4 +1,5 @@
 import "server-only";
+import { io } from "next/cache";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { createMysqlAdapter } from "@/server/mysql";
 import { AppError } from "@/server/errors";
@@ -45,6 +46,8 @@ function clientMatchesLoadedSchema(client) {
   );
 }
 
+const POOL_VERSION = 2;
+
 export function getPrisma() {
   if (!process.env.DATABASE_URL) {
     throw new AppError(
@@ -55,7 +58,7 @@ export function getPrisma() {
   }
 
   const cached = globalForPrisma.flyworkPrisma;
-  if (cached && clientMatchesLoadedSchema(cached)) {
+  if (cached && globalForPrisma.flyworkPoolVersion === POOL_VERSION && clientMatchesLoadedSchema(cached)) {
     return cached;
   }
   if (cached) {
@@ -64,6 +67,7 @@ export function getPrisma() {
   const adapter = createMysqlAdapter();
   const client = new PrismaClient({ adapter });
   globalForPrisma.flyworkPrisma = client;
+  globalForPrisma.flyworkPoolVersion = POOL_VERSION;
   return client;
 }
 
@@ -92,7 +96,7 @@ export function normalizeDatabaseError(error) {
         503,
       );
     }
-    if (CONNECTION_ERROR_CODES.has(error.code)) {
+    if (CONNECTION_ERROR_CODES.has(error.code) || error.code === "P2039") {
       return new AppError(
         "Veritabanına bağlanılamadı.",
         "DATABASE_UNAVAILABLE",
@@ -127,6 +131,7 @@ export function normalizeDatabaseError(error) {
 export async function withDatabase(
   work,
 ) {
+  await io();
   try {
     return await work(getPrisma());
   } catch (error) {

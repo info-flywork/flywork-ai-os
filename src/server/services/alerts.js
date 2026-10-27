@@ -3,6 +3,7 @@ import "server-only";
 import { can } from "@/server/auth/permissions";
 import { dateOnly, istanbulToday, toIsoDate } from "@/server/dates";
 import { withDatabase } from "@/server/db";
+import { invalidate, remember } from "@/server/readCache";
 import { AppError } from "@/server/errors";
 import { redact } from "@/server/runtime/redact";
 import { invoiceReviewMonthWhere } from "@/server/dashboard/summary";
@@ -33,7 +34,7 @@ export async function listAlerts(actor, now = new Date(), invoiceMonth) {
   const today = dateOnly(todayIso);
   const horizon = horizonDate(today);
 
-  const items = await withDatabase(async (db) => {
+  const items = await remember(`alerts:${actor.id}:${invoiceMonth ?? ""}`, () => withDatabase(async (db) => {
     const [reviews, leaves, renewals, failures] = await Promise.all([
       company
         ? db.invoiceReview.findMany({
@@ -137,7 +138,7 @@ export async function listAlerts(actor, now = new Date(), invoiceMonth) {
     return collected
       .map((item) => ({ ...item, read: readKeys.has(item.key) }))
       .sort((left, right) => Number(left.read) - Number(right.read));
-  });
+  }));
 
   return items;
 }
@@ -163,6 +164,7 @@ export async function markAlertRead(actor, key, now = new Date()) {
       update: {},
     }),
   );
+  invalidate("alerts");
 }
 
 export async function markVisibleAlertsRead(actor, now = new Date()) {
@@ -176,4 +178,5 @@ export async function markVisibleAlertsRead(actor, now = new Date()) {
       skipDuplicates: true,
     }),
   );
+  invalidate("alerts");
 }

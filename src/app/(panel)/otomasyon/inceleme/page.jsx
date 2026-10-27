@@ -4,6 +4,7 @@ import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { REVIEW_STATUS_LABELS } from "@/server/finance/reviewRules";
 import { listInvoiceReviews } from "@/server/services/invoiceReview";
+export const instant = false;
 
 export default async function InvoiceReviewListPage() {
   const user = await requireUser();

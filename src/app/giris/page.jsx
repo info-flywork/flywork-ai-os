@@ -4,6 +4,7 @@ import LoginForm from "@/components/LoginForm";
 import { landingPath } from "@/lib/safeNextPath";
 import { readCurrentUser } from "@/server/auth/session";
 import { withDatabase } from "@/server/db";
+export const instant = false;
 
 async function LoginScreen({
   searchParams,
@@ -16,9 +17,14 @@ async function LoginScreen({
     redirect(landingPath(user, params.next));
   }
 
-  const adminCount = await withDatabase((db) =>
-    db.user.count({ where: { role: "ADMIN", active: true } }),
-  );
+  let adminCount = null;
+  try {
+    adminCount = await withDatabase((db) =>
+      db.user.count({ where: { role: "ADMIN", active: true } }),
+    );
+  } catch {
+    adminCount = null;
+  }
 
   return (
     <div className="grid min-h-screen md:grid-cols-2">

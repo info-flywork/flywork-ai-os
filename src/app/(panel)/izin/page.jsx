@@ -4,6 +4,7 @@ import { istanbulToday } from "@/server/dates";
 import { redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
 import { getAdminLeaveView, getEmployeeLeaveView } from "@/server/services/leave";
+export const instant = false;
 
 const CARD_FROM = "2025-01-01";
 const CARD_TO = "2027-12-31";
@@ -50,15 +51,16 @@ export default async function IzinPage({
   redirectMealOnlyUser(user);
   const params = await searchParams;
 
-  const ownLeave = await getEmployeeLeaveView(user);
-  const requestForm = {
-    today: istanbulToday(),
-    balance: ownLeave.balance,
-    requests: ownLeave.requests,
-  };
-
   if (user.role === "ADMIN") {
-    const view = await getAdminLeaveView(user, filtersFrom());
+    const [ownLeave, view] = await Promise.all([
+      getEmployeeLeaveView(user),
+      getAdminLeaveView(user, filtersFrom()),
+    ]);
+    const requestForm = {
+      today: istanbulToday(),
+      balance: ownLeave.balance,
+      requests: ownLeave.requests,
+    };
     return (
       <AdminLeave
         requestForm={requestForm}
@@ -72,6 +74,13 @@ export default async function IzinPage({
       />
     );
   }
+
+  const ownLeave = await getEmployeeLeaveView(user);
+  const requestForm = {
+    today: istanbulToday(),
+    balance: ownLeave.balance,
+    requests: ownLeave.requests,
+  };
 
   return (
     <EmployeeLeave

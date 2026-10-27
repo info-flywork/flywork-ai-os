@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { redirectEmployeeFromAdminPages, redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
+export const instant = false;
 
 function one(value) {
   const picked = Array.isArray(value) ? value[0] : value;

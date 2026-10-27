@@ -10,7 +10,8 @@ import { panelNav } from "@/components/panelNav";
 
 export default function AppSidebar({
   user,
-  alertCount = 0,
+  alertBadge = null,
+  alertDot = null,
   open = false,
   collapsed = false,
   onNavigate,
@@ -86,14 +87,12 @@ export default function AppSidebar({
               >
                 <span className="relative inline-flex">
                   <Icon size={18} aria-hidden="true" />
-                  {item.path === "/bildirimler" && alertCount > 0 ? (
-                    <span className={`absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[#ff5a5f] ${collapsed ? "hidden lg:block" : "hidden"}`} />
+                  {item.path === "/bildirimler" ? (
+                    <span className={collapsed ? "hidden lg:contents" : "hidden"}>{alertDot}</span>
                   ) : null}
                 </span>
                 <span className={`flex-1 ${rail}`}>{item.name}</span>
-                {item.path === "/bildirimler" && alertCount > 0 ? (
-                  <span className={`min-w-5 rounded-full bg-[#ff5a5f] px-1.5 py-0.5 text-center text-[11px] font-semibold text-white ${rail}`}>{alertCount}</span>
-                ) : null}
+                {item.path === "/bildirimler" ? <span className={rail}>{alertBadge}</span> : null}
               </Link>
             );
           })}

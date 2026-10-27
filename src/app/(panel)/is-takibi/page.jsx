@@ -3,6 +3,7 @@ import { redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { getWorkBoard } from "@/server/services/work";
+export const instant = false;
 
 export default async function IsTakibiPage() {
   const user = await requireUser();

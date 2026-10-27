@@ -11,10 +11,15 @@ export function mysqlConnectionOptions(connectionString = process.env.DATABASE_U
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
     database: decodeURIComponent(url.pathname.replace(/^\//, "")),
-    connectionLimit: 10,
+    connectTimeout: 20_000,
   };
 }
 
 export function createMysqlAdapter(connectionString = process.env.DATABASE_URL) {
-  return new PrismaMariaDb(mysqlConnectionOptions(connectionString));
+  return new PrismaMariaDb({
+    ...mysqlConnectionOptions(connectionString),
+    connectionLimit: 10,
+    minimumIdle: 1,
+    acquireTimeout: 20_000,
+  });
 }

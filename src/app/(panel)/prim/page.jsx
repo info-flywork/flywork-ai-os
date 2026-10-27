@@ -3,6 +3,7 @@ import { redirectEmployeeFromAdminPages, redirectMealOnlyUser } from "@/server/a
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { getBonusPage } from "@/server/services/bonus";
+export const instant = false;
 
 function one(value) {
   return Array.isArray(value) ? value[0] : value;
