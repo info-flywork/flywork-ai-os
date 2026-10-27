@@ -42,6 +42,7 @@ export async function createInitialAdmin(
       email: data.email,
       name: data.name,
       role: "ADMIN",
+      approver: true,
       passwordHash,
     },
     select: { email: true },
