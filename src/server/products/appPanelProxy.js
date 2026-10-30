@@ -33,15 +33,27 @@ export function upstreamLocation(location) {
 }
 
 function panelCredentials() {
-  const file = readFileSync(path.join(process.cwd(), "app_panel-main-main", ".env"), "utf8");
-  const env = {};
-  for (const line of file.split("\n")) {
-    if (!line || line.startsWith("#") || !line.includes("=")) continue;
-    const index = line.indexOf("=");
-    const key = line.slice(0, index).trim();
-    env[key] = line.slice(index + 1).trim().replace(/^["']|["']$/g, "");
+  const fromEnv = {
+    email: process.env.APP_PANEL_EMAIL ?? "",
+    password: process.env.APP_PANEL_PASSWORD ?? "",
+  };
+  if (fromEnv.email && fromEnv.password) return fromEnv;
+  try {
+    const file = readFileSync(path.join(process.cwd(), "app_panel-main-main", ".env"), "utf8");
+    const env = {};
+    for (const line of file.split("\n")) {
+      if (!line || line.startsWith("#") || !line.includes("=")) continue;
+      const index = line.indexOf("=");
+      const key = line.slice(0, index).trim();
+      env[key] = line.slice(index + 1).trim().replace(/^["']|["']$/g, "");
+    }
+    return {
+      email: fromEnv.email || env.SUPER_ADMIN_EMAIL || "",
+      password: fromEnv.password || env.SUPER_ADMIN_PASSWORD || "",
+    };
+  } catch {
+    return fromEnv;
   }
-  return { email: env.SUPER_ADMIN_EMAIL ?? "", password: env.SUPER_ADMIN_PASSWORD ?? "" };
 }
 
 function tokenFromCookies(cookies) {

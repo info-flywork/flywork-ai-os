@@ -22,9 +22,16 @@ const nextConfig = {
         headers: shared,
       },
       {
-        source: "/:path*",
+        source: "/((?!uygulama-paneli).*)",
         missing: [{ type: "host", value: "apppanel.localhost" }],
         headers: [{ key: "X-Frame-Options", value: "DENY" }],
+      },
+      {
+        source: "/uygulama-paneli/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
       },
       {
         source: "/:path*",
@@ -41,6 +48,14 @@ const nextConfig = {
   async rewrites() {
     return {
       beforeFiles: [
+        {
+          source: "/uygulama-paneli",
+          destination: "/api/app-panel-proxy/panel",
+        },
+        {
+          source: "/uygulama-paneli/:path*",
+          destination: "/api/app-panel-proxy/:path*",
+        },
         {
           source: "/:path*",
           has: [{ type: "host", value: "apppanel.localhost" }],

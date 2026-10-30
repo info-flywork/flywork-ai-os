@@ -28,7 +28,8 @@ export function proxy(request) {
   const taskPage = pathname === "/is-takibi" || pathname.startsWith("/is-takibi/");
   const feedbackPage = pathname === "/oneri" || pathname.startsWith("/oneri/");
   const productPage = pathname === "/urunler" || pathname.startsWith("/urunler/");
-  if ((mealOnly && !mealPage) || (staff && !mealPage && !leavePage && !taskPage && !feedbackPage && !productPage)) {
+  const panelEmbed = pathname === "/uygulama-paneli" || pathname.startsWith("/uygulama-paneli/");
+  if ((mealOnly && !mealPage) || (staff && !mealPage && !leavePage && !taskPage && !feedbackPage && !productPage && !panelEmbed)) {
     const url = request.nextUrl.clone();
     url.pathname = "/yemek-yonetimi";
     url.search = "";

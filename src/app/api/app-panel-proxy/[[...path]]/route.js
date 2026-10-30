@@ -1,15 +1,21 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { prefixPanelLocation, prefixPanelPaths } from "@/lib/appPanelPaths";
 import { getServiceToken, isAppPanelHost, rewriteTokenCookie, upstreamLocation, upstreamUrl } from "@/server/products/appPanelProxy";
 
 export const instant = false;
 
 const HOP = new Set(["connection", "content-length", "host", "keep-alive", "transfer-encoding"]);
 
+function textual(contentType) {
+  return /text\/|javascript|json|xml|css/i.test(contentType ?? "");
+}
+
 async function forward(request, context) {
   const host = request.headers.get("host");
-  if (!isAppPanelHost(host)) {
+  const sameOrigin = !isAppPanelHost(host);
+  if (sameOrigin && !(await cookies()).has("flywork_session")) {
     return NextResponse.json({ message: "Sayfa bulunamadı." }, { status: 404 });
   }
 
@@ -29,7 +35,7 @@ async function forward(request, context) {
 
   const contentType = request.headers.get("content-type");
   const accept = request.headers.get("accept");
-  const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
+  const requestBody = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
 
   async function pull(sessionToken) {
     const headers = new Headers();
@@ -39,7 +45,7 @@ async function forward(request, context) {
     return fetch(upstreamUrl(path, search), {
       method: request.method,
       headers,
-      body,
+      body: requestBody,
       redirect: "manual",
       cache: "no-store",
     });
@@ -67,7 +73,11 @@ async function forward(request, context) {
     responseHeaders.set(key, value);
   });
   const location = upstreamLocation(upstream.headers.get("location"));
-  if (location) responseHeaders.set("location", location);
+  if (location) responseHeaders.set("location", sameOrigin ? prefixPanelLocation(location) : location);
+  if (sameOrigin) {
+    responseHeaders.delete("x-frame-options");
+    responseHeaders.delete("content-security-policy");
+  }
   for (const cookie of upstream.headers.getSetCookie?.() ?? []) {
     const rewritten = rewriteTokenCookie(cookie);
     if (rewritten) responseHeaders.append("set-cookie", rewritten);
@@ -79,7 +89,12 @@ async function forward(request, context) {
   responseHeaders.set("cache-control", "private, no-store");
   responseHeaders.set("x-flywork-app-panel", "1");
 
-  return new NextResponse(request.method === "HEAD" ? null : upstream.body, {
+  let body = request.method === "HEAD" ? null : upstream.body;
+  if (body && sameOrigin && textual(upstream.headers.get("content-type"))) {
+    body = prefixPanelPaths(await upstream.text());
+  }
+
+  return new NextResponse(body, {
     status: upstream.status,
     headers: responseHeaders,
   });

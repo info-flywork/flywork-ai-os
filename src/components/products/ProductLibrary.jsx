@@ -493,19 +493,10 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
 }
 
 function AppPanelFrame() {
-  const [src, setSrc] = useState("");
-
-  useEffect(() => {
-    const port = window.location.port || "3000";
-    setSrc(`http://apppanel.localhost:${port}/panel`);
-  }, []);
-
-  if (!src) return <div className="min-h-0 w-full flex-1 rounded-2xl border border-slate-200 bg-white" />;
-
   return (
     <iframe
       title="App Panel"
-      src={src}
+      src="/uygulama-paneli/panel"
       className="min-h-0 w-full flex-1 rounded-2xl border border-slate-200 bg-white"
     />
   );
