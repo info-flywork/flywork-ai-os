@@ -29,7 +29,9 @@ export function proxy(request) {
   const feedbackPage = pathname === "/oneri" || pathname.startsWith("/oneri/");
   const productPage = pathname === "/urunler" || pathname.startsWith("/urunler/");
   const panelEmbed = pathname === "/uygulama-paneli" || pathname.startsWith("/uygulama-paneli/");
-  if ((mealOnly && !mealPage) || (staff && !mealPage && !leavePage && !taskPage && !feedbackPage && !productPage && !panelEmbed)) {
+  const homePage = pathname === "/";
+  const alertPage = pathname === "/bildirimler" || pathname.startsWith("/bildirimler/");
+  if ((mealOnly && !mealPage) || (staff && !homePage && !alertPage && !mealPage && !leavePage && !taskPage && !feedbackPage && !productPage && !panelEmbed)) {
     const url = request.nextUrl.clone();
     url.pathname = "/yemek-yonetimi";
     url.search = "";

@@ -8,6 +8,7 @@ import {
   XCircle,
 } from "lucide-react";
 import DashboardRefresh from "@/components/dashboard/DashboardRefresh";
+import EmployeeHome from "@/components/dashboard/EmployeeHome";
 import TaskHome from "@/components/dashboard/TaskHome";
 import EmptyState from "@/components/ui/EmptyState";
 import StatCard from "@/components/ui/StatCard";
@@ -15,6 +16,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
 import { getDashboardSummary } from "@/server/dashboard/summary";
+import { getEmployeeHome } from "@/server/dashboard/employeeHome";
 import { getWorkPulse } from "@/server/dashboard/workPulse";
 import { toPublicError } from "@/server/errors";
 import { listAlerts } from "@/server/services/alerts";
@@ -58,6 +60,21 @@ function currencyName(code) {
 export default async function DashboardPage() {
   const user = await requireUser();
   redirectMealOnlyUser(user);
+  if (user.role !== "ADMIN") {
+    const [homeResult, alertResult] = await Promise.all([
+      getEmployeeHome(user).then((value) => ({ ok: true, value })).catch((error) => ({ ok: false, message: toPublicError(error).message })),
+      listAlerts(user).then((value) => ({ ok: true, value })).catch(() => ({ ok: false })),
+    ]);
+    const alertCount = alertResult.ok
+      ? alertResult.value.filter((alert) => alert.level === "action" && !alert.read).length
+      : 0;
+    return (
+      <div>
+        <DashboardRefresh />
+        {homeResult.ok ? <EmployeeHome home={homeResult.value} alertCount={alertCount} /> : <p>{homeResult.message}</p>}
+      </div>
+    );
+  }
   const admin = user.role === "ADMIN";
   const [pulseResult, alertResult, summaryResult] = await Promise.all([
     getWorkPulse(user).then((value) => ({ ok: true, value })).catch((error) => ({ ok: false, message: toPublicError(error).message })),

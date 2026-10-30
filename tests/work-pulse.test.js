@@ -98,5 +98,24 @@ describe("görev özeti", () => {
     expect(pulse.assigned.map((item) => item.id)).toEqual(["today", "revision", "review-new"]);
     expect(pulse.dueToday.map((item) => item.id)).toEqual(["today"]);
     expect(pulse.revision[0]).toMatchObject({ id: "revision", openItems: 2 });
+    expect(pulse.team).toBeUndefined();
+    expect(pulse.counts).toBeUndefined();
+    expect(pulse.reviewQueue).toBeUndefined();
+    expect(JSON.stringify(pulse)).not.toContain("Sena");
+    expect(pulse.attention.revision[0]).toMatchObject({ id: "revision", openItems: 2 });
+    expect(pulse.attention.overdue).toEqual([]);
+    expect(pulse.attention.soon.map((item) => item.id)).toEqual(["today"]);
+    expect(pulse.jobs.map((item) => item.id)).toEqual(["today", "revision", "review-new"]);
+    expect(pulse.doingCount).toBe(1);
+    expect(pulse.review[0]).toMatchObject({ id: "review-new", reviewHours: 26 });
+    expect(pulse.week).toEqual({ done: 0, onTimePercent: null });
+  });
+
+  it("çalışanın bu hafta kapanan kartında zamanında teslim oranını kendi kartından hesaplar", () => {
+    const pulse = buildWorkPulse({ id: "sena", role: "EMPLOYEE" }, board(tasks), now);
+    expect(pulse.doingCount).toBe(4);
+    expect(pulse.week).toEqual({ done: 1, onTimePercent: 0 });
+    expect(pulse.attention.overdue.map((item) => item.id)).toEqual(["late"]);
+    expect(JSON.stringify(pulse)).not.toContain("Emrah");
   });
 });

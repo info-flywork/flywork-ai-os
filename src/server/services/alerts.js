@@ -94,7 +94,9 @@ export async function listAlerts(actor, now = new Date(), invoiceMonth) {
           })
         : Promise.resolve(null),
       db.workTask.findMany({
-        where: { column: { not: "DONE" } },
+        where: company
+          ? { column: { not: "DONE" } }
+          : { column: { not: "DONE" }, assignees: { some: { userId: actor.id } } },
         select: {
           id: true,
           title: true,

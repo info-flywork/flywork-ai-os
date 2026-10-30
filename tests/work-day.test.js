@@ -3,12 +3,12 @@ import { visibleWorkDay, workDayView } from "@/server/work/day";
 
 describe("günün iş şeridi", () => {
   it("açık işi şu an, bugün kapananı bugün listesine koyar", () => {
-    const morning = new Date(Date.UTC(2026, 9, 29, 8, 20));
-    const later = new Date(Date.UTC(2026, 9, 29, 9, 5));
+    const morning = new Date(Date.UTC(2026, 9, 29, 5, 20));
+    const later = new Date(Date.UTC(2026, 9, 29, 6, 5));
     const view = workDayView([
       { id: "open", endedAt: null, startedAt: morning, userName: "Tunahan", title: "Date AI", done: false },
       { id: "done", endedAt: later, startedAt: morning, userName: "Sena", title: "İvme", done: true },
-      { id: "old", endedAt: new Date(Date.UTC(2026, 9, 28, 9, 0)), startedAt: new Date(Date.UTC(2026, 9, 28, 8, 0)), userName: "Emrah", title: "Eski", done: true },
+      { id: "old", endedAt: new Date(Date.UTC(2026, 9, 28, 6, 0)), startedAt: new Date(Date.UTC(2026, 9, 28, 5, 0)), userName: "Emrah", title: "Eski", done: true },
     ], "2026-10-29");
     expect(view.now.map((item) => item.id)).toEqual(["open"]);
     expect(view.now[0].startedLabel).toBe("08:20");
@@ -18,8 +18,8 @@ describe("günün iş şeridi", () => {
   });
 
   it("durdurulan işi şu andan ayırır", () => {
-    const started = new Date(Date.UTC(2026, 9, 29, 10, 0));
-    const pausedAt = new Date(Date.UTC(2026, 9, 29, 10, 40));
+    const started = new Date(Date.UTC(2026, 9, 29, 7, 0));
+    const pausedAt = new Date(Date.UTC(2026, 9, 29, 7, 40));
     const view = workDayView([
       { id: "held", endedAt: null, pausedAt, startedAt: started, userName: "Emrah", title: "Femia", done: false },
     ], "2026-10-29");

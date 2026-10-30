@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Check, Clock, MessageCircle, Pause, Pencil, Play } from "lucide-react";
+import { COMMENT_EMOJIS } from "@/lib/commentReactions";
 import { reminderKind, taskDeadline } from "@/lib/workDeadline";
 import { WORK_FILTERS, matchesWorkFilter } from "@/lib/workPulse";
 import Notice from "@/components/Notice";
@@ -22,6 +23,7 @@ import {
   setTaskCompletedAction,
   setWorkFocusAction,
   seeCardAction,
+  toggleCommentReactionAction,
   updateCommentAction,
 
 } from "@/app/(panel)/is-takibi/actions";
@@ -233,6 +235,7 @@ function TaskDialog({
   const [selected, setSelected] = useState(task?.assigneeIds ?? []);
   const [target, setTarget] = useState(task?.column ?? column);
   const [comment, setComment] = useState("");
+  const [commentFiles, setCommentFiles] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState("");
   const [brokenImages, setBrokenImages] = useState({});
@@ -241,6 +244,7 @@ function TaskDialog({
   const [state, setState] = useState(null);
   const [pending, setPending] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [emojiFor, setEmojiFor] = useState(null);
   const commentRef = useRef(null);
   const editRef = useRef(null);
   const mentionSource = editingId ? draft : comment;
@@ -251,6 +255,22 @@ function TaskDialog({
   useEffect(() => {
     setMentionIndex(0);
   }, [mentionQuery]);
+
+  function insertEmoji(emoji) {
+    const field = editingId ? editRef.current : commentRef.current;
+    const current = field?.value ?? mentionSource;
+    const start = field?.selectionStart ?? current.length;
+    const end = field?.selectionEnd ?? current.length;
+    const next = `${current.slice(0, start)}${emoji}${current.slice(end)}`;
+    const caret = start + emoji.length;
+    if (editingId) setDraft(next);
+    else setComment(next);
+    requestAnimationFrame(() => {
+      if (!field) return;
+      field.focus();
+      field.setSelectionRange(caret, caret);
+    });
+  }
 
   function insertMention(name) {
     const field = editingId ? editRef.current : commentRef.current;
@@ -350,14 +370,51 @@ function TaskDialog({
     else setState(result);
   }
 
+  function addCommentFiles(files) {
+    setCommentFiles((current) => {
+      const next = [...current];
+      for (const file of files) {
+        if (next.length >= 6) break;
+        next.push({ file, url: URL.createObjectURL(file) });
+      }
+      return next;
+    });
+  }
+
+  function dropCommentFile(url) {
+    setCommentFiles((current) => {
+      const item = current.find((entry) => entry.url === url);
+      if (item) URL.revokeObjectURL(item.url);
+      return current.filter((entry) => entry.url !== url);
+    });
+  }
+
   async function sendComment() {
-    if (!task) return;
+    if (!task || (!comment.trim() && commentFiles.length === 0)) return;
     setPending(true);
-    const result = await addCommentAction({ taskId: task.id, body: comment });
+    const form = new FormData();
+    form.set("taskId", task.id);
+    form.set("body", comment);
+    for (const item of commentFiles) form.append("file", item.file);
+    const result = await addCommentAction(form);
     setPending(false);
     setState(result);
     if (result.ok) {
+      for (const item of commentFiles) URL.revokeObjectURL(item.url);
+      setCommentFiles([]);
       setComment("");
+      router.refresh();
+    }
+  }
+
+  async function leaveReaction(commentId, emoji) {
+    if (!task) return;
+    setPending(true);
+    const result = await toggleCommentReactionAction({ commentId, emoji });
+    setPending(false);
+    if (!result.ok) setState(result);
+    else {
+      setEmojiFor(null);
       router.refresh();
     }
   }
@@ -571,7 +628,7 @@ function TaskDialog({
                 {task.comments.map((item) => (
                   <li key={item.id} className="rounded-xl bg-slate-50 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-slate-500">{item.authorName} · {item.createdAt}</p>
+                      <p className="text-xs font-semibold text-slate-500">{item.authorName} · {createdStamp(item.createdAt)}</p>
                       {item.authorId === viewerId && editingId !== item.id ? (
                         <button type="button" className="text-xs font-semibold text-[#03624c]" onClick={() => { setEditingId(item.id); setDraft(item.body); }}>Düzenle</button>
                       ) : null}
@@ -586,8 +643,54 @@ function TaskDialog({
                         </div>
                       </div>
                     ) : (
-                      <p className="mt-1 whitespace-pre-wrap text-sm"><CommentBody body={item.body} people={people} /></p>
+                      <>
+                        {item.body ? <p className="mt-1 whitespace-pre-wrap text-sm"><CommentBody body={item.body} people={people} /></p> : null}
+                        {(item.images ?? []).length > 0 ? (
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {item.images.map((image) => (
+                              <a key={image.id} href={`/api/is-gorsel/${image.id}`} target="_blank" rel="noreferrer">
+                                {brokenImages[image.id] ? (
+                                  <span className="block rounded-xl bg-white px-3 py-6 text-center text-xs text-slate-500">Görsel açılamadı</span>
+                                ) : (
+                                  <img
+                                    src={`/api/is-gorsel/${image.id}`}
+                                    alt=""
+                                    className="max-h-48 w-full rounded-xl bg-white object-contain"
+                                    onError={() => setBrokenImages((current) => ({ ...current, [image.id]: true }))}
+                                  />
+                                )}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
                     )}
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      {(item.reactions ?? []).map((reaction) => (
+                        <button
+                          key={reaction.emoji}
+                          type="button"
+                          title={reaction.names.join(", ")}
+                          disabled={pending}
+                          onClick={() => void leaveReaction(item.id, reaction.emoji)}
+                          className={`rounded-full border px-2 py-0.5 text-xs ${reaction.mine ? "border-[#03624c] bg-[#03624c]/10" : "border-slate-200 bg-white"}`}
+                        >
+                          {reaction.emoji} {reaction.count}
+                        </button>
+                      ))}
+                      <button type="button" disabled={pending} onClick={() => setEmojiFor(emojiFor === item.id ? null : item.id)} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500">
+                        Emoji
+                      </button>
+                    </div>
+                    {emojiFor === item.id ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {COMMENT_EMOJIS.map((emoji) => (
+                          <button key={emoji} type="button" disabled={pending} onClick={() => void leaveReaction(item.id, emoji)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-base">
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -597,7 +700,34 @@ function TaskDialog({
                 ) : null}
                 <textarea ref={commentRef} value={comment} onChange={(event) => setComment(event.target.value)} onKeyDown={onCommentKeyDown} rows={3} placeholder="Yorum yazın. Etiket için @ yazın." className="field" />
               </div>
-              <button type="button" className="btn-primary mt-2" disabled={pending} onClick={() => void sendComment()}>Yorum ekle</button>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {COMMENT_EMOJIS.map((emoji) => (
+                  <button key={emoji} type="button" disabled={pending} onClick={() => insertEmoji(emoji)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-base">
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              {commentFiles.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {commentFiles.map((item) => (
+                    <span key={item.url} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1">
+                      <img src={item.url} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                      <button type="button" className="pr-2 text-xs font-semibold text-slate-500" onClick={() => dropCommentFile(item.url)}>Kaldır</button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <label className="btn-secondary">
+                  Görsel ekle
+                  <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(event) => {
+                    const files = [...(event.target.files ?? [])];
+                    if (files.length > 0) addCommentFiles(files);
+                    event.target.value = "";
+                  }} />
+                </label>
+                <button type="button" className="btn-primary" disabled={pending || (!comment.trim() && commentFiles.length === 0)} onClick={() => void sendComment()}>Yorum ekle</button>
+              </div>
             </section>
           </div>
         ) : null}

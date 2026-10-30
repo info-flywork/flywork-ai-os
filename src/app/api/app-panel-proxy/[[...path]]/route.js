@@ -25,7 +25,7 @@ async function forward(request, context) {
   const search = incoming.searchParams.size ? `?${incoming.searchParams.toString()}` : "";
   const browserToken = (await cookies()).get("token")?.value ?? "";
 
-  let path = segments.join("/") === "login.html" ? ["panel"] : segments;
+  const path = segments;
   let token = "";
   try {
     token = await getServiceToken();

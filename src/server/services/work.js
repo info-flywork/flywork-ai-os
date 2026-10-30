@@ -14,7 +14,8 @@ import { settleAlerts } from "@/server/services/alerts";
 import { pauseGapMillis } from "@/lib/workTime";
 import { unreadCommentCount } from "@/lib/workComments";
 import { commentNoticeRecipients, pushWorkNotice, workAssignNotice, workCardNotice, workCommentNotice, workNoticeRecipients } from "@/server/work/notify";
-import { moveWorkTaskSchema, parseInput, workCommentSchema, workCommentUpdateSchema, workCompletedSchema, workLinkSchema, workRevisionSchema, workSpaceSchema, workTaskSchema } from "@/server/validation/schemas";
+import { groupCommentReactions } from "@/lib/commentReactions";
+import { moveWorkTaskSchema, parseInput, workCommentReactionSchema, workCommentSchema, workCommentUpdateSchema, workCompletedSchema, workLinkSchema, workRevisionSchema, workSpaceSchema, workTaskSchema } from "@/server/validation/schemas";
 
 const COLUMNS = ["POOL", "DOING", "REVIEW", "REVISION", "DONE"] ;
  
@@ -61,7 +62,14 @@ export async function getWorkBoard(actor) {
         include: {
           assignees: { select: { userId: true } },
           createdBy: { select: { name: true } },
-          comments: { include: { author: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
+          comments: {
+            include: {
+              author: { select: { name: true } },
+              reactions: { include: { user: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
+              images: { select: { id: true }, orderBy: { createdAt: "asc" } },
+            },
+            orderBy: { createdAt: "asc" },
+          },
           links: { orderBy: { createdAt: "asc" } },
           images: { select: { id: true }, orderBy: { createdAt: "asc" } },
           revisions: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
@@ -148,6 +156,12 @@ export async function getWorkBoard(actor) {
           body: comment.body,
           createdAt: formatMysqlDateTime(comment.createdAt),
           at: comment.createdAt.toISOString(),
+          images: comment.images.map((image) => ({ id: image.id })),
+          reactions: comment.reactions.map((reaction) => ({
+            emoji: reaction.emoji,
+            userId: reaction.userId,
+            userName: reaction.user.name,
+          })),
         })),
         links: task.links.map((link) => ({ id: link.id, url: link.url, label: link.label || link.url })),
         images: task.images.map((image) => ({ id: image.id })),
@@ -171,7 +185,10 @@ export async function getWorkBoard(actor) {
   const seenAt = new Map(seenRows.map((row) => [row.taskId, row.seenAt.getTime()]));
   const tasks = board.tasks.map((task) => ({
     ...task,
-    comments: task.comments.map(({ at, ...comment }) => comment),
+    comments: task.comments.map(({ at, reactions, ...comment }) => ({
+      ...comment,
+      reactions: groupCommentReactions(reactions, actor.id),
+    })),
     unreadComments: unreadCommentCount(task.comments, actor.id, seenAt.get(task.id)),
   }));
   return { ...board, tasks, viewerId: actor.id, viewerRole: actor.role, day };
@@ -546,6 +563,43 @@ export async function setWorkTaskCompleted(actor, input) {
   });
 }
 
+export async function sendTaskToReview(actor, taskId) {
+  invalidate("work");
+  invalidate("alerts");
+  guard(actor, "task:write");
+  if (!taskId) throw new AppError("Kart bulunamadı.", "VALIDATION", 400);
+  return withDatabase(async (db) => {
+    const task = await db.workTask.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        column: true,
+        spaceId: true,
+        revisions: { select: { done: true } },
+        assignees: { select: { userId: true } },
+      },
+    });
+    if (!task) throw new AppError("Kart bulunamadı.", "NOT_FOUND", 404);
+    if (actor.role !== "ADMIN" && !task.assignees.some((item) => item.userId === actor.id)) {
+      throw new AppError("Yalnızca sana atanmış kart kontrol için gönderilebilir.", "FORBIDDEN", 403);
+    }
+    if (task.column === "DONE") throw new AppError("Tamamlanan kart kontrole gönderilemez.", "VALIDATION", 400);
+    if (task.column === "REVIEW") throw new AppError("Kart zaten kontrolde.", "VALIDATION", 400);
+    assertReviewReady(task.revisions);
+    const last = await db.workTask.aggregate({
+      where: { spaceId: task.spaceId, column: "REVIEW" },
+      _max: { sortOrder: true },
+    });
+    await db.$transaction([
+      db.workTask.update({
+        where: { id: task.id },
+        data: { column: "REVIEW", sortOrder: (last._max.sortOrder ?? -1) + 1 },
+      }),
+      db.workTaskMove.create({ data: { taskId: task.id, column: "REVIEW", actorId: actor.id } }),
+    ]);
+  });
+}
+
 export async function setWorkFocus(actor, taskId) {
   invalidate("work");
   guard(actor, "task:write");
@@ -613,10 +667,33 @@ export async function finishWorkSession(actor, taskId) {
   });
 }
 
+const COMMENT_IMAGE_LIMIT = 6;
+const COMMENT_IMAGE_TOTAL = 20 * 1024 * 1024;
+
+function takenCommentImages(input) {
+  const list = Array.isArray(input) ? input : [];
+  if (list.length > COMMENT_IMAGE_LIMIT) {
+    throw new AppError("Bir yoruma en fazla 6 görsel eklenebilir.", "VALIDATION", 400);
+  }
+  const images = list.map((item) => inspectWorkImage(Buffer.isBuffer(item) ? item : Buffer.from(item)));
+  const total = images.reduce((sum, image) => sum + image.bytes.length, 0);
+  if (total > COMMENT_IMAGE_TOTAL) {
+    throw new AppError("Yorum görselleri birlikte 20 MB sınırını aşıyor.", "VALIDATION", 400);
+  }
+  return images;
+}
+
 export async function addWorkComment(actor, input) {
   invalidate("work");
   guard(actor, "task:write");
-  const data = parseInput(workCommentSchema, input);
+  const images = takenCommentImages(input?.images);
+  const data = parseInput(workCommentSchema, {
+    taskId: input?.taskId,
+    body: typeof input?.body === "string" ? input.body : "",
+  });
+  if (!data.body && images.length === 0) {
+    throw new AppError("Yorum boş olamaz.", "VALIDATION", 400);
+  }
   return withDatabase(async (db) => {
     const task = await db.workTask.findUnique({
       where: { id: data.taskId },
@@ -628,15 +705,28 @@ export async function addWorkComment(actor, input) {
       select: { id: true, name: true },
     });
     const ids = mentionedIds(data.body, people);
-    const comment = await db.workTaskComment.create({
-      data: {
-        taskId: data.taskId,
-        authorId: actor.id,
-        body: data.body,
-        mentions: { create: ids.map((userId) => ({ userId })) },
-      },
-      select: { id: true },
-    });
+    const stored = [];
+    for (const image of images) {
+      const storageKey = randomBytes(16).toString("hex");
+      await writeWorkImage(storageKey, image.bytes);
+      stored.push({ storageKey, contentType: image.contentType });
+    }
+    let comment;
+    try {
+      comment = await db.workTaskComment.create({
+        data: {
+          taskId: data.taskId,
+          authorId: actor.id,
+          body: data.body,
+          mentions: { create: ids.map((userId) => ({ userId })) },
+          images: { create: stored },
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      await Promise.all(stored.map((image) => removeWorkImage(image.storageKey)));
+      throw error;
+    }
     const mentioned = new Set(ids);
     await pushWorkNotice(db, {
       kind: "work.comment",
@@ -645,10 +735,32 @@ export async function addWorkComment(actor, input) {
       textFor: (userId) => workCommentNotice({
         actor: actor.name,
         title: task.title,
-        body: data.body,
+        body: data.body || "Görsel",
         mentioned: mentioned.has(userId),
       }),
       buttons: [[{ text: "Cevapla", data: workReplyCallback(task.id) }]],
+    });
+  });
+}
+
+export async function toggleWorkCommentReaction(actor, input) {
+  invalidate("work");
+  guard(actor, "task:write");
+  const data = parseInput(workCommentReactionSchema, input);
+  return withDatabase(async (db) => {
+    const comment = await db.workTaskComment.findUnique({
+      where: { id: data.commentId },
+      select: { id: true },
+    });
+    if (!comment) throw new AppError("Yorum bulunamadı.", "NOT_FOUND", 404);
+    const where = { commentId_userId_emoji: { commentId: data.commentId, userId: actor.id, emoji: data.emoji } };
+    const existing = await db.workCommentReaction.findUnique({ where, select: { id: true } });
+    if (existing) {
+      await db.workCommentReaction.delete({ where: { id: existing.id } });
+      return;
+    }
+    await db.workCommentReaction.create({
+      data: { commentId: data.commentId, userId: actor.id, emoji: data.emoji },
     });
   });
 }
@@ -742,7 +854,8 @@ export async function openWorkImage(actor, id) {
   guard(actor, "task:read");
   return withDatabase(async (db) => {
     const current = await db.workTaskImage.findUnique({ where: { id }, select: { storageKey: true, contentType: true } });
-    if (!current) throw new AppError("Görsel bulunamadı.", "NOT_FOUND", 404);
-    return { bytes: await readWorkImage(current.storageKey), contentType: current.contentType };
+    const commentImage = current ?? await db.workCommentImage.findUnique({ where: { id }, select: { storageKey: true, contentType: true } });
+    if (!commentImage) throw new AppError("Görsel bulunamadı.", "NOT_FOUND", 404);
+    return { bytes: await readWorkImage(commentImage.storageKey), contentType: commentImage.contentType };
   });
 }

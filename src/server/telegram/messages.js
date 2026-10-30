@@ -133,7 +133,7 @@ export function formatWorkReplyPrompt(title, names) {
   const clean = title.replace(/\s+/g, " ").trim();
   const short = clean.length > 120 ? `${clean.slice(0, 117)}...` : clean;
   return [
-    "Cevabını yaz.",
+    "Cevabını yaz. Görsel de gönderebilirsin.",
     short,
     "Etiket için @ ve adı olduğu gibi yaz.",
     ...names.slice(0, 20).map((name) => `@${name}`),

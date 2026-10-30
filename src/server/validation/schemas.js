@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COMMENT_EMOJIS } from "@/lib/commentReactions";
 import { AppError } from "@/server/errors";
 
 const isoDate = z
@@ -46,9 +47,13 @@ export const createUserSchema = z.object({
   email: z.email("Geçerli bir e-posta girin.").trim().toLowerCase(),
   name: z.string().trim().min(2, "Ad en az 2 karakter olmalı.").max(120),
   password: passwordSchema,
-  role: z.enum(["ADMIN", "EMPLOYEE"]),
+  role: z.enum(["ADMIN", "EMPLOYEE"]).default("EMPLOYEE"),
   mealOnly: z.boolean().optional().default(false),
   startedOn: startedOnField,
+});
+
+export const announcementSchema = z.object({
+  body: z.string().trim().min(1, "Duyuru boş olamaz.").max(280),
 });
 
 export const updateUserSchema = z
@@ -480,12 +485,17 @@ export const workTaskSchema = z.object({
 
 export const workCommentSchema = z.object({
   taskId: z.string().min(1),
-  body: z.string().trim().min(1, "Yorum boş olamaz.").max(2000),
+  body: z.string().trim().max(2000),
 });
 
 export const workCommentUpdateSchema = z.object({
   id: z.string().min(1),
   body: z.string().trim().min(1, "Yorum boş olamaz.").max(2000),
+});
+
+export const workCommentReactionSchema = z.object({
+  commentId: z.string().min(1),
+  emoji: z.string().refine((emoji) => COMMENT_EMOJIS.includes(emoji), { message: "Bu emoji kullanılamaz." }),
 });
 
 export const workLinkSchema = z.object({

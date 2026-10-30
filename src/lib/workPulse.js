@@ -22,6 +22,12 @@ export function matchesWorkFilter(task, filtre, today) {
   return true;
 }
 
+function addDays(iso, days) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return next.toISOString().slice(0, 10);
+}
+
 function weekStartIso(todayIso) {
   const noon = new Date(`${todayIso}T12:00:00+03:00`);
   const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Istanbul", weekday: "short" }).format(noon);
@@ -184,8 +190,74 @@ export function buildWorkPulse(actor, board, now = new Date()) {
     })),
   ].slice(0, 6);
 
+  const tomorrow = addDays(today, 1);
+  const brief = (task) => ({
+    id: task.id,
+    title: task.title,
+    product: productOf(task, spaces),
+    priority: task.priority || "NORMAL",
+    dueOn: task.dueOn,
+    column: task.column,
+    columnLabel: COLUMN_LABEL[task.column] ?? task.column,
+    daysLate: task.dueOn && task.dueOn < today ? dayGap(task.dueOn, today) : 0,
+    openItems: (task.revisions ?? []).filter((item) => !item.done).length,
+    reviewHours: hoursSince(latestMove(task, "REVIEW") || task.createdAt, now),
+  });
+  const byTitle = (left, right) => left.title.localeCompare(right.title, "tr");
+  const jobs = mine.map(brief).sort((left, right) => {
+    if (!left.dueOn && !right.dueOn) return byTitle(left, right);
+    if (!left.dueOn) return 1;
+    if (!right.dueOn) return -1;
+    return left.dueOn.localeCompare(right.dueOn) || byTitle(left, right);
+  });
+  const attention = {
+    revision: jobs.filter((task) => task.column === "REVISION").sort((left, right) => right.openItems - left.openItems || byTitle(left, right)),
+    overdue: jobs.filter((task) => task.column !== "REVISION" && task.daysLate > 0).sort((left, right) => right.daysLate - left.daysLate || byTitle(left, right)),
+    soon: jobs.filter((task) => task.column !== "REVISION" && task.daysLate === 0 && (task.dueOn === today || task.dueOn === tomorrow)).sort((left, right) => (left.dueOn ?? "").localeCompare(right.dueOn ?? "") || byTitle(left, right)),
+  };
+  const ownReview = jobs.filter((task) => task.column === "REVIEW").sort((left, right) => right.reviewHours - left.reviewHours || byTitle(left, right));
+  const doingCount = jobs.filter((task) => task.column === "DOING").length;
+  const running = (board.day?.now ?? []).find((item) => item.userId === actor.id) ?? null;
+  const focused = running ? board.tasks.find((task) => task.id === running.taskId) : null;
+  const focus = focused
+    ? brief(focused)
+    : running?.taskId
+      ? { id: running.taskId, title: running.title, product: productOf({ spaceId: running.spaceId }, spaces), priority: "NORMAL", dueOn: null, column: "", columnLabel: "", daysLate: 0, openItems: 0, reviewHours: 0 }
+      : null;
+  const doneThisWeek = board.tasks.filter((task) => {
+    if (!task.assigneeIds.includes(actor.id) || task.column !== "DONE") return false;
+    const entered = latestMove(task, "DONE");
+    return Boolean(entered) && entered.slice(0, 10) >= weekStart;
+  });
+  const onTime = doneThisWeek.filter((task) => {
+    const entered = latestMove(task, "DONE");
+    return !task.dueOn || !entered || entered.slice(0, 10) <= task.dueOn;
+  }).length;
+  const week = {
+    done: doneThisWeek.length,
+    onTimePercent: doneThisWeek.length === 0 ? null : Math.round((onTime / doneThisWeek.length) * 100),
+  };
+
+  if (actor.role !== "ADMIN") {
+    return {
+      role: "EMPLOYEE",
+      today,
+      notices,
+      assigned,
+      dueToday: assigned.filter((task) => task.today),
+      revision,
+      focus,
+      choices: jobs.map((task) => ({ id: task.id, title: task.title, product: task.product })),
+      attention,
+      jobs,
+      doingCount,
+      review: ownReview,
+      week,
+    };
+  }
+
   return {
-    role: actor.role === "ADMIN" ? "ADMIN" : "EMPLOYEE",
+    role: "ADMIN",
     today,
     counts: {
       overdue: board.tasks.filter(overdue).length,

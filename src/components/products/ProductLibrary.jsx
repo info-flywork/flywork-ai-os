@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Folder, FolderPlus, FolderUp, Trash2 } from "lucide-react";
+import { ChevronRight, Folder, FolderPlus, FolderUp, Pencil, Trash2 } from "lucide-react";
 import EmptyState from "@/components/ui/EmptyState";
 import { createFolderAction, deleteEntryAction, deleteFigmaLinkAction, prepareFolderImportAction, saveFigmaLinkAction, updateFigmaLinkAction, uploadProductFilesAction } from "@/app/(panel)/urunler/actions";
 
@@ -570,15 +570,29 @@ function FileTile({ file, hint, onDelete }) {
   );
 }
 
+function figmaHref(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (url.protocol === "https:" && (host === "figma.com" || host.endsWith(".figma.com"))) return url.toString();
+  } catch {
+    return "";
+  }
+  return "";
+}
+
 function FigmaLinkRow({ link, busy, confirming, onConfirm, onCancel, onRemove, onNotice, onSaved }) {
   const [name, setName] = useState(link.name);
   const [url, setUrl] = useState(link.url);
+  const [editingUrl, setEditingUrl] = useState(false);
   const [saving, setSaving] = useState(false);
   const dirty = name !== link.name || url !== link.url;
+  const href = figmaHref(url);
 
   useEffect(() => {
     setName(link.name);
     setUrl(link.url);
+    setEditingUrl(false);
   }, [link.name, link.url]);
 
   async function save(event) {
@@ -601,13 +615,27 @@ function FigmaLinkRow({ link, busy, confirming, onConfirm, onCancel, onRemove, o
         aria-label={`${link.name} adı`}
         disabled={busy || saving || confirming}
       />
-      <input
-        value={url}
-        onChange={(event) => setUrl(event.target.value)}
-        className="field text-left"
-        aria-label={`${link.name} linki`}
-        disabled={busy || saving || confirming}
-      />
+      {editingUrl ? (
+        <input
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          className="field text-left"
+          aria-label={`${link.name} linki`}
+          disabled={busy || saving || confirming}
+          autoFocus
+        />
+      ) : href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="field block cursor-pointer truncate text-left !text-[#03624c] underline"
+        >
+          {url}
+        </a>
+      ) : (
+        <span className="field block truncate text-left">{url}</span>
+      )}
       <div className="flex items-center justify-end gap-1">
         {confirming ? (
           <>
@@ -617,6 +645,9 @@ function FigmaLinkRow({ link, busy, confirming, onConfirm, onCancel, onRemove, o
         ) : (
           <>
             {dirty ? <button type="submit" className="btn-primary" disabled={busy || saving}>Kaydet</button> : null}
+            <button type="button" onClick={() => setEditingUrl((current) => !current)} aria-label={`${link.name} linkini düzenle`} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              <Pencil size={15} />
+            </button>
             <button type="button" onClick={onConfirm} aria-label={`${link.name} linkini sil`} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-700">
               <Trash2 size={15} />
             </button>

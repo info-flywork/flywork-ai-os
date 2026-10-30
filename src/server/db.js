@@ -60,11 +60,14 @@ function clientMatchesLoadedSchema(client) {
     "feedbackNote" in client &&
     "telegramLinkRequest" in client &&
     "telegramWorkReply" in client &&
-    "workCardSeen" in client
+    "workCardSeen" in client &&
+    "workCommentReaction" in client &&
+    "workCommentImage" in client &&
+    "announcement" in client
   );
 }
 
-const POOL_VERSION = 8;
+const POOL_VERSION = 11;
 
 export function getPrisma() {
   if (!process.env.DATABASE_URL) {

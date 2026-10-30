@@ -8,6 +8,9 @@ import { withDatabase } from "@/server/db";
 import { toPublicError } from "@/server/errors";
 import { reviewLeaveRequest } from "@/server/services/leave";
 import { addWorkComment } from "@/server/services/work";
+import { downloadTelegramFile } from "@/server/telegram/client";
+import { telegramBotToken } from "@/server/telegram/config";
+import { inspectWorkImage } from "@/server/work/images";
 import { confirmedInvoiceDraft } from "@/server/finance/reviewRules";
 import { decideInvoiceReview } from "@/server/services/invoiceReview";
 import { pushRenewalReminders } from "@/server/telegram/renewals";
@@ -77,6 +80,21 @@ function privateIds(from, chat) {
   return { telegramUserId: String(fromId), chatId: String(chatId) };
 }
 
+function messagePhotoId(message) {
+  if ("photo" in message && Array.isArray(message.photo) && message.photo.length > 0) {
+    const last = message.photo[message.photo.length - 1];
+    if (last && typeof last === "object" && "file_id" in last && typeof last.file_id === "string") {
+      return last.file_id;
+    }
+  }
+  if ("document" in message && message.document && typeof message.document === "object") {
+    const mime = "mime_type" in message.document && typeof message.document.mime_type === "string" ? message.document.mime_type : "";
+    const fileId = "file_id" in message.document && typeof message.document.file_id === "string" ? message.document.file_id : "";
+    if ((mime === "image/jpeg" || mime === "image/png" || mime === "image/webp") && fileId) return fileId;
+  }
+  return "";
+}
+
 export function readTelegramUpdate(update) {
   if (!update || typeof update !== "object") {
     return null;
@@ -85,10 +103,13 @@ export function readTelegramUpdate(update) {
     const message = update.message;
     const ids = privateIds("from" in message ? message.from : undefined, "chat" in message ? message.chat : undefined);
     const text = "text" in message && typeof message.text === "string" ? message.text : "";
-    if (!ids || text.length === 0 || text.length > 4096) {
+    const caption = "caption" in message && typeof message.caption === "string" ? message.caption : "";
+    const spoken = text || caption;
+    const photoFileId = messagePhotoId(message);
+    if (!ids || spoken.length > 4096 || (spoken.length === 0 && !photoFileId) || photoFileId.length > 256) {
       return null;
     }
-    return { ...ids, text };
+    return { ...ids, text: spoken, photoFileId };
   }
   if ("callback_query" in update && update.callback_query && typeof update.callback_query === "object") {
     const query = update.callback_query;
@@ -417,7 +438,7 @@ async function handleIncoming(input) {
     return one(reply(input, "Yorum cevabı iptal edildi."));
   }
 
-  if (input.text && !command) {
+  if ((input.text || input.photoFileId) && !command) {
     const pending = await pendingWorkReply(input.telegramUserId);
     if (pending === "expired") {
       return one(reply(input, "Süre doldu. Bildirimdeki Cevapla'ya yeniden bas."));
@@ -427,12 +448,20 @@ async function handleIncoming(input) {
       if (!worker) {
         return one(reply(input, "Bu Telegram hesabı panele bağlı değil."));
       }
-      const body = input.text.trim();
+      const body = (input.text ?? "").trim();
       if (body.length > 2000) {
         return one(reply(input, "Yorum en fazla 2000 karakter olabilir. Daha kısasını yaz."));
       }
       try {
-        await addWorkComment(worker, { taskId: pending.taskId, body });
+        const images = [];
+        if (input.photoFileId) {
+          const token = telegramBotToken();
+          if (!token) return one(reply(input, "Telegram görseli alınamadı."));
+          const file = await downloadTelegramFile(input.photoFileId, { token });
+          if (!file.ok) return one(reply(input, file.error));
+          images.push(inspectWorkImage(file.bytes).bytes);
+        }
+        await addWorkComment(worker, { taskId: pending.taskId, body, images });
         await clearWorkReply(input.telegramUserId);
         return one(reply(input, "Yorum karta eklendi."));
       } catch (error) {

@@ -15,11 +15,6 @@ function todayLabel() {
   }).format(new Date());
 }
 
-function dueLabel(iso) {
-  if (!iso) return "Tarih yok";
-  return new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
-}
-
 function waitLabel(hours) {
   if (hours < 1) return "1 saatten az";
   if (hours < 24) return `${hours} saat`;
@@ -75,7 +70,7 @@ export default function TaskHome({ pulse, alertCount }) {
         }
       />
 
-      {admin ? <AdminPulse pulse={pulse} /> : <EmployeePulse pulse={pulse} />}
+      <AdminPulse pulse={pulse} />
 
       <section className="panel-card mt-4">
         <div className="mb-2 flex items-center justify-between">
@@ -196,66 +191,3 @@ function AdminPulse({ pulse }) {
   );
 }
 
-function EmployeePulse({ pulse }) {
-  return (
-    <div className="space-y-4">
-      <section className="panel-card border-amber-200 bg-amber-50/60">
-        <h2 className="mb-2 text-base font-semibold">Bugün teslim etmem gerekenler</h2>
-        {pulse.dueToday.length === 0 ? (
-          <EmptyState title="Bugün teslim etmen gereken iş yok." />
-        ) : (
-          <ul>
-            {pulse.dueToday.map((task) => (
-              <TaskRow
-                key={task.id}
-                href={`/is-takibi?filtre=bugun&kart=${task.id}`}
-                title={task.title}
-                meta={`${task.product} · ${task.column}`}
-                aside="Bugün"
-                tone="today"
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className="panel-card">
-        <h2 className="mb-2 text-base font-semibold">Bana atanan işler</h2>
-        {pulse.assigned.length === 0 ? (
-          <EmptyState title="Açık işin yok." />
-        ) : (
-          <ul>
-            {pulse.assigned.map((task) => (
-              <TaskRow
-                key={task.id}
-                href={`/is-takibi?kart=${task.id}`}
-                title={task.title}
-                meta={`${task.product} · ${task.column}`}
-                aside={task.overdue ? `${dueLabel(task.dueOn)} · gecikti` : dueLabel(task.dueOn)}
-                tone={task.today ? "today" : task.overdue ? "red" : "plain"}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className="panel-card">
-        <h2 className="mb-2 text-base font-semibold">Revize bekleyen işlerim</h2>
-        {pulse.revision.length === 0 ? (
-          <EmptyState title="Revize bekleyen işin yok." />
-        ) : (
-          <ul>
-            {pulse.revision.map((task) => (
-              <TaskRow
-                key={task.id}
-                href={`/is-takibi?filtre=revize&kart=${task.id}`}
-                title={task.title}
-                meta={task.product}
-                aside={task.openItems === 1 ? "1 madde açık" : `${task.openItems} madde açık`}
-                tone="orange"
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
-}

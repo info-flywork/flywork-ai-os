@@ -153,7 +153,7 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
-  role         Role
+  role         Role     @default(EMPLOYEE)
   mealOnly     Boolean  @default(false)
   approver     Boolean  @default(false)
   active       Boolean  @default(true)
@@ -186,12 +186,14 @@ model User {
   workTasksCreated      WorkTask[]         @relation("WorkTaskCreator")
   workAssignments       WorkTaskAssignee[]
   workComments          WorkTaskComment[]  @relation("WorkCommentAuthor")
+  workCommentReactions  WorkCommentReaction[]
   workMentions          WorkTaskMention[]
   workSessions          WorkSession[]
   workMoves             WorkTaskMove[]
   workCardSeen          WorkCardSeen[]
   feedbackNotes         FeedbackNote[]     @relation("FeedbackAuthor")
   feedbackReviews       FeedbackNote[]     @relation("FeedbackReviewer")
+  announcements         Announcement[]
 }
 
 model Session {
@@ -1098,8 +1100,34 @@ model WorkTaskComment {
   body      String            @db.Text
   createdAt DateTime          @default(now())
   mentions  WorkTaskMention[]
+  reactions WorkCommentReaction[]
+  images    WorkCommentImage[]
 
   @@index([taskId, createdAt])
+}
+
+model WorkCommentReaction {
+  id        String          @id @default(cuid())
+  commentId String
+  comment   WorkTaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String          @db.VarChar(16)
+  createdAt DateTime        @default(now())
+
+  @@unique([commentId, userId, emoji])
+  @@index([commentId])
+}
+
+model WorkCommentImage {
+  id          String          @id @default(cuid())
+  commentId   String
+  comment     WorkTaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  storageKey  String          @unique
+  contentType String
+  createdAt   DateTime        @default(now())
+
+  @@index([commentId])
 }
 
 model WorkTaskMention {
@@ -1165,6 +1193,16 @@ model WorkTaskAssignee {
   assignedAt DateTime @default(now())
 
   @@unique([taskId, userId])
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  body        String   @db.VarChar(280)
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model InvoiceAutoRule {

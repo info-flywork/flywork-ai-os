@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
-import { addWorkComment, addWorkImage, addWorkLink, createWorkSpace, deleteWorkImage, deleteWorkLink, deleteWorkTask, finishWorkSession, moveWorkTask, saveWorkTask, seeWorkCard, setRevisionItem, setWorkFocus, setWorkTaskCompleted, updateWorkComment } from "@/server/services/work";
+import { addWorkComment, addWorkImage, addWorkLink, createWorkSpace, deleteWorkImage, deleteWorkLink, deleteWorkTask, finishWorkSession, moveWorkTask, saveWorkTask, seeWorkCard, sendTaskToReview, setRevisionItem, setWorkFocus, setWorkTaskCompleted, toggleWorkCommentReaction, updateWorkComment } from "@/server/services/work";
 
  
 
@@ -52,8 +52,21 @@ export async function setWorkFocusAction(taskId) {
     const actor = await requireUser();
     const status = await setWorkFocus(actor, taskId || null);
     revalidatePath("/is-takibi");
+    revalidatePath("/");
     const message = status === "paused" ? "İş durduruldu." : status === "resumed" ? "İşe devam ediyorsun." : status === "started" ? "Bu işe başladın." : "Çalışan iş yok.";
     return { ok: true, message };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function sendToReviewAction(taskId) {
+  try {
+    const actor = await requireUser();
+    await sendTaskToReview(actor, taskId);
+    revalidatePath("/is-takibi");
+    revalidatePath("/");
+    return { ok: true, message: "Kart kontrole gönderildi." };
   } catch (error) {
     return finish(error);
   }
@@ -106,9 +119,33 @@ export async function seeCardAction(taskId) {
 export async function addCommentAction(input) {
   try {
     const actor = await requireUser();
-    await addWorkComment(actor, input);
+    if (input instanceof FormData) {
+      const files = input.getAll("file").filter((file) => file instanceof File && file.size > 0);
+      const images = [];
+      for (const file of files) {
+        images.push(Buffer.from(await file.arrayBuffer()));
+      }
+      await addWorkComment(actor, {
+        taskId: String(input.get("taskId") ?? ""),
+        body: String(input.get("body") ?? ""),
+        images,
+      });
+    } else {
+      await addWorkComment(actor, input);
+    }
     revalidatePath("/is-takibi");
     return { ok: true, message: "Yorum eklendi." };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function toggleCommentReactionAction(input) {
+  try {
+    const actor = await requireUser();
+    await toggleWorkCommentReaction(actor, input);
+    revalidatePath("/is-takibi");
+    return { ok: true };
   } catch (error) {
     return finish(error);
   }

@@ -4,7 +4,9 @@ import { redirectEmployeeFromAdminPages, redirectMealOnlyUser } from "@/server/a
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { getInvoiceAutoRule } from "@/server/services/invoiceAutoRule";
+import AnnouncementForm from "@/components/settings/AnnouncementForm";
 import InvoiceAutoRuleForm from "@/components/settings/InvoiceAutoRuleForm";
+import { listRecentAnnouncements } from "@/server/services/announcements";
 
 export const instant = false;
 
@@ -13,9 +15,13 @@ export default async function SettingsPage() {
   redirectMealOnlyUser(user);
   redirectEmployeeFromAdminPages(user);
   let rule = null;
+  let announcements = [];
   let message = "Ayarlar okunamadı.";
   try {
-    rule = await getInvoiceAutoRule();
+    [rule, announcements] = await Promise.all([
+      getInvoiceAutoRule(),
+      listRecentAnnouncements(user),
+    ]);
   } catch (error) {
     message = toPublicError(error).message;
   }
@@ -30,6 +36,7 @@ export default async function SettingsPage() {
         description="Otomatik fatura onayı varsayılan olarak kapalıdır. Açıldığında seçilen tedarikçilerden, yazdığınız tutarın altındaki faturalar onaylanır ve bilgi bildirimi olarak düşer."
       />
       <InvoiceAutoRuleForm action={saveInvoiceAutoRuleAction} rule={rule} />
+      <AnnouncementForm items={announcements} />
     </div>
   );
 }

@@ -1,8 +1,7 @@
 import { formatIstanbulDateTime } from "@/server/dates";
 
 export function wallNowMillis(now = new Date()) {
-  const label = formatIstanbulDateTime(now);
-  return Date.parse(`${label.slice(0, 10)}T${label.slice(11, 16)}:00.000Z`);
+  return now.getTime();
 }
 
 export function pauseGapMillis(pausedAt, now = new Date()) {
@@ -17,11 +16,15 @@ export function shiftIsoDate(iso, days) {
 }
 
 function clock(ms) {
-  return new Date(ms).toISOString().slice(11, 16);
+  return formatIstanbulDateTime(new Date(ms)).slice(11, 16);
 }
 
 function dayOf(ms) {
-  return new Date(ms).toISOString().slice(0, 10);
+  return formatIstanbulDateTime(new Date(ms)).slice(0, 10);
+}
+
+function nextIstanbulMidnight(isoDay) {
+  return Date.parse(`${shiftIsoDate(isoDay, 1)}T00:00:00.000+03:00`);
 }
 
 export function formatWorkDuration(minutes) {
@@ -46,7 +49,7 @@ export function dayReport(people, entries, day, now = new Date()) {
     let cursor = entry.start;
     while (cursor < end) {
       const current = dayOf(cursor);
-      const boundary = Date.parse(`${shiftIsoDate(current, 1)}T00:00:00.000Z`);
+      const boundary = nextIstanbulMidnight(current);
       const pieceEnd = Math.min(end, boundary);
       if (current === day && pieceEnd > cursor) {
         stints.push({
