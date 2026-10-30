@@ -388,16 +388,27 @@ function TaskDialog({
     }
   }
 
-  async function sendImage(file) {
-    if (!task) return;
-    const form = new FormData();
-    form.set("taskId", task.id);
-    form.set("file", file);
+  async function sendImages(files) {
+    if (!task || files.length === 0) return;
     setPending(true);
-    const result = await addImageAction(form);
+    let added = 0;
+    let failure = null;
+    for (const file of files) {
+      const form = new FormData();
+      form.set("taskId", task.id);
+      form.set("file", file);
+      const result = await addImageAction(form);
+      if (!result.ok) {
+        failure = result;
+        break;
+      }
+      added += 1;
+    }
     setPending(false);
-    setState(result);
-    if (result.ok) router.refresh();
+    if (failure) {
+      setState(added > 0 ? { ok: false, message: `${added} görsel eklendi. ${failure.message}` } : failure);
+    }
+    if (added > 0) router.refresh();
   }
 
   return (
@@ -547,9 +558,9 @@ function TaskDialog({
               </div>
               <label className="btn-secondary mt-2">
                 Görsel ekle
-                <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void sendImage(file);
+                <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(event) => {
+                  const files = [...(event.target.files ?? [])];
+                  if (files.length > 0) void sendImages(files);
                   event.target.value = "";
                 }} />
               </label>

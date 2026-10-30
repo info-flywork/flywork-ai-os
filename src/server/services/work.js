@@ -703,7 +703,7 @@ export async function addWorkImage(actor, taskId, bytes) {
     const task = await db.workTask.findUnique({ where: { id: taskId }, select: { id: true } });
     if (!task) throw new AppError("Kart bulunamadı.", "NOT_FOUND", 404);
     const count = await db.workTaskImage.count({ where: { taskId } });
-    if (count >= 6) throw new AppError("Bir karta en fazla 6 görsel eklenebilir.", "VALIDATION", 400);
+    if (count >= 20) throw new AppError("Bir karta en fazla 20 görsel eklenebilir.", "VALIDATION", 400);
     await writeWorkImage(storageKey, image.bytes);
     try {
       await db.workTaskImage.create({ data: { taskId, storageKey, contentType: image.contentType } });

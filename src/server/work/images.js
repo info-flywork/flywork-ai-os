@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AppError } from "@/server/errors";
 
-const MAX_BYTES = 2 * 1024 * 1024;
+const MAX_BYTES = 20 * 1024 * 1024;
 
 const TYPES = {
   jpg: {
@@ -27,7 +27,7 @@ function rootDir() {
 
 export function inspectWorkImage(bytes) {
   if (bytes.length === 0) throw new AppError("Görsel boş.", "VALIDATION", 400);
-  if (bytes.length > MAX_BYTES) throw new AppError("Görsel 2 MB sınırını aşıyor.", "VALIDATION", 400);
+  if (bytes.length > MAX_BYTES) throw new AppError("Görsel 20 MB sınırını aşıyor.", "VALIDATION", 400);
   const detected = Object.values(TYPES).find((type) => type.matches(bytes));
   if (!detected) throw new AppError("Görsel JPEG, PNG veya WEBP olmalı.", "VALIDATION", 400);
   return { bytes, contentType: detected.mime };

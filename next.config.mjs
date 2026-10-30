@@ -5,7 +5,7 @@ const nextConfig = {
   cacheComponents: true,
   experimental: {
     serverActions: {
-      bodySizeLimit: "24mb",
+      bodySizeLimit: "32mb",
     },
   },
   partialPrefetching: true,
