@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yogify — Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body theme-yogify">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">YG</div>
+          <div>
+            <strong id="sidebarAppName">Yogify</strong>
+            <span>Yönetim paneli</span>
+          </div>
+        </div>
+        <a href="/panel" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Uygulamalara dön
+        </a>
+        <button type="button" class="nav-link active" data-view="overview">Özet</button>
+        <button type="button" class="nav-link" data-view="categories">Kategoriler</button>
+        <button type="button" class="nav-link" data-view="videos">Videolar</button>
+        <button type="button" class="nav-link" data-view="users">Kullanıcılar</button>
+        <div style="flex: 1"></div>
+        <button type="button" class="nav-link" id="settingsBtn" data-manager-only>Bağlantı ayarları</button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header">
+          <div class="header-brand">
+            <div class="header-app-icon" id="headerAppIconWrap">
+              <img id="headerAppIcon" alt="Uygulama logosu" hidden />
+              <span id="headerAppIconFallback">YG</span>
+            </div>
+            <div>
+              <nav class="breadcrumb">
+                <a href="/panel">Uygulamalar</a>
+                <span>/</span>
+                <span id="breadcrumbName">Yogify</span>
+              </nav>
+              <h1 id="appTitle">Yogify</h1>
+              <p class="subtitle" id="apiInfo">Firebase bağlantısı kontrol ediliyor...</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <span id="healthBadge" class="badge"><span class="badge-dot"></span>Kontrol...</span>
+            <button type="button" class="btn" id="refreshBtn">Yenile</button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <div id="viewerBanner" class="readonly-banner" hidden>
+            Salt okunur mod: verileri görüntüleyebilirsiniz, değişiklik yapamazsınız.
+          </div>
+
+          <div id="view-overview" class="view-panel active">
+            <section class="stat-grid stat-grid--3" style="margin-bottom: 16px">
+              <article class="card stat-card">
+                <div class="stat-label">Toplam kullanıcı</div>
+                <div class="stat-value loading" id="statTotalUsers">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Kategori</div>
+                <div class="stat-value loading" id="statTotalCategories">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Video</div>
+                <div class="stat-value loading" id="statTotalVideos">—</div>
+              </article>
+            </section>
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Son kullanıcılar</h2>
+                  <p>En son kayıt olanlar</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Ad</th>
+                      <th>E-posta</th>
+                      <th>Hedef</th>
+                      <th>Kayıt</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recentUsersBody">
+                    <tr>
+                      <td colspan="4">Yükleniyor...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="view-categories" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header" style="align-items: flex-start; gap: 12px">
+                <div>
+                  <h2>Yoga kategorileri</h2>
+                  <p>Uygulamadaki kategori listesi</p>
+                </div>
+                <button type="button" class="btn btn-primary" id="newCategoryBtn" data-manager-only>
+                  + Kategori
+                </button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Sıra</th>
+                      <th>Görsel</th>
+                      <th>Kategori</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="categoriesBody">
+                    <tr>
+                      <td colspan="4">Yükleniyor...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="view-videos" class="view-panel">
+            <section class="card card-padded" style="margin-bottom: 16px">
+              <div class="card-header" style="align-items: flex-end; gap: 12px; flex-wrap: wrap">
+                <div class="field" style="min-width: 240px; margin: 0">
+                  <label for="videoCategorySelect">Kategori</label>
+                  <select class="select" id="videoCategorySelect"></select>
+                </div>
+                <button type="button" class="btn btn-primary" id="newVideoBtn" data-manager-only>
+                  + Video
+                </button>
+              </div>
+            </section>
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Videolar</h2>
+                  <p>Seçili kategorideki egzersiz videoları</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Sıra</th>
+                      <th>Kapak</th>
+                      <th>Başlık</th>
+                      <th>Süre</th>
+                      <th>Video</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="videosBody">
+                    <tr>
+                      <td colspan="6">Kategori seçin</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="view-users" class="view-panel">
+            <section class="card card-padded" style="margin-bottom: 16px">
+              <div class="header-toolbar" style="justify-content: flex-start; gap: 8px">
+                <input
+                  id="userSearchInput"
+                  class="input input-search input-compact"
+                  type="search"
+                  placeholder="Ad veya e-posta ara..."
+                />
+                <button type="button" class="btn btn-sm btn-ghost" id="userClearFilterBtn">
+                  Filtreyi temizle
+                </button>
+              </div>
+            </section>
+            <section class="card card-padded">
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Kullanıcı</th>
+                      <th>Hedef</th>
+                      <th>Kurulum</th>
+                      <th>Bildirim</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersBody">
+                    <tr>
+                      <td colspan="5">Yükleniyor...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="pagination-row" style="margin-top: 12px; display: flex; gap: 8px; align-items: center">
+                <button type="button" class="btn btn-sm" id="usersPrevBtn">Önceki</button>
+                <span id="usersPageInfo" class="user-cell-sub">—</span>
+                <button type="button" class="btn btn-sm" id="usersNextBtn">Sonraki</button>
+              </div>
+            </section>
+
+            <section class="card card-padded" id="userDetailCard" hidden style="margin-top: 16px">
+              <div class="card-header">
+                <div>
+                  <h2>Kullanıcı detayı</h2>
+                  <p id="userDetailSubtitle">—</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-ghost" id="closeUserDetailBtn">Kapat</button>
+              </div>
+              <div id="userDetailBody" class="yogify-detail-grid"></div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div id="categoryDialog" class="modal-backdrop hidden" hidden>
+      <div class="modal-card card card-padded" style="max-width: 480px; width: min(480px, calc(100vw - 32px))">
+        <h2 id="categoryDialogTitle">Kategori</h2>
+        <form id="categoryForm" class="form-grid" style="margin-top: 12px">
+          <input type="hidden" id="categoryId" />
+          <div class="field full">
+            <label for="categoryName">Ad</label>
+            <input class="input" id="categoryName" required />
+          </div>
+          <div class="field full">
+            <label for="categoryImagePath">Görsel adresi</label>
+            <input class="input" id="categoryImagePath" placeholder="https://... veya assets/..." />
+            <div class="yogify-media-preview" id="categoryImagePreview"></div>
+          </div>
+          <div class="field">
+            <label for="categoryOrder">Sıra</label>
+            <input class="input" id="categoryOrder" type="number" value="0" />
+          </div>
+          <div class="field full" style="display: flex; gap: 8px; justify-content: flex-end">
+            <button type="button" class="btn" id="categoryCancelBtn">İptal</button>
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="videoDialog" class="modal-backdrop hidden" hidden>
+      <div class="modal-card card card-padded" style="max-width: 560px; width: min(560px, calc(100vw - 32px))">
+        <h2 id="videoDialogTitle">Video</h2>
+        <form id="videoForm" class="form-grid" style="margin-top: 12px">
+          <input type="hidden" id="videoId" />
+          <div class="field full">
+            <label for="videoTitle">Başlık</label>
+            <input class="input" id="videoTitle" required />
+          </div>
+          <div class="field full">
+            <label for="videoDescription">Açıklama</label>
+            <textarea class="input" id="videoDescription" rows="3"></textarea>
+          </div>
+          <div class="field full">
+            <label for="videoUrl">Video adresi</label>
+            <input class="input" id="videoUrl" type="url" placeholder="https://..." />
+            <div class="yogify-media-preview" id="videoUrlPreview"></div>
+          </div>
+          <div class="field full">
+            <label for="videoImagePath">Kapak görseli</label>
+            <input class="input" id="videoImagePath" placeholder="https://... veya assets/..." />
+            <div class="yogify-media-preview" id="videoImagePreview"></div>
+          </div>
+          <div class="field">
+            <label for="videoDuration">Süre</label>
+            <input class="input" id="videoDuration" placeholder="05:30" />
+          </div>
+          <div class="field">
+            <label for="videoOrder">Sıra</label>
+            <input class="input" id="videoOrder" type="number" value="0" />
+          </div>
+          <div class="field full" style="display: flex; gap: 8px; justify-content: flex-end">
+            <button type="button" class="btn" id="videoCancelBtn">İptal</button>
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/js/panel-auth.js"></script>
+    <script src="/js/yogify-panel.js"></script>
+  </body>
+</html>

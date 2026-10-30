@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lingola Kids — Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body theme-lingolakids">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">LK</div>
+          <div>
+            <strong id="sidebarAppName">Lingola Kids</strong>
+            <span>Yönetim paneli</span>
+          </div>
+        </div>
+        <a href="/panel" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Uygulamalara dön
+        </a>
+        <button type="button" class="nav-link active" data-view="overview">Özet</button>
+        <button type="button" class="nav-link" data-view="users">Kullanıcılar</button>
+        <button type="button" class="nav-link" data-view="lessons">Ders kategorileri</button>
+        <button type="button" class="nav-link" data-view="activities">Aktiviteler</button>
+        <button type="button" class="nav-link" data-view="items">Öğrenme öğeleri</button>
+        <button type="button" class="nav-link" data-view="languages">Diller</button>
+        <button type="button" class="nav-link" data-view="analytics">Analizler</button>
+        <button type="button" class="nav-link" data-view="revenuecat">RevenueCat</button>
+        <div style="flex: 1"></div>
+        <button type="button" class="nav-link" id="settingsBtn" data-manager-only>Bağlantı ayarları</button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header">
+          <div class="header-brand">
+            <div class="header-app-icon" id="headerAppIconWrap">
+              <img id="headerAppIcon" alt="Uygulama logosu" hidden />
+              <span id="headerAppIconFallback">LK</span>
+            </div>
+            <div>
+              <nav class="breadcrumb">
+                <a href="/panel">Uygulamalar</a>
+                <span>/</span>
+                <span id="breadcrumbName">Lingola Kids</span>
+              </nav>
+              <h1 id="appTitle">Lingola Kids</h1>
+              <p class="subtitle" id="apiInfo">API bağlantısı kontrol ediliyor...</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <span id="healthBadge" class="badge"><span class="badge-dot"></span>Kontrol...</span>
+            <button type="button" class="btn" id="refreshBtn">Yenile</button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <div id="viewerBanner" class="readonly-banner" hidden>
+            Salt okunur mod: verileri görüntüleyebilirsiniz, değişiklik yapamazsınız.
+          </div>
+
+          <div id="view-overview" class="view-panel active">
+            <section class="stat-grid stat-grid--4">
+              <article class="card stat-card">
+                <div class="stat-label">Toplam kullanıcı</div>
+                <div class="stat-value loading" id="statTotalUsers">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Premium</div>
+                <div class="stat-value loading" id="statPremiumUsers">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Ders kategorileri</div>
+                <div class="stat-value loading" id="statTotalLessons">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Aktiviteler</div>
+                <div class="stat-value loading" id="statTotalActivities">—</div>
+              </article>
+            </section>
+            <section class="stat-grid stat-grid--3" style="margin-bottom: 16px">
+              <article class="card stat-card">
+                <div class="stat-label">Bugün yeni kullanıcı</div>
+                <div class="stat-value loading" id="statNewUsersToday">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Öğrenme öğeleri</div>
+                <div class="stat-value loading" id="statTotalItems">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Ses dosyaları</div>
+                <div class="stat-value loading" id="statTotalVoices">—</div>
+              </article>
+            </section>
+            <p class="field-hint" id="analyseHint" style="margin: -8px 0 16px"></p>
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Son 14 gün</h2>
+                  <p>Yeni kullanıcılar</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tarih</th>
+                      <th>Yeni kullanıcı</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dailyBody"></tbody>
+                </table>
+              </div>
+              <div id="analyseError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-users" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Kullanıcılar</h2>
+                  <p id="usersMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="userSearch" class="input input-search" type="search" placeholder="İsim, e-posta veya id..." />
+                <select class="select" id="userPremiumFilter" style="width: auto">
+                  <option value="">Tümü</option>
+                  <option value="1">Premium</option>
+                  <option value="0">Ücretsiz</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" id="userSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="userClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Kullanıcı</th>
+                      <th>Premium</th>
+                      <th>Giriş</th>
+                      <th>Dil</th>
+                      <th>Kayıt</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="usersPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="usersNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="usersError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-lessons" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Ders kategorileri</h2>
+                  <p id="lessonsMeta">Liste yükleniyor...</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="lessonCreateBtn" data-manager-only>+ Kategori</button>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="lessonSearch" class="input input-search" type="search" placeholder="Başlık veya slug..." />
+                <button type="button" class="btn btn-primary btn-sm" id="lessonSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="lessonClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Kategori</th>
+                      <th>Slug</th>
+                      <th>Aktivite</th>
+                      <th>Öğe</th>
+                      <th>Aktif</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="lessonsBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="lessonsPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="lessonsNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="lessonsError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-activities" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Aktiviteler</h2>
+                  <p id="activitiesMeta">Liste yükleniyor...</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="activityCreateBtn" data-manager-only>+ Aktivite</button>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="activitySearch" class="input input-search" type="search" placeholder="Başlık veya tür..." />
+                <select class="select" id="activityLessonFilter" style="width: auto">
+                  <option value="">Tüm kategoriler</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" id="activitySearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="activityClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Aktivite</th>
+                      <th>Kategori</th>
+                      <th>Tür</th>
+                      <th>Route</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="activitiesBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="activitiesPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="activitiesNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="activitiesError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-items" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Öğrenme öğeleri</h2>
+                  <p id="itemsMeta">Liste yükleniyor...</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="itemCreateBtn" data-manager-only>+ Öğe</button>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="itemSearch" class="input input-search" type="search" placeholder="Etiket veya item key..." />
+                <select class="select" id="itemLessonFilter" style="width: auto">
+                  <option value="">Tüm kategoriler</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" id="itemSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="itemClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Öğe</th>
+                      <th>Kategori</th>
+                      <th>Asset</th>
+                      <th>Sıra</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="itemsBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="itemsPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="itemsNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="itemsError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-languages" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Diller</h2>
+                  <p id="languagesMeta">Liste yükleniyor...</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="languageCreateBtn" data-manager-only>+ Dil</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Kod</th>
+                      <th>Ad</th>
+                      <th>Sıra</th>
+                      <th>Aktif</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="languagesBody"></tbody>
+                </table>
+              </div>
+              <div id="languagesError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-analytics" class="view-panel">
+            <div id="analyticsGrid" class="analytics-grid"></div>
+          </div>
+
+          <div id="view-revenuecat" class="view-panel">
+            <section class="card card-padded rc-section" id="revenuecatSection">
+              <div class="card-header">
+                <div>
+                  <h2>Abonelik ve gelir (RevenueCat)</h2>
+                  <p class="field-hint" id="rcStatus">Yükleniyor...</p>
+                </div>
+              </div>
+              <div class="stat-grid stat-grid--3 rc-revenue-periods">
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 1 ay</div>
+                  <div class="stat-value loading" id="rcRevenue1m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 6 ay</div>
+                  <div class="stat-value loading" id="rcRevenue6m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · tüm zamanlar</div>
+                  <div class="stat-value loading" id="rcRevenueAll">—</div>
+                </article>
+              </div>
+              <div id="rcMetricsGrid" class="stat-grid stat-grid--3"></div>
+              <section class="rc-premium-section">
+                <div class="card-header" style="margin-top: 8px">
+                  <div>
+                    <h3>Premium kullanıcılar ve fatura hareketleri</h3>
+                    <p class="field-hint" id="rcFeedStatus">Liste yüklenmedi</p>
+                  </div>
+                </div>
+                <div class="toolbar-row" style="margin-bottom: 10px">
+                  <input id="rcFeedSearch" class="input input-search" type="search" placeholder="Kullanıcı, ürün, işlem no ara..." />
+                  <button type="button" class="btn btn-sm" id="rcFeedRefreshBtn">Listeyi yükle</button>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Müşteri (RC)</th>
+                        <th>Uygulama kullanıcısı</th>
+                        <th>Ülke</th>
+                        <th>Ürün</th>
+                        <th>Mağaza</th>
+                        <th>Durum</th>
+                        <th>Tutar</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="rcFeedBody"></tbody>
+                  </table>
+                </div>
+              </section>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="userDialog" class="panel-dialog">
+      <form method="dialog" id="userForm" class="dialog-body">
+        <h2>Kullanıcı düzenle</h2>
+        <input type="hidden" id="userEditId" />
+        <label>Görünen ad<input class="input" id="userDisplayName" readonly /></label>
+        <label class="checkbox-row"><input type="checkbox" id="userIsPremium" /> Premium</label>
+        <label class="checkbox-row"><input type="checkbox" id="userIsActive" /> Aktif</label>
+        <div id="userFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="userCancelBtn">İptal</button>
+          <button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="lessonDialog" class="panel-dialog">
+      <form method="dialog" id="lessonForm" class="dialog-body">
+        <h2 id="lessonDialogTitle">Ders kategorisi</h2>
+        <input type="hidden" id="lessonEditId" />
+        <label>Başlık<input class="input" id="lessonTitle" required /></label>
+        <label>Slug<input class="input" id="lessonSlug" required /></label>
+        <label>Asset key<input class="input" id="lessonAssetKey" required /></label>
+        <label>Sıra<input class="input" id="lessonOrder" type="number" value="0" /></label>
+        <label class="checkbox-row"><input type="checkbox" id="lessonActive" checked /> Aktif</label>
+        <div id="lessonFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="lessonCancelBtn">İptal</button>
+          <button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="activityDialog" class="panel-dialog">
+      <form method="dialog" id="activityForm" class="dialog-body">
+        <h2 id="activityDialogTitle">Aktivite</h2>
+        <input type="hidden" id="activityEditId" />
+        <label>Kategori<select class="select" id="activityLessonId" required><option value="">Seçin...</option></select></label>
+        <label>Başlık<input class="input" id="activityTitle" required /></label>
+        <label>Slug<input class="input" id="activitySlug" required /></label>
+        <label>Tür<input class="input" id="activityType" required placeholder="flash-cards" /></label>
+        <label>Route<input class="input" id="activityRoute" required /></label>
+        <label>Sıra<input class="input" id="activityOrder" type="number" value="0" /></label>
+        <label class="checkbox-row"><input type="checkbox" id="activityActive" checked /> Aktif</label>
+        <div id="activityFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="activityCancelBtn">İptal</button>
+          <button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="itemDialog" class="panel-dialog">
+      <form method="dialog" id="itemForm" class="dialog-body">
+        <h2 id="itemDialogTitle">Öğrenme öğesi</h2>
+        <input type="hidden" id="itemEditId" />
+        <label>Kategori<select class="select" id="itemLessonId" required><option value="">Seçin...</option></select></label>
+        <label>Item key<input class="input" id="itemKey" required /></label>
+        <label>Etiket<input class="input" id="itemLabel" required /></label>
+        <label>Asset key<input class="input" id="itemAssetKey" required /></label>
+        <label>Draw asset key<input class="input" id="itemDrawAssetKey" /></label>
+        <label>Sıra<input class="input" id="itemOrder" type="number" value="0" /></label>
+        <div id="itemFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="itemCancelBtn">İptal</button>
+          <button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="languageDialog" class="panel-dialog">
+      <form method="dialog" id="languageForm" class="dialog-body">
+        <h2 id="languageDialogTitle">Dil</h2>
+        <input type="hidden" id="languageEditId" />
+        <label>Kod<input class="input" id="languageCode" maxlength="2" required /></label>
+        <label>Ad<input class="input" id="languageName" required /></label>
+        <label>Sıra<input class="input" id="languageOrder" type="number" value="0" /></label>
+        <label class="checkbox-row"><input type="checkbox" id="languageActive" checked /> Aktif</label>
+        <div id="languageFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="languageCancelBtn">İptal</button>
+          <button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/js/panel-auth.js"></script>
+    <script src="/js/rc-summary-ui.js"></script>
+    <script src="/js/revenuecat-panel.js"></script>
+    <script src="/js/lingolakids-panel.js"></script>
+  </body>
+</html>

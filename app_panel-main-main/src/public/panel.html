@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Uygulamalar — App Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">AP</div>
+          <div>
+            <strong>App Panel</strong>
+            <span>Yönetim</span>
+          </div>
+        </div>
+        <button type="button" class="nav-link active" id="navApps">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          Uygulamalar
+        </button>
+        <button type="button" class="nav-link" id="navNewApp" data-manager-only>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Yeni uygulama
+        </button>
+        <a href="/panel/users" class="nav-link" id="navPanelUsers" data-super-admin-only hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+          </svg>
+          Yöneticiler
+        </a>
+        
+        <div style="flex: 1"></div>
+        <div class="sidebar-user">
+          <strong id="userNameLabel">—</strong>
+          <span class="role-badge" id="userRoleBadge">—</span>
+        </div>
+        <button type="button" class="nav-link" id="logoutBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+          Çıkış
+        </button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header page-header--apps">
+          <div class="page-header__lead">
+            <h1>Uygulamalar</h1>
+            <p class="subtitle" id="appCount">Yükleniyor...</p>
+          </div>
+          <div class="header-toolbar">
+            <input
+              id="searchInput"
+              class="input input-search input-compact"
+              type="search"
+              placeholder="Uygulama veya bundle ara..."
+            />
+            <button type="button" class="btn btn-compact" id="statusFilterBtn">Tüm durumlar</button>
+            <button type="button" class="btn btn-compact btn-primary" id="newAppBtnHeader" data-manager-only>
+              + Yeni uygulama
+            </button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          
+          <div id="forbiddenAlert" class="readonly-banner" hidden>
+            Bu sayfaya erisim yetkiniz yok.
+          </div>
+          <div id="viewerBanner" class="readonly-banner" hidden>
+            Salt okunur mod: uygulama verilerini görüntüleyebilirsiniz, değişiklik yapamazsınız.
+          </div>
+          <div id="appsList" class="app-grid"></div>
+        </main>
+      </div>
+    </div>
+
+    <div id="actionDock" class="action-dock hidden">
+      <span class="action-dock-text" id="selectionInfo">Uygulama secin</span>
+      <button type="button" class="btn btn-sm" id="editAppBtn" data-manager-only>Ayarlar</button>
+      <button type="button" class="btn btn-sm btn-danger" id="deleteAppBtn" data-super-admin-only hidden>
+        Kaldır
+      </button>
+      <button type="button" class="btn btn-sm btn-primary" id="openAppBtn">Paneli aç</button>
+    </div>
+
+    <script src="/js/panel-auth.js"></script>
+    <script>
+      const appsList = document.getElementById("appsList");
+      const selectionInfo = document.getElementById("selectionInfo");
+      const actionDock = document.getElementById("actionDock");
+      const openAppBtn = document.getElementById("openAppBtn");
+      const editAppBtn = document.getElementById("editAppBtn");
+      const deleteAppBtn = document.getElementById("deleteAppBtn");
+      const appCount = document.getElementById("appCount");
+      const searchInput = document.getElementById("searchInput");
+      const statusFilterBtn = document.getElementById("statusFilterBtn");
+
+      let apps = [];
+      let selectedAppId = null;
+      let currentFilter = "ALL";
+      let searchTerm = "";
+      let sessionUser = null;
+
+      function applyRoleUi() {
+        const isManager = PanelAuth.isManager(sessionUser);
+        const isSuperAdmin = PanelAuth.isSuperAdmin(sessionUser);
+        const isViewer = PanelAuth.isViewer(sessionUser);
+
+        PanelAuth.applySidebarUser(sessionUser);
+
+        document.querySelectorAll("[data-manager-only]").forEach((el) => {
+          el.hidden = !isManager;
+          el.style.display = isManager ? "" : "none";
+        });
+
+        const navUsers = document.getElementById("navPanelUsers");
+        if (navUsers) {
+          navUsers.hidden = !isSuperAdmin;
+          navUsers.style.display = isSuperAdmin ? "" : "none";
+        }
+
+        document.querySelectorAll("[data-super-admin-only]").forEach((el) => {
+          el.hidden = !isSuperAdmin;
+          el.style.display = isSuperAdmin ? "" : "none";
+        });
+
+        document.getElementById("viewerBanner").hidden = !isViewer;
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("forbidden") === "1") {
+          document.getElementById("forbiddenAlert").hidden = false;
+        }
+      }
+
+      function statusLabel(status) {
+        if (status === "READY") return "Yayında";
+        if (status === "ISSUE") return "Sorun var";
+        return "Hazırlanıyor";
+      }
+
+      function statusDotClass(status) {
+        if (status === "READY") return "badge-dot";
+        if (status === "ISSUE") return "badge-dot";
+        return "badge-dot";
+      }
+
+      function statusBadgeClass(status) {
+        if (status === "READY") return "ok";
+        if (status === "ISSUE") return "fail";
+        return "warn";
+      }
+
+      function appInitial(name) {
+        return (name || "?").trim().slice(0, 1).toUpperCase();
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function panelThemeSlug(app) {
+        const slug = String(app.panelSlug || "").trim().toLowerCase();
+        return slug || "default";
+      }
+
+      function panelShortLabel(app) {
+        if (app.panelSlug === "friendify") return "Friendify";
+        if (app.panelSlug === "mindcoach") return "MindCoach";
+        if (app.panelSlug === "chatface") return "ChatFace";
+        if (app.panelSlug === "slim30") return "Slim30";
+        if (app.panelSlug === "sixpack30") return "Sixpack30";
+        if (app.panelSlug === "breathpath") return "BreathPath";
+        if (app.panelSlug === "yogiface") return "YogiFace";
+        if (app.panelSlug === "yogify") return "Yogify";
+        if (app.panelSlug === "lingolabuddy") return "Lingola Buddy";
+        if (app.panelSlug === "live-lingola") return "Live Lingola";
+        if (app.panelSlug === "homeworksnap") return "HomeworkSnap";
+        if (app.panelSlug === "aulix") return "Aulix";
+        if (app.panelSlug === "nightflow") return "NightFlow";
+        if (app.panelSlug === "menuma") return "MenuMa";
+        if (app.panelSlug === "slidify") return "Slidify";
+        if (app.panelSlug === "smplanner") return "SM Planner";
+        if (app.panelSlug === "filetranslate") return "FileTranslate";
+        if (app.panelSlug === "videosummary") return "VideoSummary";
+        if (app.panelSlug === "filechat") return "FileChat";
+        if (app.panelSlug === "homifit") return "HomiFit";
+        if (app.panelSlug === "fitgym") return "FitGym Pro";
+        if (app.panelSlug === "momfit") return "MomFit";
+        if (app.panelSlug === "signivo") return "Signivo";
+        if (app.panelSlug === "lingolawords") return "Lingola Words";
+        if (app.panelSlug === "storylang") return "Lingola Stories";
+        if (app.panelSlug === "lingolatravel") return "Lingola Travel";
+        if (app.panelSlug === "lingolakids") return "Lingola Kids";
+        if (app.panelSlug === "storieskids") return "Lingola Stories Kids";
+        if (app.panelSlug === "lingolajob") return "Lingola Job";
+        if (app.panelSlug === "dayflow") return "DayFlow";
+        if (app.panelSlug === "practigram") return "Practigram";
+        if (app.panelSlug === "podora") return "Podora";
+        if (app.panelSlug === "logora") return "Logora";
+        if (app.panelSlug === "pdfology") return "File Reader";
+        if (app.panelSlug) return app.panelSlug;
+        return "Genel";
+      }
+
+      function panelTypeLabel(app) {
+        if (app.panelSlug === "friendify") return "Friendify paneli";
+        if (app.panelSlug === "mindcoach") return "MindCoach paneli";
+        if (app.panelSlug === "chatface") return "ChatFace paneli";
+        if (app.panelSlug === "slim30") return "Slim30 paneli";
+        if (app.panelSlug === "sixpack30") return "Sixpack30 paneli";
+        if (app.panelSlug === "breathpath") return "BreathPath paneli";
+        if (app.panelSlug === "yogiface") return "YogiFace paneli";
+        if (app.panelSlug === "yogify") return "Yogify paneli";
+        if (app.panelSlug === "lingolabuddy") return "Lingola Buddy paneli";
+        if (app.panelSlug === "live-lingola") return "Live Lingola paneli";
+        if (app.panelSlug === "homeworksnap") return "HomeworkSnap paneli";
+        if (app.panelSlug === "aulix") return "Aulix paneli";
+        if (app.panelSlug === "nightflow") return "NightFlow paneli";
+        if (app.panelSlug === "menuma") return "MenuMa paneli";
+        if (app.panelSlug === "slidify") return "Slidify paneli";
+        if (app.panelSlug === "smplanner") return "SM Planner paneli";
+        if (app.panelSlug === "filetranslate") return "FileTranslate paneli";
+        if (app.panelSlug === "videosummary") return "VideoSummary paneli";
+        if (app.panelSlug === "filechat") return "FileChat paneli";
+        if (app.panelSlug === "homifit") return "HomiFit paneli";
+        if (app.panelSlug === "fitgym") return "FitGym Pro paneli";
+        if (app.panelSlug === "momfit") return "MomFit paneli";
+        if (app.panelSlug === "signivo") return "Signivo paneli";
+        if (app.panelSlug === "lingolawords") return "Lingola Words paneli";
+        if (app.panelSlug === "storylang") return "Lingola Stories paneli";
+        if (app.panelSlug === "lingolatravel") return "Lingola Travel paneli";
+        if (app.panelSlug === "lingolakids") return "Lingola Kids paneli";
+        if (app.panelSlug === "storieskids") return "Lingola Stories Kids paneli";
+        if (app.panelSlug === "lingolajob") return "Lingola Job paneli";
+        if (app.panelSlug === "dayflow") return "DayFlow paneli";
+        if (app.panelSlug === "practigram") return "Practigram paneli";
+        if (app.panelSlug === "podora") return "Podora paneli";
+        if (app.panelSlug === "logora") return "Logora paneli";
+        if (app.panelSlug === "pdfology") return "File Reader paneli";
+        if (app.panelSlug) return app.panelSlug;
+        return "Genel ayarlar";
+      }
+
+      function updateDock() {
+        const selected = apps.find((a) => a.id === selectedAppId);
+        if (!selected) {
+          actionDock.classList.add("hidden");
+          return;
+        }
+        actionDock.classList.remove("hidden");
+        selectionInfo.textContent = selected.appName;
+      }
+
+      function renderList() {
+        const filteredApps = apps
+          .filter((app) => (currentFilter === "ALL" ? true : app.status === currentFilter))
+          .filter((app) => {
+            if (!searchTerm) return true;
+            const keyword = searchTerm.toLowerCase();
+            return (
+              app.appName.toLowerCase().includes(keyword) ||
+              app.bundleId.toLowerCase().includes(keyword)
+            );
+          });
+
+        appCount.textContent =
+          apps.length === 0
+            ? "Henüz uygulama yok"
+            : `${filteredApps.length} / ${apps.length} uygulama gosteriliyor`;
+
+        appsList.innerHTML = "";
+
+        if (filteredApps.length === 0) {
+          appsList.innerHTML = `
+            <div class="card card-padded empty-state" style="grid-column: 1 / -1">
+              <div class="empty-state-icon">📱</div>
+              <h3>Uygulama bulunamadi</h3>
+              <p>Filtreyi değiştirin veya yeni bir uygulama ekleyin.</p>
+              <button type="button" class="btn btn-primary" style="margin-top:16px" id="emptyNewBtn" data-manager-only>+ Uygulama ekle</button>
+            </div>`;
+          document.getElementById("emptyNewBtn")?.addEventListener("click", () => {
+            window.location.href = "/apps/new";
+          });
+          selectedAppId = null;
+          updateDock();
+          return;
+        }
+
+        for (const app of filteredApps) {
+          const card = document.createElement("article");
+          const theme = panelThemeSlug(app);
+          card.className =
+            "card app-card" + (app.id === selectedAppId ? " selected" : "");
+          card.dataset.theme = theme;
+          card.tabIndex = 0;
+          card.setAttribute("role", "button");
+          card.setAttribute("aria-label", `${app.appName} sec`);
+
+          card.innerHTML = `
+            <div class="app-card-glow" aria-hidden="true"></div>
+            <div class="app-card-body">
+              <div class="app-card-icon">
+                ${
+                  app.iconUrl
+                    ? `<img src="${escapeHtml(app.iconUrl)}" alt="" loading="lazy" onerror="this.remove();this.parentNode.insertAdjacentHTML('beforeend','<span>${escapeHtml(appInitial(app.appName))}</span>')" />`
+                    : `<span>${escapeHtml(appInitial(app.appName))}</span>`
+                }
+              </div>
+              <div class="app-card-content">
+                <div class="app-card-head">
+                  <h3>${escapeHtml(app.appName)}</h3>
+                  <span class="app-card-version">v${escapeHtml(app.latestVersion)}</span>
+                </div>
+                <span class="app-card-chip">${escapeHtml(panelShortLabel(app))}</span>
+              </div>
+              <span class="app-card-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </span>
+            </div>
+            <div class="app-card-footer">
+              <span class="app-status badge ${statusBadgeClass(app.status)}">
+                <span class="badge-dot"></span>
+                ${statusLabel(app.status)}
+              </span>
+              <span class="app-card-bundle" title="${escapeHtml(app.bundleId)}">${escapeHtml(app.bundleId)}</span>
+            </div>
+          `;
+
+          const select = () => {
+            selectedAppId = app.id;
+            renderList();
+            updateDock();
+          };
+
+          card.addEventListener("click", select);
+          card.addEventListener("dblclick", () => {
+            select();
+            openSelectedApp();
+          });
+          card.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              select();
+            }
+          });
+
+          appsList.appendChild(card);
+        }
+
+        updateDock();
+        applyRoleUi();
+      }
+
+      function appOpenPath(app) {
+        if (app.panelSlug === "friendify") return `/apps/${app.id}/friendify`;
+        if (app.panelSlug === "mindcoach") return `/apps/${app.id}/mindcoach`;
+        if (app.panelSlug === "chatface") return `/apps/${app.id}/chatface`;
+        if (app.panelSlug === "slim30") return `/apps/${app.id}/slim30`;
+        if (app.panelSlug === "sixpack30") return `/apps/${app.id}/sixpack30`;
+        if (app.panelSlug === "breathpath") return `/apps/${app.id}/breathpath`;
+        if (app.panelSlug === "yogiface") return `/apps/${app.id}/yogiface`;
+        if (app.panelSlug === "yogify") return `/apps/${app.id}/yogify`;
+        if (app.panelSlug === "lingolabuddy") return `/apps/${app.id}/lingolabuddy`;
+        if (app.panelSlug === "live-lingola") return `/apps/${app.id}/live-lingola`;
+        if (app.panelSlug === "homeworksnap") return `/apps/${app.id}/homeworksnap`;
+        if (app.panelSlug === "aulix") return `/apps/${app.id}/aulix`;
+        if (app.panelSlug === "nightflow") return `/apps/${app.id}/nightflow`;
+        if (app.panelSlug === "menuma") return `/apps/${app.id}/menuma`;
+        if (app.panelSlug === "slidify") return `/apps/${app.id}/slidify`;
+        if (app.panelSlug === "smplanner") return `/apps/${app.id}/smplanner`;
+        if (app.panelSlug === "filetranslate") return `/apps/${app.id}/filetranslate`;
+        if (app.panelSlug === "videosummary") return `/apps/${app.id}/videosummary`;
+        if (app.panelSlug === "filechat") return `/apps/${app.id}/filechat`;
+        if (app.panelSlug === "homifit") return `/apps/${app.id}/homifit`;
+        if (app.panelSlug === "fitgym") return `/apps/${app.id}/fitgym`;
+        if (app.panelSlug === "momfit") return `/apps/${app.id}/momfit`;
+        if (app.panelSlug === "signivo") return `/apps/${app.id}/signivo`;
+        if (app.panelSlug === "lingolawords") return `/apps/${app.id}/lingolawords`;
+        if (app.panelSlug === "storylang") return `/apps/${app.id}/storylang`;
+        if (app.panelSlug === "lingolatravel") return `/apps/${app.id}/lingolatravel`;
+        if (app.panelSlug === "lingolakids") return `/apps/${app.id}/lingolakids`;
+        if (app.panelSlug === "storieskids") return `/apps/${app.id}/storieskids`;
+        if (app.panelSlug === "lingolajob") return `/apps/${app.id}/lingolajob`;
+        if (app.panelSlug === "dayflow") return `/apps/${app.id}/dayflow`;
+        if (app.panelSlug === "practigram") return `/apps/${app.id}/practigram`;
+        if (app.panelSlug === "podora") return `/apps/${app.id}/podora`;
+        if (app.panelSlug === "logora") return `/apps/${app.id}/logora`;
+        if (app.panelSlug === "pdfology") return `/apps/${app.id}/pdfology`;
+        return `/apps/${app.id}/edit`;
+      }
+
+      function openSelectedApp() {
+        const selected = apps.find((app) => app.id === selectedAppId);
+        if (!selected) return;
+        window.location.href = appOpenPath(selected);
+      }
+
+      async function loadApps() {
+        appsList.innerHTML = Array.from({ length: 6 })
+          .map(
+            () => `
+          <div class="card app-card app-card--skeleton" style="pointer-events:none">
+            <div class="skeleton" style="height:56px;width:56px;border-radius:16px;margin-bottom:14px"></div>
+            <div class="skeleton" style="height:18px;width:72%;margin-bottom:10px"></div>
+            <div class="skeleton" style="height:22px;width:38%;margin-bottom:16px;border-radius:999px"></div>
+            <div class="skeleton" style="height:14px;width:100%"></div>
+          </div>`
+          )
+          .join("");
+
+        const response = await fetch("/api/apps");
+        if (response.status === 401) {
+          window.location.href = "/login.html";
+          return;
+        }
+
+        const data = await response.json();
+        apps = Array.isArray(data.apps) ? data.apps : [];
+        renderList();
+      }
+
+      statusFilterBtn.addEventListener("click", () => {
+        const order = ["ALL", "READY", "PREPARE", "ISSUE"];
+        const i = order.indexOf(currentFilter);
+        currentFilter = order[(i + 1) % order.length];
+        const labels = {
+          ALL: "Tüm durumlar",
+          READY: "Yayında",
+          PREPARE: "Hazırlanıyor",
+          ISSUE: "Sorun var"
+        };
+        statusFilterBtn.textContent = labels[currentFilter];
+        renderList();
+      });
+
+      searchInput.addEventListener("input", (e) => {
+        searchTerm = e.target.value.trim();
+        renderList();
+      });
+
+      openAppBtn.addEventListener("click", openSelectedApp);
+      editAppBtn.addEventListener("click", () => {
+        const selected = apps.find((app) => app.id === selectedAppId);
+        if (!selected) return;
+        window.location.href = `/apps/${selected.id}/edit`;
+      });
+
+      deleteAppBtn.addEventListener("click", async () => {
+        const selected = apps.find((app) => app.id === selectedAppId);
+        if (!selected || !PanelAuth.isSuperAdmin(sessionUser)) return;
+
+        const label = selected.appName || selected.bundleId || selected.id;
+        if (
+          !confirm(
+            `"${label}" uygulaması panelden kalıcı olarak kaldırılacak. Bu işlem geri alınamaz. Devam edilsin mi?`
+          )
+        ) {
+          return;
+        }
+
+        deleteAppBtn.disabled = true;
+        try {
+          const response = await fetch(`/api/apps/${selected.id}`, { method: "DELETE" });
+          if (response.status === 401) {
+            window.location.href = "/login.html";
+            return;
+          }
+          const data = await response.json();
+          if (!response.ok) {
+            alert(data.message || "Uygulama kaldırılamadı.");
+            return;
+          }
+          selectedAppId = null;
+          actionDock.classList.add("hidden");
+          await loadApps();
+        } catch {
+          alert("Sunucuya ulaşılamadı.");
+        } finally {
+          deleteAppBtn.disabled = false;
+        }
+      });
+
+      document.getElementById("newAppBtnHeader").addEventListener("click", () => {
+        window.location.href = "/apps/new";
+      });
+      document.getElementById("navNewApp").addEventListener("click", () => {
+        window.location.href = "/apps/new";
+      });
+      document.getElementById("logoutBtn").addEventListener("click", async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
+        window.location.href = "/login.html";
+      });
+
+      (async () => {
+        sessionUser = await PanelAuth.fetchSession();
+        if (!sessionUser) return;
+        applyRoleUi();
+        try {
+          await loadApps();
+        } catch {
+          appsList.innerHTML = `
+          
+          
+          <div class="card card-padded alert alert-error" style="grid-column:1/-1">
+            Uygulamalar yüklenemedi. Sayfayı yenileyin.
+          </div>`;
+        }
+      })();
+    </script>
+  </body>
+</html>

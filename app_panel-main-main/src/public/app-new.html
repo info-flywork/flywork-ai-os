@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yeni Uygulama Ekle</title>
+    <style>
+      :root {
+        --bg: #f4f6fa;
+        --card: rgba(255, 255, 255, 0.88);
+        --line: rgba(15, 23, 42, 0.09);
+        --text: #111827;
+        --muted: #6b7280;
+        --accent: #0071e3;
+        --accent-soft: rgba(0, 113, 227, 0.15);
+        --danger: #c62828;
+        --success: #0f8a44;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+        background:
+          radial-gradient(circle at 10% -12%, rgba(137, 186, 255, 0.25), transparent 34%),
+          radial-gradient(circle at 92% 0%, rgba(182, 158, 255, 0.16), transparent 30%),
+          var(--bg);
+        color: var(--text);
+      }
+
+      .container {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 26px 20px 34px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+
+      .title {
+        margin: 0;
+        font-size: clamp(28px, 5vw, 40px);
+        letter-spacing: -0.03em;
+      }
+
+      .back-btn {
+        border: 1px solid #d9e2ec;
+        background: #fff;
+        border-radius: 999px;
+        padding: 9px 14px;
+        cursor: pointer;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--card);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 16px 38px rgba(15, 23, 42, 0.08);
+        padding: 24px;
+      }
+
+      .card p {
+        margin-top: 0;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .field.full {
+        grid-column: 1 / -1;
+      }
+
+      label {
+        font-size: 13px;
+        color: #334155;
+      }
+
+      input,
+      select {
+        border: 1px solid #d5dde8;
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px 13px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease;
+      }
+
+      input:focus,
+      select:focus {
+        border-color: rgba(0, 113, 227, 0.5);
+        box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.12);
+      }
+
+      .actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .btn-primary {
+        border: 0;
+        border-radius: 10px;
+        padding: 11px 14px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 10px 20px var(--accent-soft);
+      }
+
+      .btn-secondary {
+        border: 1px solid #d5dde8;
+        border-radius: 10px;
+        padding: 11px 14px;
+        background: #fff;
+        cursor: pointer;
+      }
+
+      #message {
+        min-height: 20px;
+        margin-top: 12px;
+        font-size: 13px;
+      }
+
+      .error {
+        color: var(--danger);
+      }
+
+      .success {
+        color: var(--success);
+      }
+
+      @media (max-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="topbar">
+        <h1 class="title">Yeni Uygulama Ekle</h1>
+        <button id="backBtn" class="back-btn">Apps Listesine Don</button>
+      </header>
+
+      <section class="card">
+        <p>Bu form ile panelde takip edecegin yeni uygulamayi olusturabilirsin.</p>
+
+        <form id="newAppForm">
+          <div class="grid">
+            <div class="field full">
+              <label for="appName">Uygulama Adi *</label>
+              <input id="appName" type="text" placeholder="Orn: Mind Coach" required />
+            </div>
+
+            <div class="field full">
+              <label for="bundleId">Bundle ID *</label>
+              <input id="bundleId" type="text" placeholder="com.company.mindcoach" required />
+            </div>
+
+            <div class="field">
+              <label for="latestVersion">Son Surum</label>
+              <input id="latestVersion" type="text" placeholder="1.0.0" />
+            </div>
+
+            <div class="field">
+              <label for="status">Durum</label>
+              <select id="status">
+                <option value="PREPARE">Prepare for Submission</option>
+                <option value="READY">Ready for Distribution</option>
+                <option value="ISSUE">Issue Detected</option>
+              </select>
+            </div>
+
+            <div class="field full">
+              <label for="iconUrl">Icon URL (opsiyonel)</label>
+              <input id="iconUrl" type="url" placeholder="https://..." />
+            </div>
+
+            <div class="field full">
+              <label for="apiBaseUrl">API URL (taban adres)</label>
+              <input id="apiBaseUrl" type="url" placeholder="https://api.example.com/v1" />
+              <small style="color: var(--muted); font-size: 12px; margin-top: -2px">
+                Panel /health, /analyse ve /users uçlarını bu adrese ekleyerek çağırır.
+              </small>
+            </div>
+
+            <div class="field full">
+              <label for="panelSlug">Panel ekrani</label>
+              <select id="panelSlug">
+                <option value="">Varsayilan</option>
+                <option value="friendify">Friendify</option>
+                <option value="mindcoach">MindCoach</option>
+                <option value="chatface">ChatFace</option>
+                <option value="slim30">Slim30</option>
+                <option value="sixpack30">Sixpack30</option>
+                <option value="breathpath">BreathPath</option>
+                <option value="yogiface">YogiFace</option>
+                <option value="yogify">Yogify</option>
+                <option value="lingolabuddy">Lingola Buddy</option>
+                <option value="live-lingola">Live Lingola</option>
+                <option value="homeworksnap">HomeworkSnap</option>
+                <option value="aulix">Aulix</option>
+                <option value="nightflow">NightFlow</option>
+                <option value="menuma">MenuMa</option>
+                <option value="slidify">Slidify</option>
+                <option value="smplanner">SM Planner</option>
+                <option value="filetranslate">FileTranslate</option>
+                <option value="videosummary">VideoSummary</option>
+                <option value="filechat">FileChat</option>
+                <option value="homifit">HomiFit</option>
+                <option value="fitgym">FitGym Pro</option>
+                <option value="momfit">MomFit</option>
+                <option value="signivo">Signivo</option>
+                <option value="lingolawords">Lingola Words</option>
+                <option value="storylang">Lingola Stories</option>
+                <option value="lingolatravel">Lingola Travel</option>
+                <option value="lingolakids">Lingola Kids</option>
+                <option value="storieskids">Lingola Stories Kids</option>
+                <option value="lingolajob">Lingola Job</option>
+                <option value="dayflow">DayFlow</option>
+                <option value="practigram">Practigram</option>
+                <option value="podora">Podora</option>
+                <option value="logora">Logora</option>
+                <option value="pdfology">File Reader</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="btn-primary">Uygulamayi Ekle</button>
+            <button type="button" id="cancelBtn" class="btn-secondary">Iptal</button>
+          </div>
+        </form>
+
+        <div id="message"></div>
+      </section>
+    </div>
+
+    <script>
+      const newAppForm = document.getElementById("newAppForm");
+      const message = document.getElementById("message");
+      const backBtn = document.getElementById("backBtn");
+      const cancelBtn = document.getElementById("cancelBtn");
+
+      function goBack() {
+        window.location.href = "/panel";
+      }
+
+      backBtn.addEventListener("click", goBack);
+      cancelBtn.addEventListener("click", goBack);
+
+      newAppForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        message.className = "";
+        message.textContent = "Kaydediliyor...";
+
+        const payload = {
+          appName: document.getElementById("appName").value.trim(),
+          bundleId: document.getElementById("bundleId").value.trim(),
+          latestVersion: document.getElementById("latestVersion").value.trim(),
+          status: document.getElementById("status").value,
+          iconUrl: document.getElementById("iconUrl").value.trim(),
+          apiBaseUrl: document.getElementById("apiBaseUrl").value.trim(),
+          panelSlug: document.getElementById("panelSlug").value.trim()
+        };
+
+        try {
+          const response = await fetch("/api/apps", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          if (response.status === 401) {
+            window.location.href = "/login.html";
+            return;
+          }
+
+          const data = await response.json();
+          if (!response.ok) {
+            message.className = "error";
+            message.textContent = data.message || "Uygulama eklenemedi.";
+            return;
+          }
+
+          message.className = "success";
+          message.textContent = "Uygulama eklendi. Listeye yonlendiriliyorsun...";
+          setTimeout(() => {
+            window.location.href = "/panel";
+          }, 900);
+        } catch (error) {
+          message.className = "error";
+          message.textContent = "Sunucuya ulasilamadi.";
+        }
+      });
+    </script>
+  </body>
+</html>

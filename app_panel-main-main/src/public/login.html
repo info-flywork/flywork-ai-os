@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Giriş - Yönetim Paneli</title>
+    <style>
+      :root {
+        --bg: #f4f5f7;
+        --card: rgba(255, 255, 255, 0.86);
+        --line: rgba(15, 23, 42, 0.08);
+        --text: #111827;
+        --muted: #6b7280;
+        --brand: #1a5c3e;
+        --brand-hover: #144a32;
+        --accent: var(--brand);
+        --accent-hover: var(--brand-hover);
+        --error: #c62727;
+        --success: #0f8a44;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 10% -10%, rgba(120, 175, 255, 0.32), transparent 38%),
+          radial-gradient(circle at 90% 0%, rgba(162, 140, 255, 0.2), transparent 34%),
+          linear-gradient(180deg, #f9fafb, #f0f3f9 55%, #edf1f7);
+        color: var(--text);
+      }
+
+      .shell {
+        width: min(960px, calc(100vw - 32px));
+        display: grid;
+        grid-template-columns: 1fr 430px;
+        border-radius: 28px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.66);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 24px 72px rgba(15, 23, 42, 0.12);
+      }
+
+      .brand-side {
+        padding: 42px 38px;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0)),
+          linear-gradient(170deg, #edf2ff 0%, #f6f8fc 52%, #eff6ff 100%);
+        border-right: 1px solid var(--line);
+      }
+
+      .brand-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        font-size: 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(17, 24, 39, 0.08);
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #0f8a44;
+        box-shadow: 0 0 0 4px rgba(15, 138, 68, 0.15);
+      }
+
+      .brand-title {
+        margin: 20px 0 10px;
+        font-size: clamp(30px, 4vw, 44px);
+        line-height: 1.06;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-desc {
+        margin: 0;
+        max-width: 360px;
+        color: #4b5563;
+        line-height: 1.5;
+      }
+
+      .brand-list {
+        margin: 28px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 12px;
+      }
+
+      .brand-list li {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid rgba(17, 24, 39, 0.07);
+        color: #374151;
+        font-size: 14px;
+      }
+
+      .card {
+        width: 100%;
+        padding: 42px 36px;
+        background: var(--card);
+      }
+
+      .login-brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        margin-bottom: 28px;
+      }
+
+      .login-logo {
+        width: 72px;
+        height: 72px;
+        border-radius: 18px;
+        object-fit: cover;
+        box-shadow: 0 12px 32px rgba(26, 92, 62, 0.22);
+        margin-bottom: 16px;
+      }
+
+      .login-brand-name {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--brand);
+      }
+
+      h1 {
+        margin: 4px 0 8px;
+        font-size: 29px;
+        letter-spacing: -0.02em;
+      }
+
+      p {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 13px;
+        color: #374151;
+      }
+
+      input {
+        width: 100%;
+        margin-bottom: 16px;
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: #fff;
+        color: var(--text);
+        outline: none;
+        font-size: 15px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      input:focus {
+        border-color: rgba(26, 92, 62, 0.45);
+        box-shadow: 0 0 0 4px rgba(26, 92, 62, 0.12);
+      }
+
+      button {
+        width: 100%;
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: var(--accent);
+        color: white;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+        transition: transform 0.14s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      button:hover {
+        background: var(--accent-hover);
+        box-shadow: 0 10px 22px rgba(26, 92, 62, 0.28);
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      #message {
+        min-height: 20px;
+        margin-top: 14px;
+        font-size: 13px;
+      }
+
+      .error {
+        color: var(--error);
+      }
+
+      .success {
+        color: var(--success);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .verify-hint {
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(26, 92, 62, 0.08);
+        border: 1px solid rgba(26, 92, 62, 0.14);
+        color: #374151;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .verify-hint strong {
+        color: var(--brand);
+      }
+
+      .otp-input {
+        text-align: center;
+        letter-spacing: 0.35em;
+        font-size: 22px;
+        font-weight: 600;
+      }
+
+      .secondary-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .link-btn {
+        background: transparent;
+        color: var(--brand);
+        padding: 0;
+        width: auto;
+        font-size: 13px;
+        font-weight: 500;
+        box-shadow: none;
+      }
+
+      .link-btn:hover {
+        background: transparent;
+        box-shadow: none;
+        text-decoration: underline;
+      }
+
+      .link-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        text-decoration: none;
+      }
+
+      @media (max-width: 900px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        .brand-side {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+          padding-bottom: 28px;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .card,
+        .brand-side {
+          padding: 26px 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="brand-side">
+        <div class="brand-chip"><span class="dot"></span> Canlı Sistem Durumu</div>
+        <h2 class="brand-title">Uygulamalarını tek panelden yönet.</h2>
+        <p class="brand-desc">
+          Apple benzeri sade bir deneyimle yayın durumu, hatalar ve performans metriklerini izle.
+        </p>
+        <ul class="brand-list">
+          <li>Yayın hazırlığı ve canlı durum takibi</li>
+          <li>Rol bazlı erişim: Super Admin / Admin / Kullanıcı</li>
+          <li>Her uygulama için tek tıkla analiz ekranına geçiş</li>
+        </ul>
+      </section>
+
+      <main class="card">
+        <div class="login-brand">
+          <img
+            class="login-logo"
+            src="/assets/flyworkventures_logo.jpeg"
+            alt="Flywork Ventures"
+            width="72"
+            height="72"
+          />
+          <p class="login-brand-name">Flywork Ventures</p>
+        </div>
+        <h1>Yönetim Paneli Giriş</h1>
+        <p>Hesabınızla giriş yaparak paneli açın.</p>
+
+        <form id="loginForm">
+          <div id="credentialsStep">
+            <label for="email">Email</label>
+            <input id="email" type="email" placeholder="ornek@company.com" required />
+
+            <label for="password">Şifre</label>
+            <input id="password" type="password" placeholder="********" required />
+
+            <button type="submit" id="loginSubmitBtn">Giriş Yap</button>
+          </div>
+
+          <div id="verifyStep" class="hidden">
+            <p class="verify-hint">
+              <strong id="maskedEmailLabel">—</strong> adresine 6 haneli doğrulama kodu gönderdik.
+              Kod 10 dakika geçerlidir.
+            </p>
+
+            <label for="otpCode">Doğrulama kodu</label>
+            <input
+              id="otpCode"
+              class="otp-input"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="6"
+              placeholder="000000"
+              autocomplete="one-time-code"
+            />
+
+            <button type="submit" id="verifySubmitBtn">Doğrula ve Giriş Yap</button>
+
+            <div class="secondary-actions">
+              <button type="button" class="link-btn" id="resendBtn">Kodu tekrar gönder</button>
+              <button type="button" class="link-btn" id="backBtn">Geri dön</button>
+            </div>
+          </div>
+        </form>
+
+        <div id="message"></div>
+      </main>
+    </div>
+
+    <script>
+      const loginForm = document.getElementById("loginForm");
+      const message = document.getElementById("message");
+      const credentialsStep = document.getElementById("credentialsStep");
+      const verifyStep = document.getElementById("verifyStep");
+      const maskedEmailLabel = document.getElementById("maskedEmailLabel");
+      const otpCodeInput = document.getElementById("otpCode");
+      const resendBtn = document.getElementById("resendBtn");
+      const backBtn = document.getElementById("backBtn");
+
+      let challengeId = null;
+      let verifyMode = false;
+
+      function showMessage(type, text) {
+        message.className = type;
+        message.textContent = text;
+      }
+
+      function showCredentialsStep() {
+        verifyMode = false;
+        challengeId = null;
+        credentialsStep.classList.remove("hidden");
+        verifyStep.classList.add("hidden");
+        otpCodeInput.value = "";
+      }
+
+      function showVerifyStep(data) {
+        verifyMode = true;
+        challengeId = data.challengeId;
+        maskedEmailLabel.textContent = data.maskedEmail || "E-posta";
+        credentialsStep.classList.add("hidden");
+        verifyStep.classList.remove("hidden");
+        otpCodeInput.focus();
+
+        let text = data.message || "Doğrulama kodu gönderildi.";
+        if (data.devCodeLogged) {
+          text += " (Geliştirme: kod sunucu konsolunda.)";
+        }
+        showMessage("success", text);
+      }
+
+      loginForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        message.className = "";
+
+        if (!verifyMode) {
+          showMessage("", "Giriş yapılıyor...");
+
+          const email = document.getElementById("email").value.trim();
+          const password = document.getElementById("password").value;
+
+          try {
+            const response = await fetch("/api/auth/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              showMessage("error", data.message || "Giriş başarısız.");
+              return;
+            }
+
+            if (data.requiresVerification) {
+              showVerifyStep(data);
+              return;
+            }
+
+            showMessage("success", "Giriş başarılı. Yönlendiriliyorsunuz...");
+            window.location.href = "/panel";
+          } catch (error) {
+            showMessage("error", "Sunucuya ulasilamadi.");
+          }
+          return;
+        }
+
+        const code = otpCodeInput.value.trim();
+        if (!/^\d{6}$/.test(code)) {
+          showMessage("error", "6 haneli doğrulama kodunu girin.");
+          return;
+        }
+
+        showMessage("", "Kod doğrulanıyor...");
+
+        try {
+          const response = await fetch("/api/auth/verify-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ challengeId, code })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            let text = data.message || "Doğrulama başarısız.";
+            if (data.remainingAttempts !== undefined) {
+              text += ` (${data.remainingAttempts} deneme kaldı)`;
+            }
+            showMessage("error", text);
+            return;
+          }
+
+          showMessage("success", "Giris basarili. Yonlendiriliyorsunuz...");
+          window.location.href = "/panel";
+        } catch (error) {
+          showMessage("error", "Sunucuya ulasilamadi.");
+        }
+      });
+
+      resendBtn.addEventListener("click", async () => {
+        if (!challengeId) {
+          return;
+        }
+
+        resendBtn.disabled = true;
+        showMessage("", "Kod yeniden gönderiliyor...");
+
+        try {
+          const response = await fetch("/api/auth/resend-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ challengeId })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            showMessage("error", data.message || "Kod gonderilemedi.");
+            if (data.retryAfterSeconds) {
+              setTimeout(() => {
+                resendBtn.disabled = false;
+              }, data.retryAfterSeconds * 1000);
+              return;
+            }
+            resendBtn.disabled = false;
+            return;
+          }
+
+          let text = data.message || "Yeni kod gönderildi.";
+          if (data.devCodeLogged) {
+            text += " (Geliştirme: kod sunucu konsolunda.)";
+          }
+          showMessage("success", text);
+          otpCodeInput.value = "";
+          otpCodeInput.focus();
+        } catch (error) {
+          showMessage("error", "Sunucuya ulasilamadi.");
+        }
+
+        setTimeout(() => {
+          resendBtn.disabled = false;
+        }, 60000);
+      });
+
+      backBtn.addEventListener("click", () => {
+        showCredentialsStep();
+        showMessage("", "");
+      });
+
+      otpCodeInput.addEventListener("input", () => {
+        otpCodeInput.value = otpCodeInput.value.replace(/\D/g, "").slice(0, 6);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Podora — Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body theme-podora">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">PD</div>
+          <div>
+            <strong id="sidebarAppName">Podora</strong>
+            <span>Yönetim paneli</span>
+          </div>
+        </div>
+        <a href="/panel" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6" /></svg>
+          Uygulamalara dön
+        </a>
+        <button type="button" class="nav-link active" data-view="overview">Özet</button>
+        <button type="button" class="nav-link" data-view="users">Kullanıcılar</button>
+        <button type="button" class="nav-link" data-view="podcasts">Podcastler</button>
+        <button type="button" class="nav-link" data-view="episodes">Bölümler</button>
+        <button type="button" class="nav-link" data-view="livesessions">Canlı oturumlar</button>
+        <button type="button" class="nav-link" data-view="analytics">Analizler</button>
+        <button type="button" class="nav-link" data-view="revenuecat">RevenueCat</button>
+        <div style="flex: 1"></div>
+        <button type="button" class="nav-link" id="settingsBtn" data-manager-only>Bağlantı ayarları</button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header">
+          <div class="header-brand">
+            <div class="header-app-icon">
+              <img id="headerAppIcon" alt="Uygulama logosu" hidden />
+              <span id="headerAppIconFallback">PD</span>
+            </div>
+            <div>
+              <nav class="breadcrumb"><a href="/panel">Uygulamalar</a><span>/</span><span id="breadcrumbName">Podora</span></nav>
+              <h1 id="appTitle">Podora</h1>
+              <p class="subtitle" id="apiInfo">API bağlantısı kontrol ediliyor...</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <span id="healthBadge" class="badge"><span class="badge-dot"></span>Kontrol...</span>
+            <button type="button" class="btn" id="refreshBtn">Yenile</button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <div id="viewerBanner" class="readonly-banner" hidden>Salt okunur mod: verileri görüntüleyebilirsiniz, değişiklik yapamazsınız.</div>
+
+          <div id="view-overview" class="view-panel active">
+            <section class="stat-grid stat-grid--4">
+              <article class="card stat-card"><div class="stat-label">Toplam kullanıcı</div><div class="stat-value loading" id="statTotalUsers">—</div></article>
+              <article class="card stat-card"><div class="stat-label">Admin kullanıcı</div><div class="stat-value loading" id="statAdminUsers">—</div></article>
+              <article class="card stat-card"><div class="stat-label">Pro kullanıcı</div><div class="stat-value loading" id="statProUsers">—</div></article>
+              <article class="card stat-card"><div class="stat-label">Toplam podcast</div><div class="stat-value loading" id="statTotalPodcasts">—</div></article>
+            </section>
+            <section class="stat-grid stat-grid--4" style="margin-bottom: 16px">
+              <article class="card stat-card"><div class="stat-label">Hazır podcast</div><div class="stat-value loading" id="statReadyPodcasts">—</div></article>
+              <article class="card stat-card"><div class="stat-label">Toplam bölüm</div><div class="stat-value loading" id="statTotalEpisodes">—</div></article>
+              <article class="card stat-card"><div class="stat-label">Canlı oturum</div><div class="stat-value loading" id="statLiveSessions">—</div></article>
+              <article class="card stat-card"><div class="stat-label">Bugün yeni kullanıcı</div><div class="stat-value loading" id="statNewUsersToday">—</div></article>
+            </section>
+            <p class="field-hint" id="analyseHint"></p>
+            <section class="card card-padded">
+              <div class="card-header"><div><h2>Son 14 gün</h2><p>Yeni kullanıcılar</p></div></div>
+              <div class="table-wrap"><table class="data-table"><thead><tr><th>Tarih</th><th>Yeni kullanıcı</th></tr></thead><tbody id="dailyBody"></tbody></table></div>
+              <div id="analyseError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-users" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header"><div><h2>Kullanıcılar</h2><p id="usersMeta">Liste yükleniyor...</p></div></div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="userSearch" class="input input-search" type="search" placeholder="Ad, mail, telefon..." />
+                <select class="select" id="userStatusFilter" style="width: auto"><option value="">Tüm durumlar</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select>
+                <select class="select" id="userRoleFilter" style="width: auto"><option value="">Tüm roller</option><option value="user">User</option><option value="admin">Admin</option></select>
+                <button type="button" class="btn btn-primary btn-sm" id="userSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="userClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table"><thead><tr><th>Kullanıcı</th><th>Durum</th><th>Rol</th><th>Pro</th><th>Podcast</th><th>İşlem</th></tr></thead><tbody id="usersBody"></tbody></table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="usersPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="usersNextBtn" disabled>Sonraki</button>
+              </div>
+            </section>
+          </div>
+
+          <div id="view-podcasts" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header"><div><h2>Podcastler</h2><p id="podcastsMeta">Liste yükleniyor...</p></div></div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="podcastSearch" class="input input-search" type="search" placeholder="Başlık, açıklama..." />
+                <select class="select" id="podcastStatusFilter" style="width: auto"><option value="">Tüm statüler</option><option value="processing">processing</option><option value="ready">ready</option><option value="failed">failed</option></select>
+                <button type="button" class="btn btn-primary btn-sm" id="podcastSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="podcastClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap"><table class="data-table"><thead><tr><th>Podcast</th><th>Kullanıcı</th><th>Kategori</th><th>Statü</th><th>İşlem</th></tr></thead><tbody id="podcastsBody"></tbody></table></div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end"><button type="button" class="btn btn-sm" id="podcastsPrevBtn" disabled>Önceki</button><button type="button" class="btn btn-sm" id="podcastsNextBtn" disabled>Sonraki</button></div>
+            </section>
+          </div>
+
+          <div id="view-episodes" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header"><div><h2>Bölümler</h2><p id="episodesMeta">Liste yükleniyor...</p></div></div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="episodeSearch" class="input input-search" type="search" placeholder="Bölüm adı..." />
+                <select class="select" id="episodeStatusFilter" style="width: auto"><option value="">Tüm statüler</option><option value="pending">pending</option><option value="processing">processing</option><option value="ready">ready</option><option value="failed">failed</option></select>
+                <button type="button" class="btn btn-primary btn-sm" id="episodeSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="episodeClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap"><table class="data-table"><thead><tr><th>Bölüm</th><th>Podcast</th><th>Durum</th><th>Süre</th><th>Oluşturma</th></tr></thead><tbody id="episodesBody"></tbody></table></div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end"><button type="button" class="btn btn-sm" id="episodesPrevBtn" disabled>Önceki</button><button type="button" class="btn btn-sm" id="episodesNextBtn" disabled>Sonraki</button></div>
+            </section>
+          </div>
+
+          <div id="view-livesessions" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header"><div><h2>Canlı oturumlar</h2><p id="liveMeta">Liste yükleniyor...</p></div></div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="liveSearch" class="input input-search" type="search" placeholder="Başlık, host..." />
+                <select class="select" id="liveStatusFilter" style="width: auto"><option value="">Tüm statüler</option><option value="scheduled">scheduled</option><option value="live">live</option><option value="ended">ended</option></select>
+                <button type="button" class="btn btn-primary btn-sm" id="liveSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="liveClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap"><table class="data-table"><thead><tr><th>Oturum</th><th>Podcast</th><th>Host</th><th>Statü</th><th>Başlangıç</th></tr></thead><tbody id="liveBody"></tbody></table></div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end"><button type="button" class="btn btn-sm" id="livePrevBtn" disabled>Önceki</button><button type="button" class="btn btn-sm" id="liveNextBtn" disabled>Sonraki</button></div>
+            </section>
+          </div>
+
+          <div id="view-analytics" class="view-panel"><div id="analyticsGrid" class="analytics-grid"></div></div>
+
+          <div id="view-revenuecat" class="view-panel">
+            <section class="card card-padded rc-section" id="revenuecatSection">
+              <div class="card-header"><div><h2>Abonelik ve gelir (RevenueCat)</h2><p class="field-hint" id="rcStatus">Yükleniyor...</p></div></div>
+              <div class="stat-grid stat-grid--3 rc-revenue-periods">
+                <article class="card stat-card"><div class="stat-label">Gelir · son 1 ay</div><div class="stat-value loading" id="rcRevenue1m">—</div></article>
+                <article class="card stat-card"><div class="stat-label">Gelir · son 6 ay</div><div class="stat-value loading" id="rcRevenue6m">—</div></article>
+                <article class="card stat-card"><div class="stat-label">Gelir · tüm zamanlar</div><div class="stat-value loading" id="rcRevenueAll">—</div></article>
+              </div>
+              <div id="rcMetricsGrid" class="stat-grid stat-grid--3"></div>
+              <div id="rcError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="userDialog" class="panel-dialog">
+      <form method="dialog" id="userForm" class="dialog-body">
+        <h2>Kullanıcı düzenle</h2>
+        <input type="hidden" id="userEditId" />
+        <label>Durum<select class="select" id="userEditStatus"><option value="active">active</option><option value="inactive">inactive</option><option value="suspended">suspended</option></select></label>
+        <label>Rol<select class="select" id="userEditRole"><option value="user">user</option><option value="admin">admin</option></select></label>
+        <label>Dil<input class="input" id="userEditLanguage" /></label>
+        <label><input type="checkbox" id="userEditIsPro" /> Pro kullanıcı</label>
+        <div id="userFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions"><button type="button" class="btn" id="userCancelBtn">İptal</button><button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="podcastDialog" class="panel-dialog">
+      <form method="dialog" id="podcastForm" class="dialog-body">
+        <h2>Podcast düzenle</h2>
+        <input type="hidden" id="podcastEditId" />
+        <label>Başlık<input class="input" id="podcastEditTitle" /></label>
+        <label>Açıklama<textarea class="input" id="podcastEditDescription" rows="3"></textarea></label>
+        <label>Kategori<input class="input" id="podcastEditCategory" /></label>
+        <label>Statü<select class="select" id="podcastEditStatus"><option value="processing">processing</option><option value="ready">ready</option><option value="failed">failed</option></select></label>
+        <label>Voice ID<input class="input" id="podcastEditVoiceId" /></label>
+        <div id="podcastFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions"><button type="button" class="btn" id="podcastCancelBtn">İptal</button><button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button></div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/js/panel-auth.js"></script>
+    <script src="/js/rc-summary-ui.js"></script>
+    <script src="/js/revenuecat-panel.js"></script>
+    <script src="/js/podora-panel.js"></script>
+  </body>
+</html>

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MenuMa — Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body theme-menuma">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">MM</div>
+          <div>
+            <strong id="sidebarAppName">MenuMa</strong>
+            <span>Yönetim paneli</span>
+          </div>
+        </div>
+        <a href="/panel" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Uygulamalara dön
+        </a>
+        <button type="button" class="nav-link active" data-view="overview">Özet</button>
+        <button type="button" class="nav-link" data-view="templates">Şablonlar</button>
+        <button type="button" class="nav-link" data-view="users">Kullanıcılar</button>
+        <button type="button" class="nav-link" data-view="menus">Kullanıcı menüleri</button>
+        <button type="button" class="nav-link" data-view="analytics">Analizler</button>
+        <button type="button" class="nav-link" data-view="revenuecat">RevenueCat</button>
+        <div style="flex: 1"></div>
+        <button type="button" class="nav-link" id="settingsBtn" data-manager-only>
+          Bağlantı ayarları
+        </button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header">
+          <div class="header-brand">
+            <div class="header-app-icon" id="headerAppIconWrap">
+              <img id="headerAppIcon" alt="Uygulama logosu" hidden />
+              <span id="headerAppIconFallback">MM</span>
+            </div>
+            <div>
+              <nav class="breadcrumb">
+                <a href="/panel">Uygulamalar</a>
+                <span>/</span>
+                <span id="breadcrumbName">MenuMa</span>
+              </nav>
+              <h1 id="appTitle">MenuMa</h1>
+              <p class="subtitle" id="apiInfo">API bağlantısı kontrol ediliyor...</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <span id="healthBadge" class="badge"><span class="badge-dot"></span>Kontrol...</span>
+            <button type="button" class="btn" id="refreshBtn">Yenile</button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <div id="viewerBanner" class="readonly-banner" hidden>
+            Salt okunur mod: verileri görüntüleyebilirsiniz, değişiklik yapamazsınız.
+          </div>
+
+          <div id="view-overview" class="view-panel active">
+            <section class="stat-grid stat-grid--4">
+              <article class="card stat-card">
+                <div class="stat-label">Toplam kullanıcı</div>
+                <div class="stat-value loading" id="statTotalUsers">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Premium kullanıcı</div>
+                <div class="stat-value loading" id="statPremiumUsers">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Toplam menü</div>
+                <div class="stat-value loading" id="statTotalMenus">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Şablon sayısı</div>
+                <div class="stat-value loading" id="statTotalTemplates">—</div>
+              </article>
+            </section>
+            <section class="stat-grid stat-grid--4" style="margin-bottom: 16px">
+              <article class="card stat-card">
+                <div class="stat-label">Bugün yeni kullanıcı</div>
+                <div class="stat-value loading" id="statNewUsersToday">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Bugün menü</div>
+                <div class="stat-value loading" id="statMenusToday">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Hazır menü</div>
+                <div class="stat-value loading" id="statReadyMenus">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">AI menü</div>
+                <div class="stat-value loading" id="statAiMenus">—</div>
+              </article>
+            </section>
+            <p class="field-hint" id="analyseHint" style="margin: -8px 0 16px"></p>
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Son 14 gün</h2>
+                  <p>Menü üretimi ve aktif kullanıcılar</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tarih</th>
+                      <th>Menü</th>
+                      <th>AI menü</th>
+                      <th>Aktif kullanıcı</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dailyBody"></tbody>
+                </table>
+              </div>
+              <div id="analyseError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-templates" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Şablon kataloğu</h2>
+                  <p id="templatesMeta">Liste yükleniyor...</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="newTemplateBtn" data-manager-only>
+                  + Yeni şablon
+                </button>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input
+                  id="templateSearch"
+                  class="input input-search"
+                  type="search"
+                  placeholder="Şablon adı, tip veya kategori..."
+                />
+                <select class="select" id="templateTypeFilter" style="width: auto">
+                  <option value="">Tüm stiller</option>
+                </select>
+                <select class="select" id="templateBrowseFilter" style="width: auto">
+                  <option value="">Tüm kategoriler</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" id="templateSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="templateClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Önizleme</th>
+                      <th>Şablon</th>
+                      <th>Stil</th>
+                      <th>Kategori</th>
+                      <th>Kullanım</th>
+                      <th>Tarih</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="templatesBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="templatesPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="templatesNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="templatesError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-users" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Kullanıcılar</h2>
+                  <p id="usersMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input
+                  id="userSearch"
+                  class="input input-search"
+                  type="search"
+                  placeholder="Kullanıcı adı veya auth id..."
+                />
+                <select class="select" id="userPremiumFilter" style="width: auto">
+                  <option value="">Tüm üyelikler</option>
+                  <option value="true">Premium</option>
+                  <option value="false">Ücretsiz</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" id="userSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="userClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Kullanıcı</th>
+                      <th>Dil</th>
+                      <th>Üyelik</th>
+                      <th>Menü</th>
+                      <th>Son hareket</th>
+                      <th>Kayıt</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="usersPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="usersNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="usersError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-menus" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Kullanıcı menüleri</h2>
+                  <p id="menusMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input
+                  id="menuSearch"
+                  class="input input-search"
+                  type="search"
+                  placeholder="Menü adı veya kullanıcı..."
+                />
+                <select class="select" id="menuStatusFilter" style="width: auto">
+                  <option value="">Tüm durumlar</option>
+                  <option value="draft">Taslak</option>
+                  <option value="ready">Hazır</option>
+                  <option value="archived">Arşiv</option>
+                </select>
+                <select class="select" id="menuAiFilter" style="width: auto">
+                  <option value="">AI filtre yok</option>
+                  <option value="true">AI üretimi</option>
+                  <option value="false">Manuel</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" id="menuSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="menuClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Menü</th>
+                      <th>Kullanıcı</th>
+                      <th>Şablon</th>
+                      <th>Durum</th>
+                      <th>İçerik</th>
+                      <th>Tarih</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="menusBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="menusPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="menusNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="menusError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-analytics" class="view-panel">
+            <div id="analyticsGrid" class="analytics-grid">
+              <p class="user-cell-sub">Analizler yükleniyor...</p>
+            </div>
+            <div id="analyticsError" class="alert alert-error" hidden></div>
+          </div>
+
+          <div id="view-revenuecat" class="view-panel">
+            <section class="card card-padded rc-section" id="revenuecatSection">
+              <div class="card-header">
+                <div>
+                  <h2>Abonelik ve gelir (RevenueCat)</h2>
+                  <p class="field-hint" id="rcStatus">Yükleniyor...</p>
+                </div>
+              </div>
+              <div class="stat-grid stat-grid--3 rc-revenue-periods">
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 1 ay</div>
+                  <div class="stat-value loading" id="rcRevenue1m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 6 ay</div>
+                  <div class="stat-value loading" id="rcRevenue6m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · tüm zamanlar</div>
+                  <div class="stat-value loading" id="rcRevenueAll">—</div>
+                </article>
+              </div>
+              <div id="rcMetricsGrid" class="stat-grid stat-grid--3"></div>
+              <section class="rc-premium-section">
+                <div class="card-header" style="margin-top: 8px">
+                  <div>
+                    <h3>Premium kullanıcılar ve fatura hareketleri</h3>
+                    <p class="field-hint" id="rcFeedStatus">Liste yüklenmedi</p>
+                  </div>
+                </div>
+                <div class="toolbar-row" style="margin-bottom: 10px">
+                  <input
+                    id="rcFeedSearch"
+                    class="input input-search"
+                    type="search"
+                    placeholder="Kullanıcı, ürün, işlem no ara..."
+                  />
+                  <button type="button" class="btn btn-sm" id="rcFeedRefreshBtn">Listeyi yükle</button>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Müşteri (RC)</th>
+                        <th>Uygulama kullanıcısı</th>
+                        <th>Ülke</th>
+                        <th>Ürün</th>
+                        <th>Mağaza</th>
+                        <th>Durum</th>
+                        <th>Harcanan</th>
+                        <th>Başlangıç</th>
+                        <th>Bitiş / Yenileme</th>
+                        <th>İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rcFeedBody">
+                      <tr>
+                        <td colspan="10" class="user-cell-sub">Listeyi yükle ile aboneleri getirin.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <div id="rcError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="templateDialog" class="shell-dialog dialog-wide">
+      <form id="templateForm">
+        <div class="dialog-header"><h3 id="templateDialogTitle">Yeni şablon</h3></div>
+        <div class="dialog-body">
+          <input type="hidden" id="templateEditId" />
+          <div class="field">
+            <label for="templateName">Şablon adı *</label>
+            <input class="input" id="templateName" type="text" required placeholder="Elegant - Gold & Ivory" />
+          </div>
+          <div class="form-grid-2">
+            <div class="field">
+              <label for="templateType">Stil *</label>
+              <select class="select" id="templateType" required></select>
+            </div>
+            <div class="field">
+              <label for="templateBrowseType">İşletme kategorisi</label>
+              <select class="select" id="templateBrowseType"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="templateCdnUrl">Önizleme CDN URL</label>
+            <input class="input" id="templateCdnUrl" type="url" placeholder="https://menuma.b-cdn.net/templates/..." />
+          </div>
+          <div class="field">
+            <label for="templateBrowseTypeImage">Kategori ikonu URL</label>
+            <input class="input" id="templateBrowseTypeImage" type="url" />
+          </div>
+          <div class="field">
+            <label for="templatePreviewFile">Önizleme görseli yükle</label>
+            <input class="input file-input" id="templatePreviewFile" type="file" accept="image/jpeg,image/png,image/webp" />
+            <p class="field-hint">Dosya seçerseniz BunnyCDN'e yüklenir ve CDN URL otomatik dolar.</p>
+          </div>
+          <div class="field">
+            <label>Önizleme</label>
+            <div id="templatePreviewBox" class="workout-media-preview-wrap"></div>
+          </div>
+          <div id="templateFormError" class="alert alert-error" hidden></div>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn" id="closeTemplateDialogBtn">İptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="userDetailDialog" class="shell-dialog dialog-wide">
+      <div class="dialog-header"><h3 id="userDetailTitle">Kullanıcı detayı</h3></div>
+      <div class="dialog-body" id="userDetailBody"></div>
+      <div class="dialog-footer">
+        <button type="button" class="btn" id="closeUserDetailBtn">Kapat</button>
+        <button type="button" class="btn btn-primary" id="editUserBtn" data-manager-only>Düzenle</button>
+      </div>
+    </dialog>
+
+    <dialog id="editUserDialog" class="shell-dialog">
+      <form id="editUserForm">
+        <div class="dialog-header"><h3>Kullanıcı düzenle</h3></div>
+        <div class="dialog-body">
+          <input type="hidden" id="editUserId" />
+          <div class="field">
+            <label for="editDisplayName">Kullanıcı adı</label>
+            <input class="input" id="editDisplayName" type="text" />
+          </div>
+          <div class="field">
+            <label for="editSubscriptionPlan">Abonelik planı</label>
+            <select class="select" id="editSubscriptionPlan">
+              <option value="none">Yok</option>
+              <option value="monthly">Aylık</option>
+              <option value="yearly">Yıllık</option>
+            </select>
+          </div>
+          <label class="checkbox-row"><input id="editPremium" type="checkbox" /> Premium kullanıcı</label>
+          <label class="checkbox-row"><input id="editNotifications" type="checkbox" /> Bildirimler açık</label>
+          <div id="editUserError" class="alert alert-error" hidden></div>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn" id="closeEditUserBtn">İptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="templateDetailDialog" class="shell-dialog dialog-wide">
+      <div class="dialog-header"><h3 id="templateDetailTitle">Şablon detayı</h3></div>
+      <div class="dialog-body" id="templateDetailBody"></div>
+      <div class="dialog-footer">
+        <button type="button" class="btn" id="closeTemplateDetailBtn">Kapat</button>
+        <button type="button" class="btn btn-primary" id="editTemplateFromDetailBtn" data-manager-only>
+          Düzenle
+        </button>
+      </div>
+    </dialog>
+
+    <dialog id="menuDetailDialog" class="shell-dialog dialog-wide">
+      <div class="dialog-header"><h3 id="menuDetailTitle">Menü detayı</h3></div>
+      <div class="dialog-body" id="menuDetailBody"></div>
+      <div class="dialog-footer">
+        <button type="button" class="btn" id="closeMenuDetailBtn">Kapat</button>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/js/panel-auth.js"></script>
+    <script src="/js/rc-summary-ui.js"></script>
+    <script src="/js/revenuecat-panel.js"></script>
+    <script src="/js/menuma-panel.js"></script>
+  </body>
+</html>

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>App Panel - Geliştirici Dokümantasyonu</title>
+    <link rel="stylesheet" href="./developer-guide.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="container">
+        <p class="eyebrow">App Panel</p>
+        <h1>Geliştirici Dokümantasyonu</h1>
+        <p class="subtitle">
+          Bu rehber, projeye yeni katılan geliştiricilerin hızlıca ortam kurup
+          geliştirmeye başlaması için hazırlanmıştır.
+        </p>
+      </div>
+    </header>
+
+    <main class="container layout">
+      <aside class="toc">
+        <h2>İçindekiler</h2>
+        <nav>
+          <a href="#hizli-baslangic">Hızlı Başlangıç</a>
+          <a href="#mimari">Mimari Özeti</a>
+          <a href="#temel-akis">Temel Akış</a>
+          <a href="#entegrasyon">Yeni Uygulama Entegrasyonu</a>
+          <a href="#kritik-dosyalar">Kritik Dosyalar</a>
+          <a href="#sorun-giderme">Sorun Giderme</a>
+        </nav>
+      </aside>
+
+      <section class="content">
+        <article id="hizli-baslangic" class="card">
+          <h2>Hızlı Başlangıç</h2>
+          <ol>
+            <li><code>.env.example</code> dosyasını <code>.env</code> olarak kopyalayın.</li>
+            <li><code>npm install</code> ile bağımlılıkları kurun.</li>
+            <li>Veritabanını oluşturun ve migration dosyalarını çalıştırın.</li>
+            <li><code>npm run seed</code> ile super admin hesabını oluşturun.</li>
+            <li><code>npm run seed:apps</code> ile örnek uygulamaları ekleyin.</li>
+            <li><code>npm run dev</code> ile sunucuyu başlatın.</li>
+          </ol>
+          <p class="note">
+            Not: Geliştirme sırasında özellikle API key ve RevenueCat değişkenlerinin
+            doğru tanımlandığını kontrol edin.
+          </p>
+        </article>
+
+        <article id="mimari" class="card">
+          <h2>Mimari Özeti</h2>
+          <p>
+            App Panel, uygulama bazlı harici backend API'lerini proxy ederek panel
+            ekranlarına veri sağlar. Her uygulama için ayrı bir <code>panel_slug</code>,
+            <code>api_base_url</code> ve gerekirse <code>panel_api_key</code> kullanılır.
+          </p>
+          <ul>
+            <li><strong>Backend:</strong> Node.js + Express tabanlı route yapısı</li>
+            <li><strong>UI:</strong> Public HTML/CSS/JS sayfaları (uygulama bazlı panel dosyaları)</li>
+            <li><strong>Auth:</strong> Cookie tabanlı panel oturumu</li>
+            <li><strong>Analitik:</strong> Uygulama backend + RevenueCat kaynaklı metrikler</li>
+          </ul>
+        </article>
+
+        <article id="temel-akis" class="card">
+          <h2>Temel Akış</h2>
+          <div class="steps">
+            <div>
+              <h3>1) Kimlik Doğrulama</h3>
+              <p>Kullanıcı panelde login olur, sunucu cookie bazlı oturum yönetir.</p>
+            </div>
+            <div>
+              <h3>2) Uygulama Seçimi</h3>
+              <p>Panel ekranında uygulama seçilir ve ilgili uygulama route'una gidilir.</p>
+            </div>
+            <div>
+              <h3>3) Proxy ve Veri Çekimi</h3>
+              <p>
+                Sunucu, seçilen uygulamanın dış API'sine istek atar ve kanonik yapıya
+                dönüştürerek UI'a iletir.
+              </p>
+            </div>
+            <div>
+              <h3>4) Yönetim İşlemleri</h3>
+              <p>
+                Kullanıcı düzenleme, metrik görüntüleme ve uygulamaya özel modül
+                işlemleri panelden yapılır.
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article id="entegrasyon" class="card">
+          <h2>Yeni Uygulama Entegrasyonu</h2>
+          <ul>
+            <li>
+              Uygulama için <code>apps/{slug}/PANEL_API.md</code> dokümanını oluşturun.
+            </li>
+            <li>
+              Gerekli uçları (<code>/panel/health</code>, <code>/panel/analyse</code>,
+              <code>/panel/users</code>) hazır edin.
+            </li>
+            <li>
+              App Panel tarafında uygulama kaydını <code>seedApps</code> ve
+              <code>applications</code> tablosu ile eşleştirin.
+            </li>
+            <li>
+              UI için gerekli ise <code>src/public/apps-{slug}.html</code> ve
+              <code>src/public/js/{slug}-panel.js</code> dosyalarını ekleyin.
+            </li>
+            <li>
+              RevenueCat kullanılıyorsa <code>{SLUG}_REVENUECAT_PROJECT_ID</code>
+              değerini tanımlayın.
+            </li>
+          </ul>
+        </article>
+
+        <article id="kritik-dosyalar" class="card">
+          <h2>Kritik Dosyalar</h2>
+          <div class="grid">
+            <div>
+              <h3>Sunucu</h3>
+              <ul>
+                <li><code>src/server.js</code></li>
+                <li><code>src/routes/apps.routes.js</code></li>
+                <li><code>src/utils/panelAuth.js</code></li>
+              </ul>
+            </div>
+            <div>
+              <h3>Panel UI</h3>
+              <ul>
+                <li><code>src/public/panel.html</code></li>
+                <li><code>src/public/app-new.html</code></li>
+                <li><code>src/public/app-edit.html</code></li>
+              </ul>
+            </div>
+            <div>
+              <h3>Dokümantasyon</h3>
+              <ul>
+                <li><code>docs/EXTERNAL_API_CONTRACT.md</code></li>
+                <li><code>docs/INTEGRATION_TEMPLATE.md</code></li>
+                <li><code>apps/*/PANEL_API.md</code></li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article id="sorun-giderme" class="card">
+          <h2>Sorun Giderme</h2>
+          <ul>
+            <li>
+              <strong>403 veya 401:</strong> Uygulama bazlı API key eşleşmesini kontrol edin.
+            </li>
+            <li>
+              <strong>Eksik metrik:</strong> Harici uygulama API'sinde analyse dönüşünü doğrulayın.
+            </li>
+            <li>
+              <strong>Boş kullanıcı listesi:</strong> Pagination ve search parametrelerini kontrol edin.
+            </li>
+            <li>
+              <strong>RevenueCat verisi yok:</strong> Proje ID ve genel API key yapılandırmasını kontrol edin.
+            </li>
+          </ul>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yoneticiler — App Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">AP</div>
+          <div>
+            <strong>App Panel</strong>
+            <span>Super Admin</span>
+          </div>
+        </div>
+        <a href="/panel" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          Uygulamalar
+        </a>
+        <button type="button" class="nav-link active" id="navUsers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+          </svg>
+          Yoneticiler
+        </button>
+        
+        <div style="flex: 1"></div>
+        <div class="sidebar-user">
+          <strong id="userNameLabel">—</strong>
+          <span class="role-badge" id="userRoleBadge">—</span>
+        </div>
+        <button type="button" class="nav-link" id="logoutBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+          Çıkış
+        </button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header">
+          <div class="page-header__lead">
+            <h1>Panel kullanicilari</h1>
+            <p class="subtitle" id="usersCount">Yükleniyor...</p>
+          </div>
+          <div class="header-toolbar">
+            <button type="button" class="btn btn-primary btn-compact" id="newUserBtn">+ Yeni kullanıcı</button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <section class="card card-padded">
+            <div class="users-toolbar">
+              <input
+                id="userSearch"
+                class="input input-search"
+                type="search"
+                placeholder="Ad veya email ara..."
+                style="max-width: 320px"
+              />
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Ad</th>
+                    <th>Email</th>
+                    <th>Rol</th>
+                    <th>Durum</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="usersBody"></tbody>
+              </table>
+            </div>
+            <div id="usersError" class="alert alert-error" hidden style="margin-top: 14px"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="userDialog" class="shell-dialog">
+      <form id="userForm">
+        <div class="dialog-header">
+          <h3 id="userDialogTitle">Yeni kullanıcı</h3>
+        </div>
+        <div class="dialog-body">
+          <input type="hidden" id="userId" />
+          
+          <div class="field">
+            <label for="userName">Ad *</label>
+            <input class="input" id="userName" type="text" required />
+          </div>
+          <div class="field">
+            <label for="userEmail">Email *</label>
+            <input class="input" id="userEmail" type="email" required />
+          </div>
+          <div class="field">
+            <label for="userPassword">Şifre <span id="passwordHint">(en az 8 karakter)</span></label>
+            <input class="input" id="userPassword" type="password" autocomplete="new-password" />
+          </div>
+          <div class="form-grid-2">
+            <div class="field">
+              <label for="userRole">Rol *</label>
+              <select class="select" id="userRole">
+                <option value="ADMIN">Admin</option>
+                <option value="USER">Kullanıcı</option>
+              </select>
+            </div>
+            <div class="field" id="activeField">
+              <label for="userActive">Durum</label>
+              <select class="select" id="userActive">
+                <option value="1">Aktif</option>
+                <option value="0">Pasif</option>
+              </select>
+            </div>
+          </div>
+          <div id="formMessage" class="alert alert-error" hidden></div>
+        </div>
+        
+        <div class="dialog-footer">
+          <button type="button" class="btn btn-danger" id="deleteUserBtn" hidden>Sil</button>
+          <button type="button" class="btn" id="cancelUserBtn">Iptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/js/panel-auth.js"></script>
+    <script>
+      const usersBody = document.getElementById("usersBody");
+      const usersCount = document.getElementById("usersCount");
+      const usersError = document.getElementById("usersError");
+      const userDialog = document.getElementById("userDialog");
+      const userForm = document.getElementById("userForm");
+      const deleteUserBtn = document.getElementById("deleteUserBtn");
+      const activeField = document.getElementById("activeField");
+      const passwordInput = document.getElementById("userPassword");
+
+      let users = [];
+      let searchTerm = "";
+      let editMode = "create";
+      let sessionUser = null;
+
+      function openCreateDialog() {
+        editMode = "create";
+        document.getElementById("userDialogTitle").textContent = "Yeni kullanıcı";
+        document.getElementById("userId").value = "";
+        document.getElementById("userName").value = "";
+        document.getElementById("userEmail").value = "";
+        document.getElementById("userRole").value = "ADMIN";
+        document.getElementById("userActive").value = "1";
+        passwordInput.value = "";
+        passwordInput.required = true;
+        document.getElementById("passwordHint").textContent = "(en az 8 karakter, zorunlu)";
+        document.getElementById("userRole").disabled = false;
+        activeField.hidden = true;
+        deleteUserBtn.hidden = true;
+        document.getElementById("formMessage").hidden = true;
+        userDialog.showModal();
+      }
+
+      function openEditDialog(user) {
+        editMode = "edit";
+        document.getElementById("userDialogTitle").textContent = "Kullanıcı düzenle";
+        document.getElementById("userId").value = user.id;
+        document.getElementById("userName").value = user.name;
+        document.getElementById("userEmail").value = user.email;
+        document.getElementById("userRole").value = user.role === "USER" ? "USER" : "ADMIN";
+        document.getElementById("userActive").value = user.isActive ? "1" : "0";
+        passwordInput.value = "";
+        passwordInput.required = false;
+        document.getElementById("passwordHint").textContent = "(boş bırakılırsa değişmez)";
+
+        const isSuperAdminRow = user.role === "SUPER_ADMIN";
+        document.getElementById("userRole").disabled = isSuperAdminRow;
+        activeField.hidden = isSuperAdminRow;
+        deleteUserBtn.hidden = isSuperAdminRow || user.id === sessionUser?.id;
+        document.getElementById("formMessage").hidden = true;
+        userDialog.showModal();
+      }
+
+      function renderUsers() {
+        const filtered = users.filter((user) => {
+          if (!searchTerm) return true;
+          const keyword = searchTerm.toLowerCase();
+          return (
+            user.name.toLowerCase().includes(keyword) ||
+            user.email.toLowerCase().includes(keyword) ||
+            PanelAuth.roleLabel(user.role).toLowerCase().includes(keyword)
+          );
+        });
+
+        usersCount.textContent = `${filtered.length} / ${users.length} hesap`;
+
+        if (filtered.length === 0) {
+          usersBody.innerHTML = `
+            <tr>
+              <td colspan="5" style="text-align:center;color:var(--muted);padding:28px">
+                Kullanıcı bulunamadı.
+              </td>
+            </tr>`;
+          return;
+        }
+
+        usersBody.innerHTML = filtered
+          .map((user) => {
+            const canEdit = user.role !== "SUPER_ADMIN" || user.id === sessionUser?.id;
+            const statusClass = user.isActive ? "ok" : "off";
+            const statusText = user.isActive ? "Aktif" : "Pasif";
+            return `
+              <tr>
+                <td><strong>${user.name}</strong></td>
+                <td>${user.email}</td>
+                <td><span class="role-badge" data-role="${user.role}">${PanelAuth.roleLabel(user.role)}</span></td>
+                <td><span class="status-pill ${statusClass}">${statusText}</span></td>
+                <td style="text-align:right">
+                  ${
+                    canEdit
+                      ? `<button type="button" class="btn btn-sm btn-ghost" data-edit-id="${user.id}">Düzenle</button>`
+                      : `<span style="color:var(--muted);font-size:12px">Korunuyor</span>`
+                  }
+                </td>
+              </tr>`;
+          })
+          .join("");
+      }
+
+      async function loadUsers() {
+        usersError.hidden = true;
+        const response = await fetch("/api/users");
+        if (response.status === 401) {
+          window.location.href = "/login.html";
+          return;
+        }
+        if (response.status === 403) {
+          window.location.href = "/panel?forbidden=1";
+          return;
+        }
+        const data = await response.json();
+        if (!response.ok) {
+          usersError.hidden = false;
+          usersError.textContent = data.message || "Liste alinamadi.";
+          return;
+        }
+        users = Array.isArray(data.users) ? data.users : [];
+        renderUsers();
+      }
+
+      userForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const formMessage = document.getElementById("formMessage");
+        formMessage.hidden = true;
+
+        const payload = {
+          name: document.getElementById("userName").value.trim(),
+          email: document.getElementById("userEmail").value.trim(),
+          role: document.getElementById("userRole").value,
+          isActive: document.getElementById("userActive").value === "1"
+        };
+
+        if (passwordInput.value.trim()) {
+          payload.password = passwordInput.value;
+        }
+
+        const id = document.getElementById("userId").value;
+        const isCreate = editMode === "create";
+        if (isCreate && !payload.password) {
+          formMessage.hidden = false;
+          formMessage.textContent = "Yeni kullanıcı için şifre zorunludur.";
+          return;
+        }
+
+        const response = await fetch(isCreate ? "/api/users" : `/api/users/${id}`, {
+          method: isCreate ? "POST" : "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          formMessage.hidden = false;
+          formMessage.textContent = data.message || "Kayıt başarısız.";
+          return;
+        }
+
+        userDialog.close();
+        await loadUsers();
+      });
+
+      deleteUserBtn.addEventListener("click", async () => {
+        const id = document.getElementById("userId").value;
+        if (!id || !confirm("Bu kullanıcı kalıcı olarak silinecek. Emin misiniz?")) return;
+
+        const response = await fetch(`/api/users/${id}`, { method: "DELETE" });
+        const data = await response.json();
+        if (!response.ok) {
+          const formMessage = document.getElementById("formMessage");
+          formMessage.hidden = false;
+          formMessage.textContent = data.message || "Silinemedi.";
+          return;
+        }
+        userDialog.close();
+        await loadUsers();
+      });
+
+      document.getElementById("newUserBtn").addEventListener("click", openCreateDialog);
+      document.getElementById("cancelUserBtn").addEventListener("click", () => userDialog.close());
+      document.getElementById("userSearch").addEventListener("input", (e) => {
+        searchTerm = e.target.value.trim();
+        renderUsers();
+      });
+      usersBody.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-edit-id]");
+        if (!btn) return;
+        const user = users.find((item) => String(item.id) === btn.getAttribute("data-edit-id"));
+        if (user) openEditDialog(user);
+      });
+      document.getElementById("logoutBtn").addEventListener("click", async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
+        window.location.href = "/login.html";
+      });
+
+      (async () => {
+        sessionUser = await PanelAuth.fetchSession();
+        if (!sessionUser) return;
+        if (!PanelAuth.isSuperAdmin(sessionUser)) {
+          window.location.href = "/panel?forbidden=1";
+          return;
+        }
+        PanelAuth.applySidebarUser(sessionUser);
+        await loadUsers();
+      })();
+    </script>
+  </body>
+</html>

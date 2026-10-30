@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HomiFit — Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body theme-homifit">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">HF</div>
+          <div>
+            <strong id="sidebarAppName">HomiFit</strong>
+            <span>Yönetim paneli</span>
+          </div>
+        </div>
+        <a href="/panel" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Uygulamalara dön
+        </a>
+        <button type="button" class="nav-link active" data-view="overview">Özet</button>
+        <button type="button" class="nav-link" data-view="users">Kullanıcılar</button>
+        <button type="button" class="nav-link" data-view="workouts">Egzersizler</button>
+        <button type="button" class="nav-link" data-view="templates">Şablonlar</button>
+        <button type="button" class="nav-link" data-view="analytics">Analizler</button>
+        <button type="button" class="nav-link" data-view="revenuecat">RevenueCat</button>
+        <div style="flex: 1"></div>
+        <button type="button" class="nav-link" id="settingsBtn" data-manager-only>Bağlantı ayarları</button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header">
+          <div class="header-brand">
+            <div class="header-app-icon" id="headerAppIconWrap">
+              <img id="headerAppIcon" alt="Uygulama logosu" hidden />
+              <span id="headerAppIconFallback">HF</span>
+            </div>
+            <div>
+              <nav class="breadcrumb">
+                <a href="/panel">Uygulamalar</a>
+                <span>/</span>
+                <span id="breadcrumbName">HomiFit</span>
+              </nav>
+              <h1 id="appTitle">HomiFit</h1>
+              <p class="subtitle" id="apiInfo">API bağlantısı kontrol ediliyor...</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <span id="healthBadge" class="badge"><span class="badge-dot"></span>Kontrol...</span>
+            <button type="button" class="btn" id="refreshBtn">Yenile</button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <div id="viewerBanner" class="readonly-banner" hidden>
+            Salt okunur mod: verileri görüntüleyebilirsiniz, değişiklik yapamazsınız.
+          </div>
+
+          <div id="view-overview" class="view-panel active">
+            <section class="stat-grid stat-grid--4">
+              <article class="card stat-card">
+                <div class="stat-label">Toplam kullanıcı</div>
+                <div class="stat-value loading" id="statTotalUsers">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Premium</div>
+                <div class="stat-value loading" id="statPremiumUsers">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Egzersizler</div>
+                <div class="stat-value loading" id="statTotalExercises">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Şablonlar</div>
+                <div class="stat-value loading" id="statTotalTemplates">—</div>
+              </article>
+            </section>
+            <section class="stat-grid stat-grid--3" style="margin-bottom: 16px">
+              <article class="card stat-card">
+                <div class="stat-label">Bugün yeni kullanıcı</div>
+                <div class="stat-value loading" id="statNewUsersToday">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Bugün antrenman</div>
+                <div class="stat-value loading" id="statSessionsToday">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Toplam oturum</div>
+                <div class="stat-value loading" id="statTotalSessions">—</div>
+              </article>
+            </section>
+            <p class="field-hint" id="analyseHint" style="margin: -8px 0 16px"></p>
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Son 14 gün</h2>
+                  <p>Yeni kullanıcılar</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tarih</th>
+                      <th>Yeni kullanıcı</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dailyBody"></tbody>
+                </table>
+              </div>
+              <div id="analyseError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-users" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Kullanıcılar</h2>
+                  <p id="usersMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="userSearch" class="input input-search" type="search" placeholder="İsim, e-posta veya firebase uid..." />
+                <select class="select" id="userPremiumFilter" style="width: auto">
+                  <option value="">Tümü</option>
+                  <option value="1">Premium</option>
+                  <option value="0">Ücretsiz</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" id="userSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="userClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Kullanıcı</th>
+                      <th>Premium</th>
+                      <th>Plan</th>
+                      <th>Oturum</th>
+                      <th>Kayıt</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="usersPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="usersNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="usersError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-workouts" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Egzersiz kataloğu</h2>
+                  <p id="workoutsMeta">Liste yükleniyor...</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="workoutCreateBtn" data-manager-only>+ Egzersiz</button>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="workoutSearch" class="input input-search" type="search" placeholder="İsim veya slug..." />
+                <button type="button" class="btn btn-primary btn-sm" id="workoutSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="workoutClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Egzersiz</th>
+                      <th>Kas</th>
+                      <th>Zorluk</th>
+                      <th>Durum</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="workoutsBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="workoutsPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="workoutsNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="workoutsError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-templates" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Antrenman şablonları</h2>
+                  <p id="templatesMeta">Liste yükleniyor...</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="templateCreateBtn" data-manager-only>+ Şablon</button>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px; flex-wrap: wrap">
+                <input id="templateSearch" class="input input-search" type="search" placeholder="Başlık veya slug..." />
+                <button type="button" class="btn btn-primary btn-sm" id="templateSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="templateClearBtn">Temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Şablon</th>
+                      <th>Kategori</th>
+                      <th>Süre</th>
+                      <th>Egzersiz</th>
+                      <th>Premium</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="templatesBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="templatesPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="templatesNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="templatesError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-analytics" class="view-panel">
+            <div id="analyticsGrid" class="analytics-grid"></div>
+          </div>
+
+          <div id="view-revenuecat" class="view-panel">
+            <section class="card card-padded rc-section" id="revenuecatSection">
+              <div class="card-header">
+                <div>
+                  <h2>Abonelik ve gelir (RevenueCat)</h2>
+                  <p class="field-hint" id="rcStatus">Yükleniyor...</p>
+                </div>
+              </div>
+              <div class="stat-grid stat-grid--3 rc-revenue-periods">
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 1 ay</div>
+                  <div class="stat-value loading" id="rcRevenue1m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 6 ay</div>
+                  <div class="stat-value loading" id="rcRevenue6m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · tüm zamanlar</div>
+                  <div class="stat-value loading" id="rcRevenueAll">—</div>
+                </article>
+              </div>
+              <div id="rcMetricsGrid" class="stat-grid stat-grid--3"></div>
+              <section class="rc-premium-section">
+                <div class="card-header" style="margin-top: 8px">
+                  <div>
+                    <h3>Premium kullanıcılar ve fatura hareketleri</h3>
+                    <p class="field-hint" id="rcFeedStatus">Liste yüklenmedi</p>
+                  </div>
+                </div>
+                <div class="toolbar-row" style="margin-bottom: 10px">
+                  <input id="rcFeedSearch" class="input input-search" type="search" placeholder="Kullanıcı, ürün, işlem no ara..." />
+                  <button type="button" class="btn btn-sm" id="rcFeedRefreshBtn">Listeyi yükle</button>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Müşteri (RC)</th>
+                        <th>Uygulama kullanıcısı</th>
+                        <th>Ülke</th>
+                        <th>Ürün</th>
+                        <th>Mağaza</th>
+                        <th>Durum</th>
+                        <th>Tutar</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="rcFeedBody"></tbody>
+                  </table>
+                </div>
+              </section>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="userDialog" class="panel-dialog">
+      <form method="dialog" id="userForm" class="dialog-body">
+        <h2>Kullanıcı düzenle</h2>
+        <input type="hidden" id="userEditId" />
+        <label>Görünen ad<input class="input" id="userDisplayName" /></label>
+        <label class="checkbox-row"><input type="checkbox" id="userIsPremium" /> Premium</label>
+        <label class="checkbox-row"><input type="checkbox" id="userIsActive" checked /> Aktif</label>
+        <div id="userFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="userCancelBtn">İptal</button>
+          <button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="workoutDialog" class="panel-dialog">
+      <form method="dialog" id="workoutForm" class="dialog-body">
+        <h2 id="workoutDialogTitle">Egzersiz</h2>
+        <input type="hidden" id="workoutEditId" />
+        <label>İngilizce ad<input class="input" id="workoutNameEn" required /></label>
+        <label>Türkçe ad<input class="input" id="workoutNameTr" /></label>
+        <label>Slug<input class="input" id="workoutSlug" placeholder="opsiyonel" /></label>
+        <label>Kas grubu<input class="input" id="workoutMuscle" placeholder="legs / core / chest..." /></label>
+        <label>Zorluk
+          <select class="select" id="workoutDifficulty">
+            <option value="beginner">beginner</option>
+            <option value="intermediate">intermediate</option>
+            <option value="advanced">advanced</option>
+          </select>
+        </label>
+        <label>Video URL<input class="input" id="workoutVideoUrl" type="url" /></label>
+        <label>Thumbnail path<input class="input" id="workoutThumb" /></label>
+        <label class="checkbox-row"><input type="checkbox" id="workoutActive" checked /> Aktif</label>
+        <div id="workoutFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="workoutCancelBtn">İptal</button>
+          <button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="templateDialog" class="panel-dialog">
+      <form method="dialog" id="templateForm" class="dialog-body">
+        <h2 id="templateDialogTitle">Şablon</h2>
+        <input type="hidden" id="templateEditId" />
+        <label>İngilizce başlık<input class="input" id="templateTitleEn" required /></label>
+        <label>Türkçe başlık<input class="input" id="templateTitleTr" /></label>
+        <label>Slug<input class="input" id="templateSlug" placeholder="opsiyonel" /></label>
+        <label>Kategori<input class="input" id="templateCategory" placeholder="popular / core_abs / quick..." /></label>
+        <label>Süre (dk)<input class="input" id="templateDuration" type="number" min="1" value="20" /></label>
+        <label>Seviye
+          <select class="select" id="templateLevel">
+            <option value="all">all</option>
+            <option value="beginner">beginner</option>
+            <option value="intermediate">intermediate</option>
+            <option value="advanced">advanced</option>
+          </select>
+        </label>
+        <label>Egzersiz id listesi (virgülle)<input class="input" id="templateExerciseIds" placeholder="12, 45, 8" /></label>
+        <label class="checkbox-row"><input type="checkbox" id="templatePremium" /> Premium</label>
+        <label class="checkbox-row"><input type="checkbox" id="templateActive" checked /> Aktif</label>
+        <div id="templateFormError" class="alert alert-error" hidden></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="templateCancelBtn">İptal</button>
+          <button type="submit" class="btn btn-primary" data-manager-only>Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/js/panel-auth.js"></script>
+    <script src="/js/rc-summary-ui.js"></script>
+    <script src="/js/revenuecat-panel.js"></script>
+    <script src="/js/homifit-panel.js"></script>
+  </body>
+</html>

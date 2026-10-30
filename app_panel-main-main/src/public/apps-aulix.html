@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aulix — Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body theme-aulix">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">AX</div>
+          <div>
+            <strong id="sidebarAppName">Aulix</strong>
+            <span>Yönetim paneli</span>
+          </div>
+        </div>
+        <a href="/panel" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Uygulamalara dön
+        </a>
+        <button type="button" class="nav-link active" data-view="overview">Özet</button>
+        <button type="button" class="nav-link" data-view="users">Kullanıcılar</button>
+        <button type="button" class="nav-link" data-view="tracks">Parçalar</button>
+        <button type="button" class="nav-link" data-view="artists">Sanatçılar</button>
+        <button type="button" class="nav-link" data-view="subscriptions">Satın alımlar</button>
+        <button type="button" class="nav-link" data-view="analytics">Analizler</button>
+        <button type="button" class="nav-link" data-view="revenuecat">RevenueCat</button>
+        <div style="flex: 1"></div>
+        <button type="button" class="nav-link" id="settingsBtn" data-manager-only>Bağlantı ayarları</button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header">
+          <div class="header-brand">
+            <div class="header-app-icon" id="headerAppIconWrap">
+              <img id="headerAppIcon" alt="Uygulama logosu" hidden />
+              <span id="headerAppIconFallback">AX</span>
+            </div>
+            <div>
+              <nav class="breadcrumb">
+                <a href="/panel">Uygulamalar</a>
+                <span>/</span>
+                <span id="breadcrumbName">Aulix</span>
+              </nav>
+              <h1 id="appTitle">Aulix</h1>
+              <p class="subtitle" id="apiInfo">API bağlantısı kontrol ediliyor...</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <span id="healthBadge" class="badge"><span class="badge-dot"></span>Kontrol...</span>
+            <button type="button" class="btn" id="refreshBtn">Yenile</button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <div id="viewerBanner" class="readonly-banner" hidden>
+            Salt okunur mod: verileri görüntüleyebilirsiniz, değişiklik yapamazsınız.
+          </div>
+
+          <div id="view-overview" class="view-panel active">
+            <section class="stat-grid stat-grid--3" style="margin-bottom: 16px">
+              <article class="card stat-card">
+                <div class="stat-label">Toplam kullanıcı</div>
+                <div class="stat-value loading" id="statTotalUsers">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Bugün aktif</div>
+                <div class="stat-value loading" id="statLoginsToday">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Bugün yeni kullanıcı</div>
+                <div class="stat-value loading" id="statNewUsersToday">—</div>
+              </article>
+            </section>
+            <section class="stat-grid stat-grid--4" style="margin-bottom: 16px">
+              <article class="card stat-card">
+                <div class="stat-label">Toplam parça</div>
+                <div class="stat-value loading" id="statTotalTracks">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Toplam dinlenme</div>
+                <div class="stat-value loading" id="statTotalPlays">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Toplam sanatçı</div>
+                <div class="stat-value loading" id="statTotalArtists">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Toplam satın alım</div>
+                <div class="stat-value loading" id="statTotalSubscriptions">—</div>
+              </article>
+            </section>
+            <section class="stat-grid stat-grid--3" style="margin-bottom: 16px">
+              <article class="card stat-card">
+                <div class="stat-label">Bugün parça</div>
+                <div class="stat-value loading" id="statTracksToday">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Bugün sanatçı</div>
+                <div class="stat-value loading" id="statArtistsToday">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Bugün satın alım</div>
+                <div class="stat-value loading" id="statSubscriptionsToday">—</div>
+              </article>
+            </section>
+            <p class="field-hint" id="analyseHint" style="margin: -8px 0 16px"></p>
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Günlük özet</h2>
+                  <p>Aktif kullanıcı, yeni kayıt, parça ve satın alım trendi</p>
+                </div>
+              </div>
+              <div class="stat-grid stat-grid--4 overview-extra-grid">
+                <article class="card stat-card">
+                  <div class="stat-label">7 günlük toplam aktivite</div>
+                  <div class="stat-value" id="statWeeklyLogins">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">7 günlük yeni kullanıcı</div>
+                  <div class="stat-value" id="statWeeklyNewUsers">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">7 günlük parça</div>
+                  <div class="stat-value" id="statWeeklyTracks">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">7 günlük satın alım</div>
+                  <div class="stat-value" id="statWeeklySubscriptions">—</div>
+                </article>
+              </div>
+              <div class="overview-trend-panel">
+                <h3>Son 7 gün trend görünümü</h3>
+                <div id="dailyMiniChart" class="overview-mini-chart"></div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tarih</th>
+                      <th>Aktivite</th>
+                      <th>Yeni kullanıcı</th>
+                      <th>Parça</th>
+                      <th>Satın alım</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dailyBody"></tbody>
+                </table>
+              </div>
+              <div id="dailyError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-users" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Kullanıcılar</h2>
+                  <p id="usersMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px">
+                <input id="userSearch" class="input input-search" type="search" placeholder="İsim, e-posta veya kullanıcı id..." />
+                <button type="button" class="btn btn-primary btn-sm" id="searchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="userClearFilterBtn">Filtreyi temizle</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Kullanıcı</th>
+                      <th>Kredi</th>
+                      <th>Parça</th>
+                      <th>Sanatçı</th>
+                      <th>Son aktivite</th>
+                      <th>Kayıt</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="prevPageBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="nextPageBtn" disabled>Sonraki</button>
+              </div>
+              <div id="usersError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-tracks" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Parçalar</h2>
+                  <p id="tracksMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px">
+                <input id="trackSearch" class="input input-search" type="search" placeholder="Başlık, kullanıcı veya id ara..." />
+                <button type="button" class="btn btn-sm" id="trackSearchBtn">Ara</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Başlık</th>
+                      <th>Kullanıcı</th>
+                      <th>Stil</th>
+                      <th>Dinlenme</th>
+                      <th>Önizleme</th>
+                      <th>Tarih</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tracksBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="trackPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="trackNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="tracksError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-artists" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Sanatçılar</h2>
+                  <p id="artistsMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px">
+                <input id="artistSearch" class="input input-search" type="search" placeholder="Sanatçı adı veya kullanıcı ara..." />
+                <button type="button" class="btn btn-sm" id="artistSearchBtn">Ara</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Sanatçı</th>
+                      <th>Kullanıcı</th>
+                      <th>Cinsiyet</th>
+                      <th>Görsel</th>
+                      <th>Tarih</th>
+                    </tr>
+                  </thead>
+                  <tbody id="artistsBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="artistPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="artistNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="artistsError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-subscriptions" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Satın alımlar</h2>
+                  <p id="subscriptionsMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div class="toolbar-row" style="margin-bottom: 14px">
+                <input id="subscriptionSearch" class="input input-search" type="search" placeholder="Kullanıcı, ürün veya işlem no ara..." />
+                <button type="button" class="btn btn-sm" id="subscriptionSearchBtn">Ara</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Kullanıcı</th>
+                      <th>Ürün</th>
+                      <th>Platform</th>
+                      <th>Fiyat</th>
+                      <th>Durum</th>
+                      <th>Tarih</th>
+                    </tr>
+                  </thead>
+                  <tbody id="subscriptionsBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="subscriptionPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="subscriptionNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="subscriptionsError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-analytics" class="view-panel">
+            <div class="analytics-grid" id="analyticsGrid">
+              <p class="user-cell-sub">Analizler yükleniyor...</p>
+            </div>
+            <div id="analyticsError" class="alert alert-error" hidden></div>
+          </div>
+
+          <div id="view-revenuecat" class="view-panel">
+            <section class="card card-padded rc-section" id="revenuecatSection">
+              <div class="card-header">
+                <div>
+                  <h2>Abonelik ve gelir (RevenueCat)</h2>
+                  <p class="field-hint" id="rcStatus">Yükleniyor...</p>
+                </div>
+              </div>
+              <div class="stat-grid stat-grid--3 rc-revenue-periods">
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 1 ay</div>
+                  <div class="stat-value loading" id="rcRevenue1m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 6 ay</div>
+                  <div class="stat-value loading" id="rcRevenue6m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · tüm zamanlar</div>
+                  <div class="stat-value loading" id="rcRevenueAll">—</div>
+                </article>
+              </div>
+              <div id="rcMetricsGrid" class="stat-grid stat-grid--3"></div>
+              <section class="rc-premium-section">
+                <div class="card-header" style="margin-top: 8px">
+                  <div>
+                    <h3>Premium kullanıcılar ve fatura hareketleri</h3>
+                    <p class="field-hint" id="rcFeedStatus">Liste yüklenmedi</p>
+                  </div>
+                </div>
+                <div class="toolbar-row" style="margin-bottom: 10px">
+                  <input id="rcFeedSearch" class="input input-search" type="search" placeholder="Kullanıcı, ürün, işlem no ara..." />
+                  <button type="button" class="btn btn-sm" id="rcFeedRefreshBtn">Listeyi yükle</button>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Müşteri (RC)</th>
+                        <th>Uygulama kullanıcısı</th>
+                        <th>Ülke</th>
+                        <th>Ürün</th>
+                        <th>Mağaza</th>
+                        <th>Durum</th>
+                        <th>Harcanan</th>
+                        <th>Başlangıç</th>
+                        <th>Bitiş / Yenileme</th>
+                        <th>İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rcFeedBody">
+                      <tr>
+                        <td colspan="10" class="user-cell-sub">Abone listesi otomatik yüklenmez — <strong>Listeyi yükle</strong> ile getirin.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <div id="rcError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="userDetailDialog" class="shell-dialog dialog-wide">
+      <div class="dialog-header"><h3 id="userDetailTitle">Kullanıcı detay</h3></div>
+      <div class="dialog-body">
+        <div id="userDetailProfile" class="user-profile-card user-profile-card--compact"></div>
+        <div class="user-detail-section">
+          <h4 class="user-detail-section__title">Kullanım özeti</h4>
+          <div id="userDetailStats" class="stat-grid stat-grid--4"></div>
+        </div>
+        <div id="userDetailError" class="alert alert-error" hidden></div>
+      </div>
+      <div class="dialog-footer">
+        <button type="button" class="btn" id="closeUserDetailBtn">Kapat</button>
+      </div>
+    </dialog>
+
+    <dialog id="editUserDialog" class="shell-dialog">
+      <form id="editUserForm">
+        <div class="dialog-header"><h3>Kullanıcı düzenle</h3></div>
+        <div class="dialog-body">
+          <input type="hidden" id="editUserId" />
+          <div class="field">
+            <label for="editDisplayName">Görünen ad</label>
+            <input class="input" id="editDisplayName" type="text" />
+          </div>
+          <div class="field">
+            <label for="editEmail">E-posta</label>
+            <input class="input" id="editEmail" type="email" readonly />
+          </div>
+          <div class="field">
+            <label for="editCredits">Kredi</label>
+            <input class="input" id="editCredits" type="number" min="0" step="1" />
+          </div>
+          <p class="field-hint" id="editUserMeta">—</p>
+          <div id="editUserMessage" class="alert alert-error" hidden></div>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn" id="closeUserDialogBtn">İptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/js/panel-auth.js"></script>
+    <script src="/js/rc-summary-ui.js"></script>
+    <script src="/js/revenuecat-panel.js"></script>
+    <script src="/js/aulix-panel.js"></script>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "app_panel",
+  "version": "1.0.0",
+  "description": "Mobil uygulama analiz paneli",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "seed": "node src/scripts/seedSuperAdmin.js",
+    "seed:users": "node src/scripts/seedPanelUsers.js",
+    "seed:apps": "node src/scripts/seedApps.js",
+    "seed:all": "npm run seed && npm run seed:apps"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^14.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.1",
+    "mysql2": "^3.11.3",
+    "nodemailer": "^8.0.7",
+    "undici": "^6.27.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

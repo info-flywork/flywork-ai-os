@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MindCoach — Panel</title>
+    <link rel="stylesheet" href="/css/panel-shell.css" />
+  </head>
+  <body class="shell-body theme-mindcoach">
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">MC</div>
+          <div>
+            <strong id="sidebarAppName">MindCoach</strong>
+            <span>Yönetim paneli</span>
+          </div>
+        </div>
+        <a href="/panel" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Uygulamalara dön
+        </a>
+        <button type="button" class="nav-link active" data-view="overview" id="navOverview">Özet</button>
+        <button type="button" class="nav-link" data-view="users" id="navUsers">Kullanıcılar</button>
+        <button type="button" class="nav-link" data-view="agents" id="navAgents">Rehberler</button>
+        <button type="button" class="nav-link" data-view="revenuecat" id="navRevenueCat">RevenueCat</button>
+        <div style="flex: 1"></div>
+        <button type="button" class="nav-link" id="settingsBtn" data-manager-only>Bağlantı ayarları</button>
+      </aside>
+
+      <div class="main-area">
+        <header class="page-header">
+          <div class="header-brand">
+            <div class="header-app-icon" id="headerAppIconWrap">
+              <img id="headerAppIcon" alt="Uygulama logosu" hidden />
+              <span id="headerAppIconFallback">MC</span>
+            </div>
+            <div>
+            <nav class="breadcrumb">
+              <a href="/panel">Uygulamalar</a>
+              <span>/</span>
+              <span id="breadcrumbName">MindCoach</span>
+            </nav>
+            <h1 id="appTitle">MindCoach</h1>
+            <p class="subtitle" id="apiInfo">API bağlantısı kontrol ediliyor...</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <span id="healthBadge" class="badge"><span class="badge-dot"></span>Kontrol...</span>
+            <button type="button" class="btn" id="refreshBtn">Yenile</button>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <div id="viewerBanner" class="readonly-banner" hidden>
+            Salt okunur mod: verileri görüntüleyebilirsiniz, değişiklik yapamazsınız.
+          </div>
+
+          <div id="view-overview" class="view-panel active">
+            <section class="stat-grid stat-grid--4">
+              <article class="card stat-card">
+                <div class="stat-label">Toplam kullanıcı</div>
+                <div class="stat-value loading" id="statTotal">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Bugün oturum</div>
+                <div class="stat-value loading" id="statLogins">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Bugün yeni kullanıcı</div>
+                <div class="stat-value loading" id="statNew">—</div>
+              </article>
+              <article class="card stat-card">
+                <div class="stat-label">Toplam rehber</div>
+                <div class="stat-value loading" id="statAgents">—</div>
+              </article>
+            </section>
+            <p class="field-hint" id="agentsTypeHint" style="margin: -8px 0 16px"></p>
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Günlük özet</h2>
+                  <p>Oturum ve yeni kayıt trendi</p>
+                </div>
+              </div>
+              <div class="stat-grid stat-grid--4 overview-extra-grid">
+                <article class="card stat-card">
+                  <div class="stat-label">7 günlük toplam oturum</div>
+                  <div class="stat-value" id="statWeeklyLogins">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">7 günlük toplam yeni kullanıcı</div>
+                  <div class="stat-value" id="statWeeklyNewUsers">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Günlük ortalama oturum</div>
+                  <div class="stat-value" id="statDailyAvgLogins">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Günlük ortalama yeni kullanıcı</div>
+                  <div class="stat-value" id="statDailyAvgNewUsers">—</div>
+                </article>
+              </div>
+              <div class="overview-trend-panel">
+                <h3>Son 7 gün trend görünümü</h3>
+                <div id="dailyMiniChart" class="overview-mini-chart"></div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tarih</th>
+                      <th>Oturum</th>
+                      <th>Yeni kullanıcı</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dailyBody"></tbody>
+                </table>
+              </div>
+              <div id="dailyError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-revenuecat" class="view-panel">
+            <section class="card card-padded rc-section" id="revenuecatSection">
+              <div class="card-header">
+                <div>
+                  <h2>Abonelik ve gelir (RevenueCat)</h2>
+                  <p class="field-hint" id="rcStatus">Yükleniyor...</p>
+                </div>
+              </div>
+              <div class="stat-grid stat-grid--3 rc-revenue-periods">
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 1 ay</div>
+                  <div class="stat-value loading" id="rcRevenue1m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · son 6 ay</div>
+                  <div class="stat-value loading" id="rcRevenue6m">—</div>
+                </article>
+                <article class="card stat-card">
+                  <div class="stat-label">Gelir · tüm zamanlar</div>
+                  <div class="stat-value loading" id="rcRevenueAll">—</div>
+                </article>
+              </div>
+              <div id="rcMetricsGrid" class="stat-grid stat-grid--3"></div>
+              <section class="rc-premium-section">
+                <div class="card-header" style="margin-top: 8px">
+                  <div>
+                    <h3>Premium kullanıcılar ve fatura hareketleri</h3>
+                    <p class="field-hint" id="rcFeedStatus">Yükleniyor...</p>
+                  </div>
+                </div>
+                <div class="toolbar-row" style="margin-bottom: 10px">
+                  <input id="rcFeedSearch" class="input input-search" type="search" placeholder="Kullanıcı, ürün, işlem no ara..." />
+                  <button type="button" class="btn btn-sm" id="rcFeedRefreshBtn">Yenile</button>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Müşteri (RC)</th>
+                        <th>Uygulama kullanıcısı</th>
+                        <th>Ülke</th>
+                        <th>Ürün</th>
+                        <th>Mağaza</th>
+                        <th>Durum</th>
+                        <th>Harcanan</th>
+                        <th>Başlangıç</th>
+                        <th>Bitiş / Yenileme</th>
+                        <th>İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rcFeedBody">
+                      <tr><td colspan="10" class="user-cell-sub">Yükleniyor...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <div id="rcError" class="alert alert-error" hidden></div>
+            </section>
+          </div>
+
+          <div id="view-users" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Kullanıcılar</h2>
+                  <p id="usersMeta">Liste yükleniyor...</p>
+                </div>
+              </div>
+              <div id="usersListArea">
+              <div class="toolbar-row" style="margin-bottom: 14px">
+                <input
+                  id="userSearch"
+                  class="input input-search"
+                  type="search"
+                  placeholder="E-posta veya kullanıcı adı..."
+                />
+                <button type="button" class="btn btn-primary btn-sm" id="searchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="userClearFilterBtn">Filtreyi temizle</button>
+              </div>
+              <div class="agent-filter-bar">
+                <div class="agent-filter-item">
+                  <label for="userPremiumFilter">Premium</label>
+                  <select id="userPremiumFilter" class="select">
+                    <option value="">Tümü</option>
+                    <option value="yes">Premium</option>
+                    <option value="no">Premium değil</option>
+                  </select>
+                </div>
+                <div class="agent-filter-item">
+                  <label for="userAuthFilter">Giriş tipi</label>
+                  <select id="userAuthFilter" class="select">
+                    <option value="">Tümü</option>
+                    <option value="apple">APPLE</option>
+                    <option value="google">GOOGLE</option>
+                    <option value="guest">MİSAFİR</option>
+                  </select>
+                </div>
+                <div class="agent-filter-item">
+                  <label for="userGenderFilter">Cinsiyet</label>
+                  <select id="userGenderFilter" class="select">
+                    <option value="">Tümü</option>
+                    <option value="female">KADIN</option>
+                    <option value="male">ERKEK</option>
+                    <option value="other">-</option>
+                  </select>
+                </div>
+                <div class="agent-filter-item">
+                  <label for="userLangFilter">Dil</label>
+                  <input id="userLangFilter" class="input" type="text" placeholder="örn: tr" />
+                </div>
+                <div class="agent-filter-item">
+                  <label for="userCreatedDateFilter">Kayıt tarihi</label>
+                  <input id="userCreatedDateFilter" class="input" type="date" />
+                </div>
+                <div class="agent-filter-item">
+                  <label for="userLastLoginDateFilter">Son giriş</label>
+                  <input id="userLastLoginDateFilter" class="input" type="date" />
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Kullanıcı</th>
+                      <th>Yaş</th>
+                      <th>Cinsiyet</th>
+                      <th>Dil</th>
+                      <th>Giriş</th>
+                      <th>Provider ID</th>
+                      <th>Premium</th>
+                      <th>Son giriş</th>
+                      <th>Kayıt tarihi</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="prevPageBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="nextPageBtn" disabled>Sonraki</button>
+              </div>
+              <div id="usersError" class="alert alert-error" hidden></div>
+              </div>
+
+              <section id="userInsightsPanel" class="agent-editor-page" hidden>
+                <div class="dialog-header dialog-header--agent">
+                  <button type="button" class="btn btn-sm btn-ghost" id="closeUserInsightsBtn">← Kullanıcı listesine dön</button>
+                  <h3 id="userInsightsTitle">Kullanıcı detay</h3>
+                </div>
+                <div class="dialog-body">
+                  <div class="stat-grid stat-grid--4" style="margin-bottom: 14px">
+                    <article class="card stat-card"><div class="stat-label">Sohbet ettiği rehber</div><div class="stat-value" id="userStatLinkedAgents">—</div></article>
+                    <article class="card stat-card"><div class="stat-label">Toplam randevu</div><div class="stat-value" id="userStatAppointments">—</div></article>
+                    <article class="card stat-card"><div class="stat-label">Gelecek randevu</div><div class="stat-value" id="userStatUpcoming">—</div></article>
+                    <article class="card stat-card"><div class="stat-label">Geçmiş randevu</div><div class="stat-value" id="userStatPast">—</div></article>
+                  </div>
+
+                  <h3 class="section-label">Sohbet Ettiği Rehberler</h3>
+                  <div class="table-wrap">
+                    <table class="data-table">
+                      <thead><tr><th>Rehber</th><th>Meslek</th><th>İlk sohbet</th><th>Son mesaj</th></tr></thead>
+                      <tbody id="userInsightsAgentsBody"></tbody>
+                    </table>
+                  </div>
+
+                  <h3 class="section-label">Gelecek Randevular</h3>
+                  <div class="table-wrap">
+                    <table class="data-table">
+                      <thead><tr><th>Tarih</th><th>Rehber</th><th>Durum</th></tr></thead>
+                      <tbody id="userInsightsUpcomingBody"></tbody>
+                    </table>
+                  </div>
+
+                  <h3 class="section-label">Geçmiş Randevular</h3>
+                  <div class="table-wrap">
+                    <table class="data-table">
+                      <thead><tr><th>Tarih</th><th>Rehber</th><th>Durum</th></tr></thead>
+                      <tbody id="userInsightsPastBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            </section>
+          </div>
+
+          <div id="view-agents" class="view-panel">
+            <section class="card card-padded">
+              <div class="card-header">
+                <div>
+                  <h2>Rehberler (consultant)</h2>
+                  <p id="agentsMeta">Liste yükleniyor...</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="newAgentBtn" data-manager-only>
+                  + Yeni rehber
+                </button>
+              </div>
+              <div id="agentsListArea">
+              <div class="toolbar-row" style="margin-bottom: 14px">
+                <input
+                  id="agentSearch"
+                  class="input input-search"
+                  type="search"
+                  placeholder="İsim veya id..."
+                />
+                <button type="button" class="btn btn-sm" id="agentSearchBtn">Ara</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="agentClearFilterBtn">Filtreyi temizle</button>
+              </div>
+              <div class="agent-filter-bar">
+                <div class="agent-filter-item">
+                  <label for="agentSortBy">Sıralama</label>
+                  <select id="agentSortBy" class="select">
+                    <option value="id_asc">ID (Artan)</option>
+                    <option value="id_desc">ID (Azalan)</option>
+                  </select>
+                </div>
+                <div class="agent-filter-item">
+                  <label for="agentJobFilter">Meslek filtresi</label>
+                  <select id="agentJobFilter" class="select">
+                    <option value="">Tüm meslekler</option>
+                  </select>
+                </div>
+                <div class="agent-filter-item">
+                  <label for="agentRoleFilter">Cinsiyet filtresi</label>
+                  <select id="agentRoleFilter" class="select">
+                    <option value="">Tüm cinsiyetler</option>
+                    <option value="female">Kadın</option>
+                    <option value="male">Erkek</option>
+                  </select>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Rehber</th>
+                      <th>Meslek</th>
+                      <th>Bağlı kullanıcı</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="agentsBody"></tbody>
+                </table>
+              </div>
+              <div class="toolbar-row" style="margin-top: 14px; justify-content: flex-end">
+                <button type="button" class="btn btn-sm" id="agentPrevBtn" disabled>Önceki</button>
+                <button type="button" class="btn btn-sm" id="agentNextBtn" disabled>Sonraki</button>
+              </div>
+              <div id="agentsError" class="alert alert-error" hidden></div>
+              </div>
+              <section id="editAgentDialog" class="agent-editor-page" hidden>
+                <form id="editAgentForm" novalidate>
+                  <div class="dialog-header dialog-header--agent">
+                    <button type="button" class="btn btn-sm btn-ghost" id="closeAgentDialogBtn">← Rehber listesine dön</button>
+                    <h3 id="agentDialogTitle">Rehber</h3>
+                  </div>
+                  <div class="dialog-body">
+                    <input type="hidden" id="editAgentId" />
+                    <div class="field">
+                      <label>İsimler (12 dil) *</label>
+                      <div class="form-grid-2" id="agentNamesGrid"></div>
+                      <p class="field-hint">Zorunlu diller: tr, en, de, es, fr, it, pt, ko, zh, ru, ja, hi</p>
+                    </div>
+                    <div class="field">
+                      <label for="agentJob">Meslek (job) *</label>
+                      <select class="select" id="agentJob"></select>
+                    </div>
+                    <div class="field">
+                      <label>Açıklama şablonu *</label>
+                      <p class="field-hint">Mesleğe göre hazır açıklamalardan birini seçin — tam metni okuyup uygun olanı seçin.</p>
+                      <input type="hidden" id="agentExplanation" value="" />
+                      <div class="explanation-picker" id="agentExplanationPicker">
+                        <p class="field-hint">Önce meslek seçin.</p>
+                      </div>
+                    </div>
+                    <input id="agentMainPrompt" type="hidden" value="" />
+                    <div class="field agent-media-block">
+                      <label for="agentMediaCode">CDN medya kodu</label>
+                      <input class="input" id="agentMediaCode" type="text" placeholder="ör. air" autocomplete="off" />
+                      <p class="field-hint" id="agentMediaPathHint">
+                        Dosya yüklerseniz kod zorunludur. Ana: <code>images/c_<em>kod</em>.png</code> · Detay:
+                        <code>images/c_<em>kod</em>_detail.png</code> · Rive: <code>Female Riv/<em>kod</em>.riv</code> veya
+                        <code>Male Riv/<em>kod</em>.riv</code> (cinsiyete göre).
+                      </p>
+                      <p class="field-hint" id="agentMediaCurrentUrls" hidden></p>
+                      <div id="agentExistingMedia" class="agent-existing-media" hidden></div>
+                    </div>
+                    <div class="agent-media-grid">
+                      <div class="field media-upload-card">
+                        <div class="media-upload-card__icon">🖼️</div>
+                        <label for="agentMainPhoto">Ana fotoğraf</label>
+                        <p class="field-hint">PNG/JPG · otomatik ad: <code>c_kod.png</code></p>
+                        <input class="input" id="agentMainPhoto" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+                      </div>
+                      <div class="field media-upload-card">
+                        <div class="media-upload-card__icon">🧾</div>
+                        <label for="agentDetailPhoto">Detay fotoğraf</label>
+                        <p class="field-hint">PNG/JPG · otomatik ad: <code>c_kod_detail.png</code></p>
+                        <input class="input" id="agentDetailPhoto" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+                      </div>
+                      <div class="field media-upload-card">
+                        <div class="media-upload-card__icon">🎬</div>
+                        <label for="agentRiveFile">Rive animasyon (.riv)</label>
+                        <p class="field-hint">Sadece <code>.riv</code> · klasör cinsiyete göre seçilir</p>
+                        <input class="input" id="agentRiveFile" type="file" accept=".riv" />
+                      </div>
+                    </div>
+                    <div class="form-grid-2">
+                      <div class="field">
+                        <label for="agentFeaturesTrigger">Özellikler *</label>
+                        <div class="multi-select" id="agentFeaturesMulti">
+                          <button type="button" class="multi-select-trigger" id="agentFeaturesTrigger">Özellik seçin</button>
+                          <div class="multi-select-menu" id="agentFeaturesMenu" hidden></div>
+                          <div class="multi-select-chips" id="agentFeaturesChips"></div>
+                        </div>
+                      </div>
+                      <div class="field">
+                        <label for="agentRolesTrigger">Cinsiyet / Rol *</label>
+                        <div class="multi-select" id="agentRolesMulti">
+                          <button type="button" class="multi-select-trigger" id="agentRolesTrigger">Cinsiyet seçin</button>
+                          <div class="multi-select-menu" id="agentRolesMenu" hidden></div>
+                          <div class="multi-select-chips" id="agentRolesChips"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label for="agentVoiceId">Ses seçimi *</label>
+                      <select class="select" id="agentVoiceId" disabled>
+                        <option value="">Önce cinsiyet seçin</option>
+                      </select>
+                      <p class="field-hint" id="agentVoiceHint">Ses seçimi, cinsiyet seçiminden sonra açılır.</p>
+                      <audio id="agentVoicePreview" controls preload="none" hidden style="margin-top: 8px; width: 100%"></audio>
+                    </div>
+                    <div class="field">
+                      <label for="agentRating">Puan</label>
+                      <input class="input" id="agentRating" type="number" min="0" max="5" step="0.01" />
+                    </div>
+                    <p class="field-hint" id="linkedUsersHint" hidden></p>
+                    <div id="editAgentMessage" class="alert alert-error" hidden></div>
+                  </div>
+                  <div class="dialog-footer">
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                  </div>
+                </form>
+              </section>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="editUserDialog" class="shell-dialog">
+      <form id="editUserForm">
+        <div class="dialog-header"><h3>Kullanıcı düzenle</h3></div>
+        <div class="dialog-body">
+          <input type="hidden" id="editUserId" />
+          <div class="field">
+            <label for="editDisplayName">Görünen ad</label>
+            <input class="input" id="editDisplayName" type="text" maxlength="25" />
+          </div>
+          <div class="field">
+            <label for="editEmail">E-posta</label>
+            <input class="input" id="editEmail" type="email" />
+          </div>
+          <div class="form-grid-2">
+            <div class="field">
+              <label for="editAge">Yaş</label>
+              <input class="input" id="editAge" type="number" min="0" />
+            </div>
+            <div class="field">
+              <label for="editGender">Cinsiyet</label>
+              <input class="input" id="editGender" type="text" placeholder="female" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="editNativeLang">Dil</label>
+            <input class="input" id="editNativeLang" type="text" placeholder="tr" />
+          </div>
+          <div class="field">
+            <label for="editStatus">Durum</label>
+            <select class="select" id="editStatus">
+              <option value="active">Aktif</option>
+              <option value="inactive">Pasif</option>
+              <option value="banned">Yasaklı</option>
+            </select>
+          </div>
+          <p class="field-hint" id="editUserMeta">—</p>
+          <div id="editUserMessage" class="alert alert-error" hidden></div>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn" id="closeUserDialogBtn">İptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/js/panel-auth.js"></script>
+    <script src="/js/rc-summary-ui.js"></script>
+    <script src="/js/revenuecat-panel.js"></script>
+    <script src="/js/mindcoach-panel.js"></script>
+  </body>
+</html>
