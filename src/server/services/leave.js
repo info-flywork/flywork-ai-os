@@ -24,6 +24,7 @@ import {
   LeaveCalcError,
 
 } from "@/server/leave/duration";
+import { clearMealsAbsentForLeave, markMealsAbsentForLeave } from "@/server/meals/leaveAbsence";
 import { reportRange, WEEKDAY_LABELS } from "@/server/meals/schedule";
 import {
   leaveBalanceSchema,
@@ -814,6 +815,7 @@ export async function cancelOwnLeaveRequest(actor, requestId) {
 
 export async function reviewLeaveRequest(actor, requestId, input) {
   invalidate("leave");
+  invalidate("meal");
   assertCan(actor, "leaveRequest:review");
   const data = parseInput(leaveReviewSchema, input);
 
@@ -909,6 +911,9 @@ export async function reviewLeaveRequest(actor, requestId, input) {
           note: data.reviewNote,
         },
       });
+      if (data.decision === "APPROVED") {
+        await markMealsAbsentForLeave(tx, current);
+      }
       return { id: current.id, status: data.decision };
       } finally {
         await unlockEmployee();
@@ -921,6 +926,7 @@ export async function reviewLeaveRequest(actor, requestId, input) {
 
 export async function reverseLeaveApproval(actor, requestId, note) {
   invalidate("leave");
+  invalidate("meal");
   assertCan(actor, "leaveRequest:review");
   const cleanNote = note?.trim() || undefined;
 
@@ -985,6 +991,7 @@ export async function reverseLeaveApproval(actor, requestId, note) {
           note: cleanNote,
         },
       });
+      await clearMealsAbsentForLeave(tx, current);
       return { id: current.id };
       } finally {
         await unlockEmployee();

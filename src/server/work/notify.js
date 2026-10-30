@@ -8,8 +8,13 @@ function clip(value) {
   return clean.length > 240 ? `${clean.slice(0, 237)}...` : clean;
 }
 
-export function workNoticeRecipients(userIds, actorId) {
-  return [...new Set(userIds)].filter((id) => id && id !== actorId);
+export function workNoticeRecipients(userIds) {
+  return [...new Set(userIds)].filter(Boolean);
+}
+
+export function commentNoticeRecipients(assigneeIds, mentionIds, actorId) {
+  const others = assigneeIds.filter((id) => id && id !== actorId);
+  return workNoticeRecipients([...others, ...mentionIds]);
 }
 
 export function workCardNotice(actor, title) {
@@ -22,7 +27,7 @@ export function workAssignNotice(actor, title) {
 
 export function workCommentNotice(input) {
   const lead = input.mentioned ? `${input.actor} seni etiketledi` : `${input.actor} bir yorum yazdı`;
-  return `${lead}\n${clip(input.title)}\n${clip(input.body)}`;
+  return `${lead}\n${clip(input.title)}\n${clip(input.body)}\nCevaplamak için Cevapla'ya bas.`;
 }
 
 export async function pushWorkNotice(
@@ -53,6 +58,7 @@ export async function pushWorkNotice(
         kind: input.kind,
         chatId: link.chatId,
         text: input.textFor(link.userId),
+        buttons: input.buttons,
         delivery: channel.delivery,
         transport: channel.transport,
       });

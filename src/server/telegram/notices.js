@@ -1,6 +1,7 @@
 import "server-only";
 
 import { dateOnly, istanbulToday, toIsoDate } from "@/server/dates";
+import { isOwnCompanyName } from "@/server/finance/ownCompany";
 import { redact } from "@/server/runtime/redact";
 import {
   formatAutomationFailure,
@@ -82,7 +83,7 @@ export async function loadOperationalNotices(db, now = new Date()) {
   });
 
   return [
-    ...reviews.map((review) => ({
+    ...reviews.filter((review) => !isOwnCompanyName(review.vendor)).map((review) => ({
       dedupeKey: `invoice.review:${review.id}`,
       kind: "invoice.review",
       text: formatInvoiceReviewNotice(review),

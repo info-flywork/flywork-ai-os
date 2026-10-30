@@ -28,6 +28,19 @@ export function formatIstanbul(instant) {
   return key.replace("T", " ");
 }
 
+export function formatDuration(startedAt, finishedAt) {
+  if (!finishedAt) {
+    return "sürüyor";
+  }
+  const seconds = Math.max(0, Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes === 0) {
+    return `${rest} sn`;
+  }
+  return `${minutes} dk ${rest} sn`;
+}
+
 export function nextOccurrence(schedule, after) {
   const start = istanbulClock(after).date;
   for (let offset = 0; offset < 8; offset += 1) {

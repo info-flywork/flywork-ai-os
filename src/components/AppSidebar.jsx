@@ -5,13 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, PanelLeft, PanelLeftOpen } from "lucide-react";
 import PasswordForm from "@/components/account/PasswordForm";
-import { panelNav } from "@/components/panelNav";
+import { panelNav, profileNav } from "@/components/panelNav";
 
 
 export default function AppSidebar({
   user,
-  alertBadge = null,
-  alertDot = null,
   open = false,
   collapsed = false,
   onNavigate,
@@ -83,16 +81,10 @@ export default function AppSidebar({
                   setPasswordOpen(false);
                   onNavigate?.();
                 }}
-                className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium ${collapsed ? "lg:justify-center lg:px-0" : ""} ${active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium ${collapsed ? "lg:justify-center lg:px-0" : ""} ${active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50"}`}
               >
-                <span className="relative inline-flex">
-                  <Icon size={18} aria-hidden="true" />
-                  {item.path === "/bildirimler" ? (
-                    <span className={collapsed ? "hidden lg:contents" : "hidden"}>{alertDot}</span>
-                  ) : null}
-                </span>
+                <Icon size={18} aria-hidden="true" />
                 <span className={`flex-1 ${rail}`}>{item.name}</span>
-                {item.path === "/bildirimler" ? <span className={rail}>{alertBadge}</span> : null}
               </Link>
             );
           })}
@@ -108,9 +100,31 @@ export default function AppSidebar({
                 <PasswordForm />
               </>
             ) : (
-              <button type="button" className="btn-secondary w-full" onClick={() => setPasswordOpen(true)}>
-                Şifre değiştir
-              </button>
+              <>
+                {profileNav
+                  .filter((item) => item.roles.includes(user.role) && !user.mealOnly)
+                  .map((item) => {
+                    const active = pathname === item.path || pathname.startsWith(`${item.path}/`);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        onClick={() => {
+                          setAccountOpen(false);
+                          onNavigate?.();
+                        }}
+                        className={`mb-1 flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium ${active ? "bg-slate-100 text-slate-900" : "text-slate-700 hover:bg-slate-50"}`}
+                      >
+                        <Icon size={16} aria-hidden="true" />
+                        {item.name}
+                      </Link>
+                    );
+                  })}
+                <button type="button" className="btn-secondary mt-1 w-full" onClick={() => setPasswordOpen(true)}>
+                  Şifre değiştir
+                </button>
+              </>
             )}
             <button type="button" className="btn-secondary mt-2 w-full" onClick={() => void logout()} disabled={pending}>
               {pending ? "Çıkış yapılıyor…" : "Oturumu kapat"}

@@ -1,7 +1,6 @@
-import { markAllAlertsReadAction } from "@/app/(panel)/bildirimler/actions";
 import AlertList from "@/components/alerts/AlertList";
 import PageHeader from "@/components/ui/PageHeader";
-import { redirectEmployeeFromAdminPages, redirectMealOnlyUser } from "@/server/auth/mealAccess";
+import { redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { listAlerts } from "@/server/services/alerts";
@@ -10,7 +9,6 @@ export const instant = false;
 export default async function AlertsPage() {
   const user = await requireUser();
   redirectMealOnlyUser(user);
-  redirectEmployeeFromAdminPages(user);
   let alerts = null;
   let message = "Bildirimler okunamadı.";
   try {
@@ -21,21 +19,13 @@ export default async function AlertsPage() {
   if (!alerts) {
     return <p>{message}</p>;
   }
-  const unread = alerts.filter((alert) => !alert.read).length;
-  const company = user.role === "ADMIN";
+  const actionUnread = alerts.filter((alert) => alert.level === "action" && !alert.read).length;
 
   return (
     <div>
       <PageHeader
         title="Bildirimler"
-        description={company
-          ? `Fatura, izin, yenileme, otomasyon ve taslak hizmet uyarıları. Okunmamış: ${unread}.`
-          : `Bekleyen izin talepleriniz. Okunmamış: ${unread}.`}
-        actions={unread > 0 ? (
-          <form action={markAllAlertsReadAction}>
-            <button className="btn-secondary">Tümünü okundu işaretle</button>
-          </form>
-        ) : null}
+        description={`Aksiyon gerekenler üstte durur. Okunmamış aksiyon: ${actionUnread}.`}
       />
       <AlertList alerts={alerts} />
     </div>

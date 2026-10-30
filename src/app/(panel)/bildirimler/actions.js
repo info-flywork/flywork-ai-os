@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth/session";
-import { markAlertRead, markVisibleAlertsRead } from "@/server/services/alerts";
+import { dismissAlert, dismissVisibleAlerts, markAlertRead, markVisibleAlertsRead } from "@/server/services/alerts";
 
 function refresh() {
   revalidatePath("/bildirimler");
@@ -15,8 +15,22 @@ export async function markAlertReadAction(formData) {
   refresh();
 }
 
-export async function markAllAlertsReadAction() {
+export async function dismissAlertAction(formData) {
   const actor = await requireUser();
-  await markVisibleAlertsRead(actor);
+  await dismissAlert(actor, String(formData.get("key") ?? ""));
+  refresh();
+}
+
+export async function dismissVisibleAlertsAction(formData) {
+  const actor = await requireUser();
+  const level = String(formData.get("level") ?? "action");
+  await dismissVisibleAlerts(actor, new Date(), level === "info" ? "info" : "action");
+  refresh();
+}
+
+export async function markAllAlertsReadAction(formData) {
+  const actor = await requireUser();
+  const level = String(formData.get("level") ?? "action");
+  await markVisibleAlertsRead(actor, new Date(), level === "info" ? "info" : "action");
   refresh();
 }

@@ -7,6 +7,8 @@ import { rosterPeople } from "@/server/telegram/mealPush";
 import { withDatabase } from "@/server/db";
 import { toPublicError } from "@/server/errors";
 import { reviewLeaveRequest } from "@/server/services/leave";
+import { addWorkComment } from "@/server/services/work";
+import { confirmedInvoiceDraft } from "@/server/finance/reviewRules";
 import { decideInvoiceReview } from "@/server/services/invoiceReview";
 import { pushRenewalReminders } from "@/server/telegram/renewals";
 import { beginTelegramEmailLink, consumeTelegramPairing, decideTelegramEmailLink, submitTelegramEmail } from "@/server/telegram/pairing";
@@ -14,11 +16,14 @@ import {
   emailLinkCallback,
   formatInvoiceProcessed,
   formatPendingLeaves,
+  formatWorkReplyPrompt,
   leaveDecisionButtons,
   parseEmailLinkCallback,
   parseInvoiceCallback,
+  parseInvoiceReply,
   parseLeaveCallback,
   parseTelegramCommand,
+  parseWorkReplyCallback,
 
 } from "@/server/telegram/messages";
 
@@ -80,7 +85,7 @@ export function readTelegramUpdate(update) {
     const message = update.message;
     const ids = privateIds("from" in message ? message.from : undefined, "chat" in message ? message.chat : undefined);
     const text = "text" in message && typeof message.text === "string" ? message.text : "";
-    if (!ids || text.length === 0 || text.length > 80) {
+    if (!ids || text.length === 0 || text.length > 4096) {
       return null;
     }
     return { ...ids, text };
@@ -97,6 +102,61 @@ export function readTelegramUpdate(update) {
     return { ...ids, data, callbackQueryId };
   }
   return null;
+}
+
+const WORK_REPLY_MS = 30 * 60 * 1000;
+
+async function linkedWorker(telegramUserId, chatId) {
+  return withDatabase(async (db) => {
+    const link = await db.telegramLink.findUnique({
+      where: { telegramUserId },
+      include: { user: { select: { id: true, role: true, email: true, name: true, active: true, approver: true, mealOnly: true } } },
+    });
+    if (!link || link.revokedAt || link.chatId !== chatId || !link.user.active || link.user.mealOnly || !can(link.user.role, "task:write")) {
+      return null;
+    }
+    return link.user;
+  });
+}
+
+async function beginWorkReply(telegramUserId, taskId) {
+  return withDatabase(async (db) => {
+    const task = await db.workTask.findUnique({ where: { id: taskId }, select: { id: true, title: true } });
+    if (!task) {
+      return null;
+    }
+    const expiresAt = new Date(Date.now() + WORK_REPLY_MS);
+    await db.telegramWorkReply.upsert({
+      where: { telegramUserId },
+      create: { telegramUserId, taskId, expiresAt },
+      update: { taskId, expiresAt },
+    });
+    const people = await db.user.findMany({
+      where: { active: true, mealOnly: false },
+      select: { name: true },
+      orderBy: { name: "asc" },
+      take: 20,
+    });
+    return { title: task.title, names: people.map((person) => person.name) };
+  });
+}
+
+async function pendingWorkReply(telegramUserId) {
+  return withDatabase(async (db) => {
+    const pending = await db.telegramWorkReply.findUnique({ where: { telegramUserId } });
+    if (!pending) {
+      return null;
+    }
+    if (pending.expiresAt <= new Date()) {
+      await db.telegramWorkReply.delete({ where: { telegramUserId } });
+      return "expired";
+    }
+    return pending;
+  });
+}
+
+async function clearWorkReply(telegramUserId) {
+  await withDatabase((db) => db.telegramWorkReply.deleteMany({ where: { telegramUserId } }));
 }
 
 async function linkedAdmin(telegramUserId, chatId) {
@@ -140,6 +200,57 @@ async function pendingLeaves() {
 
 function one(message) {
   return [message];
+}
+
+const invoiceReviewSelect = {
+  id: true,
+  status: true,
+  documentType: true,
+  vendor: true,
+  number: true,
+  issuedOn: true,
+  amount: true,
+  currency: true,
+  tax: true,
+};
+
+function draftFromAskedReview(review) {
+  return {
+    vendor: review.vendor ?? "",
+    number: review.number ?? "",
+    issuedOn: review.issuedOn ? review.issuedOn.toISOString().slice(0, 10) : "",
+    amount: plainMoney(review.amount),
+    currency: review.currency ?? "",
+    tax: plainMoney(review.tax),
+    documentType: review.documentType === "RECEIPT" ? "RECEIPT" : review.documentType === "INVOICE" ? "INVOICE" : "",
+  };
+}
+
+async function latestOpenInvoiceAsk() {
+  return withDatabase(async (db) => {
+    const sent = await db.telegramDispatch.findMany({
+      where: { kind: "invoice.ask", status: "SENT" },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      select: { dedupeKey: true },
+    });
+    const seen = new Set();
+    for (const row of sent) {
+      const reviewId = row.dedupeKey.split(":")[1] ?? "";
+      if (!reviewId || seen.has(reviewId)) {
+        continue;
+      }
+      seen.add(reviewId);
+      const review = await db.invoiceReview.findUnique({ where: { id: reviewId }, select: invoiceReviewSelect });
+      if (!review || review.documentType === "STATEMENT") {
+        continue;
+      }
+      if (review.status === "PENDING" || review.status === "HELD") {
+        return review;
+      }
+    }
+    return null;
+  });
 }
 
 async function todayMealList(day = istanbulToday()) {
@@ -281,6 +392,55 @@ async function handleIncoming(input) {
     }
   }
 
+  const workReply = input.data ? parseWorkReplyCallback(input.data) : null;
+  if (workReply) {
+    const worker = await linkedWorker(input.telegramUserId, input.chatId);
+    if (!worker) {
+      return one(reply(input, "Bu Telegram hesabı panele bağlı değil."));
+    }
+    const opened = await beginWorkReply(input.telegramUserId, workReply.taskId);
+    if (!opened) {
+      return one(reply(input, "Kart bulunamadı."));
+    }
+    return one(reply(input, formatWorkReplyPrompt(opened.title, opened.names)));
+  }
+
+  if (command?.name === "vazgec") {
+    const pending = await pendingWorkReply(input.telegramUserId);
+    if (pending === "expired") {
+      return one(reply(input, "Süre doldu. Bildirimdeki Cevapla'ya yeniden bas."));
+    }
+    if (!pending) {
+      return one(reply(input, "Bekleyen yorum cevabı yok."));
+    }
+    await clearWorkReply(input.telegramUserId);
+    return one(reply(input, "Yorum cevabı iptal edildi."));
+  }
+
+  if (input.text && !command) {
+    const pending = await pendingWorkReply(input.telegramUserId);
+    if (pending === "expired") {
+      return one(reply(input, "Süre doldu. Bildirimdeki Cevapla'ya yeniden bas."));
+    }
+    if (pending) {
+      const worker = await linkedWorker(input.telegramUserId, input.chatId);
+      if (!worker) {
+        return one(reply(input, "Bu Telegram hesabı panele bağlı değil."));
+      }
+      const body = input.text.trim();
+      if (body.length > 2000) {
+        return one(reply(input, "Yorum en fazla 2000 karakter olabilir. Daha kısasını yaz."));
+      }
+      try {
+        await addWorkComment(worker, { taskId: pending.taskId, body });
+        await clearWorkReply(input.telegramUserId);
+        return one(reply(input, "Yorum karta eklendi."));
+      } catch (error) {
+        return one(reply(input, toPublicError(error).message));
+      }
+    }
+  }
+
   const actor = await linkedAdmin(input.telegramUserId, input.chatId);
   if (!actor) {
     return one(reply(input, "Bu Telegram hesabı yönetici olarak bağlı değil."));
@@ -296,40 +456,27 @@ async function handleIncoming(input) {
     return one(reply(input, list.text, list.link ? [[{ text: "Yemekçiye ilet", url: list.link }]] : undefined));
   }
 
+  const spoken = input.text ? parseInvoiceReply(input.text) : null;
   const invoiceDecision = input.data ? parseInvoiceCallback(input.data) : null;
-  if (invoiceDecision) {
+  if (spoken || invoiceDecision) {
     try {
-      const review = await withDatabase((db) =>
-        db.invoiceReview.findUnique({
+      const review = invoiceDecision
+        ? await withDatabase((db) => db.invoiceReview.findUnique({
           where: { id: invoiceDecision.reviewId },
-          select: {
-            vendor: true,
-            number: true,
-            issuedOn: true,
-            amount: true,
-            currency: true,
-            tax: true,
-            documentType: true,
-          },
-        }),
-      );
+          select: invoiceReviewSelect,
+        }))
+        : await latestOpenInvoiceAsk();
       if (!review) {
-        return one(reply(input, "Fatura incelemesi bulunamadı."));
+        return one(reply(input, invoiceDecision ? "Fatura incelemesi bulunamadı." : "Bekleyen fatura onayı yok."));
       }
-      const draft = {
-        vendor: review.vendor ?? "",
-        number: review.number ?? "",
-        issuedOn: review.issuedOn ? review.issuedOn.toISOString().slice(0, 10) : "",
-        amount: plainMoney(review.amount),
-        currency: review.currency ?? "",
-        tax: plainMoney(review.tax),
-        documentType: review.documentType === "RECEIPT" ? "RECEIPT" : "INVOICE",
-      };
-      if (invoiceDecision.decision === "reject") {
-        await decideInvoiceReview(actor, invoiceDecision.reviewId, "reject", draft);
+      const decision = invoiceDecision?.decision ?? spoken;
+      const raw = draftFromAskedReview(review);
+      if (decision === "reject") {
+        await decideInvoiceReview(actor, review.id, "reject", raw);
         return one(reply(input, "Belge fatura olarak işlenmedi."));
       }
-      const result = await decideInvoiceReview(actor, invoiceDecision.reviewId, "approve", draft);
+      const draft = confirmedInvoiceDraft(raw, review.id, istanbulToday());
+      const result = await decideInvoiceReview(actor, review.id, "approve", draft);
       if (result.outcome === "approved" || result.outcome === "already" || result.outcome === "drive-failed") {
         return one(reply(input, formatInvoiceProcessed({
           vendor: draft.vendor,

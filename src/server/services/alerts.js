@@ -7,6 +7,8 @@ import { invalidate, remember } from "@/server/readCache";
 import { AppError } from "@/server/errors";
 import { redact } from "@/server/runtime/redact";
 import { invoiceReviewMonthWhere } from "@/server/dashboard/summary";
+import { isOwnCompanyName } from "@/server/finance/ownCompany";
+import { alertSignature, applyAlertReads, buildAlerts, reviewWaitHours } from "@/lib/alertFeed";
 import { TECHNOLOGY_DRAFTS } from "@/server/technology/drafts";
 
  
@@ -34,8 +36,9 @@ export async function listAlerts(actor, now = new Date(), invoiceMonth) {
   const today = dateOnly(todayIso);
   const horizon = horizonDate(today);
 
-  const items = await remember(`alerts:${actor.id}:${invoiceMonth ?? ""}`, () => withDatabase(async (db) => {
-    const [reviews, leaves, renewals, failures] = await Promise.all([
+  const items = await remember(`alerts:${actor.id}:${invoiceMonth ?? ""}:${todayIso}`, () => withDatabase(async (db) => {
+    const since = new Date(now.getTime() - 7 * 86_400_000);
+    const [reviews, leaves, renewals, failures, successes, tasks, autoInvoices] = await Promise.all([
       company
         ? db.invoiceReview.findMany({
             where: {
@@ -44,21 +47,23 @@ export async function listAlerts(actor, now = new Date(), invoiceMonth) {
               ...(invoiceMonth ? invoiceReviewMonthWhere(invoiceMonth) : {}),
             },
             orderBy: { createdAt: "asc" },
-            take: 30,
+            take: 50,
             select: { id: true, vendor: true, number: true, fileName: true },
           })
         : Promise.resolve([]),
-      db.leaveRequest.findMany({
-        where: { status: "PENDING", ...(company ? {} : { userId: actor.id }) },
-        orderBy: { startDate: "asc" },
-        take: 30,
-        select: {
-          id: true,
-          type: true,
-          startDate: true,
-          user: { select: { name: true } },
-        },
-      }),
+      company
+        ? db.leaveRequest.findMany({
+            where: { status: "PENDING" },
+            orderBy: { startDate: "asc" },
+            take: 30,
+            select: {
+              id: true,
+              type: true,
+              startDate: true,
+              user: { select: { name: true } },
+            },
+          })
+        : Promise.resolve([]),
       company
         ? db.technologySubscription.findMany({
             where: { active: true, status: "ACTIVE", renewsOn: { lte: horizon } },
@@ -81,6 +86,39 @@ export async function listAlerts(actor, now = new Date(), invoiceMonth) {
             },
           })
         : Promise.resolve([]),
+      company
+        ? db.automationRun.findFirst({
+            where: { state: "SUCCEEDED", job: { key: "invoice.daily" }, finishedAt: { gte: since } },
+            orderBy: { finishedAt: "desc" },
+            select: { id: true, summary: true, job: { select: { name: true } } },
+          })
+        : Promise.resolve(null),
+      db.workTask.findMany({
+        where: { column: { not: "DONE" } },
+        select: {
+          id: true,
+          title: true,
+          column: true,
+          dueOn: true,
+          revisionCount: true,
+          createdById: true,
+          assignees: { select: { userId: true, assignedAt: true } },
+          moves: {
+            where: { column: "REVIEW" },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { createdAt: true },
+          },
+        },
+      }),
+      company
+        ? db.invoiceReviewAudit.findMany({
+            where: { action: "AUTO_APPROVE", createdAt: { gte: since } },
+            orderBy: { createdAt: "desc" },
+            take: 30,
+            select: { id: true, review: { select: { vendor: true, number: true } } },
+          })
+        : Promise.resolve([]),
     ]);
 
     const seenJobs = new Set();
@@ -91,53 +129,61 @@ export async function listAlerts(actor, now = new Date(), invoiceMonth) {
       seenJobs.add(run.jobId);
       return true;
     });
-
-    const collected = [
-      ...reviews.map((review) => ({
-        key: `invoice.review:${review.id}`,
-        title: "İnceleme bekleyen fatura",
-        body: `${review.vendor || "Tedarikçi eksik"} · ${review.number || review.fileName}`,
-        href: `/otomasyon/inceleme/${review.id}`,
-      })),
-      ...leaves.map((request) => ({
-        key: `leave.request:${request.id}`,
-        title: "Bekleyen izin talebi",
+    const incomingReviews = reviews.filter((review) => !isOwnCompanyName(review.vendor));
+    const collected = buildAlerts({
+      role: actor.role,
+      userId: actor.id,
+      today: todayIso,
+      reviews: incomingReviews,
+      leaves: leaves.map((request) => ({
+        id: request.id,
         body: `${company ? request.user.name : "Sizin talebiniz"} · ${LEAVE_LABELS[request.type] ?? request.type} · ${toIsoDate(request.startDate)}`,
-        href: "/izin",
       })),
-      ...renewals.map((item) => ({
-        key: `subscription.renewal:${item.id}:${toIsoDate(item.renewsOn)}`,
-        title: item.renewsOn.getTime() < today.getTime() ? "Geciken abonelik yenilemesi" : "Yaklaşan abonelik yenilemesi",
-        body: `${item.name} · ${toIsoDate(item.renewsOn)}`,
-        href: `/teknoloji?kayit=${item.id}`,
+      renewals: renewals.map((item) => ({
+        id: item.id,
+        name: item.name,
+        renewsOn: toIsoDate(item.renewsOn),
+        overdue: item.renewsOn.getTime() < today.getTime(),
       })),
-      ...latestFailures.map((run) => ({
-        key: `automation.failed:${run.id}`,
-        title: "Başarısız otomasyon",
-        body: `${run.job.name} · ${redact(run.error ?? run.summary).slice(0, 180)}`,
-        href: "/otomasyon",
+      failures: latestFailures.map((run) => ({
+        id: run.id,
+        name: run.job.name,
+        detail: redact(run.error ?? run.summary).slice(0, 180),
       })),
-      ...(company
+      success: successes
+        ? { id: successes.id, name: successes.job.name, detail: redact(successes.summary).slice(0, 180) }
+        : null,
+      drafts: company
         ? TECHNOLOGY_DRAFTS.map((draft) => ({
-            key: `technology.draft:${draft.id}`,
-            title: "Onay bekleyen hizmet taslağı",
+            id: draft.id,
             body: `${draft.name} · ${draft.known.join(". ")}. Eksik: ${draft.unknown.join(", ")}.`,
-            href: `/teknoloji?taslak=${draft.id}`,
           }))
-        : []),
-    ];
+        : [],
+      autoInvoices: autoInvoices.map((item) => ({
+        id: item.id,
+        body: `${item.review.vendor || "Tedarikçi"} · ${item.review.number || "numara yok"}`,
+      })),
+      tasks: tasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        column: task.column,
+        dueOn: task.dueOn ? toIsoDate(task.dueOn) : null,
+        revisionCount: task.revisionCount,
+        createdById: task.createdById,
+        assigneeIds: task.assignees.map((item) => item.userId),
+        assignedRecent: task.assignees.some((item) => item.userId === actor.id && item.assignedAt.getUTCFullYear() > 2020 && now.getTime() - item.assignedAt.getTime() < 14 * 86_400_000),
+        reviewHours: reviewWaitHours(task.moves[0]?.createdAt, now),
+      })),
+    });
 
     if (collected.length === 0) {
       return collected.map((item) => ({ ...item, read: false }));
     }
     const reads = await db.panelAlertRead.findMany({
       where: { userId: actor.id, dedupeKey: { in: collected.map((item) => item.key) } },
-      select: { dedupeKey: true },
+      select: { dedupeKey: true, dismissed: true, signature: true },
     });
-    const readKeys = new Set(reads.map((row) => row.dedupeKey));
-    return collected
-      .map((item) => ({ ...item, read: readKeys.has(item.key) }))
-      .sort((left, right) => Number(left.read) - Number(right.read));
+    return applyAlertReads(collected, reads);
   }));
 
   return items;
@@ -145,7 +191,7 @@ export async function listAlerts(actor, now = new Date(), invoiceMonth) {
 
 export async function unreadAlertCount(actor, now = new Date()) {
   const alerts = await listAlerts(actor, now);
-  return alerts.filter((alert) => !alert.read).length;
+  return alerts.filter((alert) => alert.level === "action" && !alert.read).length;
 }
 
 async function assertVisible(actor, key, now) {
@@ -167,14 +213,64 @@ export async function markAlertRead(actor, key, now = new Date()) {
   invalidate("alerts");
 }
 
-export async function markVisibleAlertsRead(actor, now = new Date()) {
+export async function markVisibleAlertsRead(actor, now = new Date(), level = "action") {
   const alerts = await listAlerts(actor, now);
-  if (alerts.length === 0) {
+  const visible = alerts.filter((alert) => alert.level === level);
+  if (visible.length === 0) {
     return;
   }
   await withDatabase((db) =>
     db.panelAlertRead.createMany({
-      data: alerts.map((alert) => ({ userId: actor.id, dedupeKey: alert.key })),
+      data: visible.map((alert) => ({ userId: actor.id, dedupeKey: alert.key })),
+      skipDuplicates: true,
+    }),
+  );
+  invalidate("alerts");
+}
+
+export async function dismissAlert(actor, key, now = new Date()) {
+  const alerts = await listAlerts(actor, now);
+  const alert = alerts.find((item) => item.key === key);
+  if (!alert) {
+    throw new AppError("Bildirim bulunamadı.", "NOT_FOUND", 404);
+  }
+  const signature = alertSignature(alert);
+  await withDatabase((db) =>
+    db.panelAlertRead.upsert({
+      where: { userId_dedupeKey: { userId: actor.id, dedupeKey: key } },
+      create: { userId: actor.id, dedupeKey: key, dismissed: true, signature },
+      update: { dismissed: true, signature },
+    }),
+  );
+  invalidate("alerts");
+}
+
+export async function dismissVisibleAlerts(actor, now = new Date(), level = "action") {
+  const alerts = (await listAlerts(actor, now)).filter((alert) => alert.level === level);
+  if (alerts.length === 0) {
+    return;
+  }
+  await withDatabase(async (db) => {
+    for (const alert of alerts) {
+      const signature = alertSignature(alert);
+      await db.panelAlertRead.upsert({
+        where: { userId_dedupeKey: { userId: actor.id, dedupeKey: alert.key } },
+        create: { userId: actor.id, dedupeKey: alert.key, dismissed: true, signature },
+        update: { dismissed: true, signature },
+      });
+    }
+  });
+  invalidate("alerts");
+}
+
+export async function settleAlerts(userId, keys) {
+  const unique = [...new Set(keys.filter(Boolean))];
+  if (unique.length === 0) {
+    return;
+  }
+  await withDatabase((db) =>
+    db.panelAlertRead.createMany({
+      data: unique.map((key) => ({ userId, dedupeKey: key })),
       skipDuplicates: true,
     }),
   );

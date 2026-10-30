@@ -1,4 +1,4 @@
-import { setJobStateAction, decideAgentActionAction, disconnectGoogleAction, previewInvoiceReaderAction, runGoogleJobAction } from "@/app/(panel)/otomasyon/actions";
+import { setJobStateAction, setJobScheduleAction, decideAgentActionAction, disconnectGoogleAction, previewInvoiceReaderAction, runGoogleJobAction } from "@/app/(panel)/otomasyon/actions";
 import Link from "next/link";
 import TelegramPairing from "@/components/automation/TelegramPairing";
 import Notice from "@/components/Notice";
@@ -28,6 +28,42 @@ const GOOGLE_MESSAGES = {
   ayar: "Google kimlik bilgileri eksik. Bağlantı kurulmadı.",
   yetki: "Bu işlem yalnızca yöneticilere açıktır.",
 };
+
+const SCAN_MESSAGES = {
+  calisiyor: "Tarama zaten çalışıyor. İkinci tarama başlatılmadı.",
+  beklet: "Tarama son 5 dakika içinde çalıştı. Yeni tarama başlatılmadı.",
+};
+
+const SCHEDULE_MESSAGES = {
+  kilit: "Tarama çalışırken saat değişmez.",
+  hata: "Saat 00:00 ile 23:59 arasında olmalı.",
+};
+
+function clockValue(hour, minute) {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function InvoiceScanControls({ job }) {
+  if (job.key !== "invoice.daily") {
+    return null;
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <form action={setJobScheduleAction} className="flex flex-wrap items-center gap-2">
+        <input type="hidden" name="jobId" value={job.id} />
+        <label className="text-sm">
+          Saat
+          <input type="time" name="clock" defaultValue={clockValue(job.hour, job.minute)} required className="field ml-2" />
+        </label>
+        <button className="btn-secondary">Saati kaydet</button>
+      </form>
+      <form action={runGoogleJobAction}>
+        <input type="hidden" name="key" value="invoice.daily" />
+        <button className="btn-primary">Şimdi tara</button>
+      </form>
+    </div>
+  );
+}
 
 function scheduleLabel(weekdays, hour, minute) {
   const clock = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
@@ -85,6 +121,8 @@ export default async function OtomasyonPage({
         <p className="mt-2">Saat dilimi Europe/Istanbul. Worker kapanırsa görev kayıtları veritabanında kalır. Yeniden açılınca zamanı gelmiş tek pencereyi bir kez çalıştırır.</p>
       </section>
       {googleMessage ? <Notice tone={query.google === "baglandi" ? "ok" : "err"}>{googleMessage}</Notice> : null}
+      {typeof query.tarama === "string" && SCAN_MESSAGES[query.tarama] ? <Notice tone="err">{SCAN_MESSAGES[query.tarama]}</Notice> : null}
+      {typeof query.saat === "string" && SCHEDULE_MESSAGES[query.saat] ? <Notice tone="err">{SCHEDULE_MESSAGES[query.saat]}</Notice> : null}
       <section className={`panel-card text-sm ${google.connected ? "border-[#03624c]/30" : "border-amber-200 bg-amber-50"}`}>
         <h2 className="section-title">Google hesabı</h2>
         {google.connected ? (
@@ -115,10 +153,6 @@ export default async function OtomasyonPage({
               <button className="btn-secondary">Bağlantıyı kes</button>
             </form>
           ) : null}
-          <form action={runGoogleJobAction}>
-            <input type="hidden" name="key" value="invoice.morning" />
-            <button className="btn-primary">Fatura taramasını şimdi çalıştır</button>
-          </form>
         </div>
       </section>
       <section className="panel-card text-sm">
@@ -132,7 +166,8 @@ export default async function OtomasyonPage({
         {data.invoicePreview ? (
           <>
             <p>Son tarama: {data.invoicePreview.scannedAt ?? data.invoiceRun?.scannedAt ?? "zaman yok"}.</p>
-            <p className="mt-2">Bulunan belge {data.invoicePreview.found}, yeni inceleme {data.invoicePreview.queued}, mükerrer {data.invoicePreview.duplicates}, elenen {data.invoicePreview.rejected}.</p>
+            <p className="mt-2">Yeni bulunan {data.invoicePreview.found}, işlenen {data.invoicePreview.processed}, atlanan {data.invoicePreview.skipped}, hata {data.invoicePreview.errors.length}.</p>
+            {data.invoicePreview.outgoing > 0 ? <p className="mt-2">Giden fatura {data.invoicePreview.outgoing}. Gider listesine eklenmedi.</p> : null}
             <p className="mt-2">{data.invoicePreview.errors.length > 0 ? `Hatalar: ${data.invoicePreview.errors.join(" ")}` : "Hata yok."}</p>
           </>
         ) : (
@@ -163,6 +198,7 @@ export default async function OtomasyonPage({
                 <button name="state" value="PAUSED" className="btn-secondary">Duraklat</button>
               )}
             </form>
+            <InvoiceScanControls job={job} />
           </article>
         ))}
       </div>
@@ -202,6 +238,7 @@ export default async function OtomasyonPage({
                       <button name="state" value="PAUSED" className="btn-secondary">Duraklat</button>
                     )}
                   </form>
+                  <InvoiceScanControls job={job} />
                 </td>
               </tr>
             ))}
@@ -215,7 +252,10 @@ export default async function OtomasyonPage({
           <ul className="space-y-2 text-sm">
             {runs.map((run) => (
               <li key={run.id}>
-                {run.startedAt} · {run.jobName} · {run.windowKey} · deneme {run.attempt} · {STATE_LABELS[run.state]}
+                {run.startedAt} · {run.duration} · {run.jobName} · {STATE_LABELS[run.state]}
+                {run.stats ? (
+                  <div>Yeni bulunan {run.stats.found}, işlenen {run.stats.processed}, atlanan {run.stats.skipped}, hata {run.stats.errors}.</div>
+                ) : null}
                 <div className="text-gray-600">{run.error ?? run.summary}</div>
               </li>
             ))}

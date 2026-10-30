@@ -15,7 +15,12 @@ import { numberList } from "@/server/jsonList";
 
 
 
-const LOCK_MS = 2 * 60 * 1000;
+export const JOB_LOCK_MS = 15 * 60 * 1000;
+export const JOB_COOLDOWN_MS = 5 * 60 * 1000;
+
+function skipJob(key, reason) {
+  console.info(`Otomasyon atlandı (${key}): ${reason}`);
+}
 
 function scheduleOf(job) {
   return { weekdays: numberList(job.weekdays), hour: job.hour, minute: job.minute };
@@ -40,7 +45,31 @@ function sameSchedule(
   );
 }
 
+const RETIRED_INVOICE_KEYS = ["invoice.morning", "invoice.evening"];
+
+async function retireSplitInvoiceJobs(db) {
+  const retired = await db.automationJob.findMany({
+    where: { key: { in: RETIRED_INVOICE_KEYS } },
+    select: { lastSuccessAt: true, lastFinishedAt: true },
+  });
+  if (retired.length === 0) {
+    return null;
+  }
+  const carried = retired.reduce((best, job) => {
+    if (!job.lastSuccessAt) {
+      return best;
+    }
+    if (!best?.lastSuccessAt || job.lastSuccessAt > best.lastSuccessAt) {
+      return job;
+    }
+    return best;
+  }, null);
+  await db.automationJob.deleteMany({ where: { key: { in: RETIRED_INVOICE_KEYS } } });
+  return carried;
+}
+
 export async function ensureAutomationJobs(db, now = new Date()) {
+  const carried = await retireSplitInvoiceJobs(db);
   for (const definition of JOB_DEFINITIONS) {
     const existing = await db.automationJob.findUnique({ where: { key: definition.key } });
     if (!existing) {
@@ -58,21 +87,33 @@ export async function ensureAutomationJobs(db, now = new Date()) {
           nextRunAt: slot,
           scheduledFor: slot,
           maxRetries: 3,
+          ...(definition.key === "invoice.daily" && carried?.lastSuccessAt
+            ? { lastSuccessAt: carried.lastSuccessAt, lastFinishedAt: carried.lastFinishedAt }
+            : {}),
         },
       });
       continue;
     }
     const locked = Boolean(existing.lockedUntil && existing.lockedUntil > now);
-    const moved = !sameSchedule(existing, definition) || !slotMatches(existing.nextRunAt, definition);
-    const slot = !locked && moved ? nextOccurrence(definition, now) : null;
+    const stored = definition.scheduleEditable
+      ? { weekdays: numberList(existing.weekdays), hour: existing.hour, minute: existing.minute }
+      : definition;
+    const moved = definition.scheduleEditable
+      ? !slotMatches(existing.nextRunAt, stored)
+      : !sameSchedule(existing, definition) || !slotMatches(existing.nextRunAt, definition);
+    const slot = !locked && moved ? nextOccurrence(stored, now) : null;
     await db.automationJob.update({
       where: { id: existing.id },
       data: {
         name: definition.name,
         agent: definition.agent,
-        weekdays: definition.weekdays,
-        hour: definition.hour,
-        minute: definition.minute,
+        ...(definition.scheduleEditable
+          ? {}
+          : {
+              weekdays: definition.weekdays,
+              hour: definition.hour,
+              minute: definition.minute,
+            }),
         ...(definition.paused ? { state: "PAUSED"  } : {}),
         ...(slot ? { nextRunAt: slot, scheduledFor: slot, retryCount: 0, lockToken: null, lockedUntil: null } : {}),
       },
@@ -87,8 +128,8 @@ export async function runDueJob(db, now = new Date(), options = {}) {
   if (!claim) {
     return "idle";
   }
-  if (claim.kind === "advanced") {
-    return "advanced";
+  if (claim.kind === "advanced" || claim.kind === "skipped") {
+    return claim.kind;
   }
 
   let result;
@@ -97,7 +138,7 @@ export async function runDueJob(db, now = new Date(), options = {}) {
     if (!handler) {
       throw new Error(`Görev işleyicisi yok: ${claim.job.key}`);
     }
-    result = await handler(db, now);
+    result = await handler(db, now, { scheduledFor: claim.job.scheduledFor });
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 500) : "Görev tamamlanamadı.";
     await finishFailure(db, claim, now, message, delayFor);
@@ -113,6 +154,9 @@ export async function drainDueJobs(db, now = new Date(), options = {}) {
     const result = await runDueJob(db, now, options);
     if (result === "idle") {
       return count;
+    }
+    if (result === "skipped") {
+      continue;
     }
     count += 1;
     if (count >= 50) {
@@ -161,12 +205,13 @@ async function claimJob(db, now) {
       return null;
     }
     if (job.lockedUntil && job.lockedUntil > now && job.lockToken) {
+      skipJob(job.key, "aynı görev zaten çalışıyor.");
       return null;
     }
 
     const windowKey = windowKeyFromInstant(job.scheduledFor);
-    const existing = await tx.automationRun.findUnique({
-      where: { jobId_windowKey: { jobId: job.id, windowKey } },
+    const existing = await tx.automationRun.findFirst({
+      where: { jobId: job.id, windowKey },
     });
     const finished =
       existing?.state === "SUCCEEDED" || existing?.state === "WAITING_CONNECTION";
@@ -186,38 +231,56 @@ async function claimJob(db, now) {
       return { kind: "advanced" };
     }
 
+    if (existing?.state === "RUNNING" && now.getTime() - existing.startedAt.getTime() < JOB_LOCK_MS) {
+      skipJob(job.key, "aynı görev zaten çalışıyor.");
+      await tx.automationJob.update({
+        where: { id: job.id },
+        data: { lockedUntil: new Date(existing.startedAt.getTime() + JOB_LOCK_MS) },
+      });
+      return { kind: "skipped" };
+    }
+    if (
+      job.lastSuccessAt &&
+      now.getTime() - job.lastSuccessAt.getTime() < JOB_COOLDOWN_MS &&
+      existing?.state !== "FAILED"
+    ) {
+      skipJob(job.key, "son 5 dakika içinde çalıştı.");
+      await tx.automationJob.update({
+        where: { id: job.id },
+        data: { nextRunAt: new Date(job.lastSuccessAt.getTime() + JOB_COOLDOWN_MS) },
+      });
+      return { kind: "skipped" };
+    }
+
     const lockToken = randomBytes(16).toString("hex");
     const attempt = (existing?.attempt ?? 0) + 1;
     await tx.automationJob.update({
       where: { id: job.id },
       data: {
         lockToken,
-        lockedUntil: new Date(now.getTime() + LOCK_MS),
+        lockedUntil: new Date(now.getTime() + JOB_LOCK_MS),
         lastStartedAt: now,
       },
     });
-    const run = existing
-      ? await tx.automationRun.update({
-          where: { id: existing.id },
-          data: {
-            state: "RUNNING",
-            attempt,
-            startedAt: now,
-            finishedAt: null,
-            error: null,
-            summary: "Çalışıyor",
-          },
-        })
-      : await tx.automationRun.create({
-          data: {
-            jobId: job.id,
-            windowKey,
-            attempt,
-            state: "RUNNING",
-            startedAt: now,
-            summary: "Çalışıyor",
-          },
-        });
+    const run = await tx.automationRun.upsert({
+      where: { jobId_windowKey: { jobId: job.id, windowKey } },
+      create: {
+        jobId: job.id,
+        windowKey,
+        attempt,
+        state: "RUNNING",
+        startedAt: now,
+        summary: "Çalışıyor",
+      },
+      update: {
+        state: "RUNNING",
+        attempt,
+        startedAt: now,
+        finishedAt: null,
+        error: null,
+        summary: "Çalışıyor",
+      },
+    });
     return {
       kind: "run" ,
       job: {

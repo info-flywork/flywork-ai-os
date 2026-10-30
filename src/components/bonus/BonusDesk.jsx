@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import Notice from "@/components/Notice";
 import {
@@ -123,7 +124,7 @@ export default function BonusDesk({
                 </div>
                 {canManage ? (
                   <div className="flex flex-wrap gap-2">
-                    <a className="btn-secondary" href={`/prim?ay=${data.month}&kayit=${award.id}`}>Düzenle</a>
+                    <Link className="btn-secondary" href={`/prim?ay=${data.month}&kayit=${award.id}`}>Düzenle</Link>
                     <form action={setAwardPaidAction}>
                       <input type="hidden" name="id" value={award.id} />
                       <input type="hidden" name="paid" value={award.paid ? "false" : "true"} />

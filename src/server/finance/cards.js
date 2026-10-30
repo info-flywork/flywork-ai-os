@@ -20,6 +20,14 @@ export function isSpenderName(name) {
   return (SPENDER_NAMES ).includes(name);
 }
 
+export function presetCardCharge(vendor) {
+  const name = (vendor ?? "").toLocaleLowerCase("tr");
+  if (name.includes("openai") || name.includes("claude")) {
+    return { paymentMethod: "CARD", accountLabel: "Anıl Bey kart" };
+  }
+  return { paymentMethod: "OTHER", accountLabel: null };
+}
+
 function cardKey(value) {
   return (value ?? "").trim().toLocaleLowerCase("tr");
 }

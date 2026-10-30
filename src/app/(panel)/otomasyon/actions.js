@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { unstable_rethrow } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
-import { decideAgentAction, previewInvoiceReader, runGoogleJobNow, setAutomationJobState } from "@/server/services/automation";
+import { decideAgentAction, previewInvoiceReader, runGoogleJobNow, setAutomationJobState, setInvoiceScanSchedule } from "@/server/services/automation";
 import { disconnectGoogleAccount } from "@/server/services/googleLink";
 import { createTelegramPairing, revokeTelegramLink } from "@/server/telegram/pairing";
 
@@ -33,15 +33,44 @@ export async function disconnectGoogleAction(formData) {
   }
 }
 
+export async function setJobScheduleAction(formData) {
+  try {
+    const actor = await requireUser();
+    const clock = String(formData.get("clock") ?? "");
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(clock);
+    if (!match) {
+      redirect("/otomasyon?saat=hata");
+    }
+    const saved = await setInvoiceScanSchedule(
+      actor,
+      String(formData.get("jobId") ?? ""),
+      Number(match[1]),
+      Number(match[2]),
+    );
+    revalidatePath("/otomasyon");
+    if (!saved.ok) {
+      redirect("/otomasyon?saat=kilit");
+    }
+  } catch (error) {
+    unstable_rethrow(error);
+  }
+}
+
 export async function runGoogleJobAction(formData) {
   try {
     const actor = await requireUser();
     const key = String(formData.get("key") ?? "");
-    if (key !== "gmail.morning" && key !== "invoice.morning") {
+    if (key !== "invoice.daily") {
       return;
     }
-    await runGoogleJobNow(actor, key);
+    const result = await runGoogleJobNow(actor, key);
     revalidatePath("/otomasyon");
+    if (result.summary.includes("zaten çalışıyor")) {
+      redirect("/otomasyon?tarama=calisiyor");
+    }
+    if (result.summary.includes("son 5 dakika")) {
+      redirect("/otomasyon?tarama=beklet");
+    }
   } catch (error) {
     unstable_rethrow(error);
   }

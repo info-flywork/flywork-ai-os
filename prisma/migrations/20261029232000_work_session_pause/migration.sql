@@ -1,0 +1,1 @@
+ALTER TABLE `WorkSession` ADD COLUMN `pausedAt` DATETIME(3) NULL;

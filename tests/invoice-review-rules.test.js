@@ -6,6 +6,7 @@ import {
   fieldCorrections,
   parsePreviewFields,
   canAutoApprove,
+  confirmedInvoiceDraft,
   reviewIssues,
 } from "@/server/finance/reviewRules";
 
@@ -22,6 +23,21 @@ describe("fatura inceleme kuralları", () => {
     draft.issuedOn = "2026-10-23";
     expect(canAutoApprove(draft, [], [])).toBe(true);
     expect(canAutoApprove(draft, ["amount"], [])).toBe(false);
+  });
+
+  it("onaylanan eksik numarayı ve vergiyi kayda uygun hale getirir", () => {
+    const draft = emptyDraft();
+    draft.vendor = "Eleven Labs Inc.";
+    draft.amount = "44.10";
+    draft.currency = "usd";
+    draft.issuedOn = "2026-10-29";
+    draft.documentType = "INVOICE";
+    const confirmed = confirmedInvoiceDraft(draft, "cmreview1234abcd", "2026-10-29");
+    expect(confirmed.number).toBe("EK-1234abcd");
+    expect(confirmed.tax).toBe("");
+    expect(confirmed.currency).toBe("USD");
+    expect(confirmed.issuedOn).toBe("2026-10-29");
+    expect(reviewIssues(confirmed)).toEqual([]);
   });
 
   it("önizleme satırındaki eksik ve belirsiz alanları ayırır", () => {

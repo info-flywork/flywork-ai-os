@@ -48,7 +48,14 @@ export async function writeWorkImage(storageKey, bytes) {
 }
 
 export async function readWorkImage(storageKey) {
-  return readFile(resolveKey(storageKey));
+  try {
+    return await readFile(resolveKey(storageKey));
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      throw new AppError("Görsel bulunamadı.", "NOT_FOUND", 404);
+    }
+    throw error;
+  }
 }
 
 export async function removeWorkImage(storageKey) {

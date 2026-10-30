@@ -34,9 +34,9 @@ export default async function HarcamaPage({
     return <p>Harcamalar ve faturalar yalnızca yöneticilere açıktır.</p>;
   }
   const query = await searchParams;
-  const flywork = one(query.sekme) === "flywork";
+  const office = one(query.sekme) === "ofis";
 
-  if (flywork) {
+  if (!office) {
     let data = null;
     let message = "Flywork faturaları okunamadı.";
     try {
@@ -54,6 +54,7 @@ export default async function HarcamaPage({
             cards={data.cards}
             transfers={data.transfers}
             totals={data.totals}
+            people={data.people}
           />
         ) : <p>{message}</p>}
       </FinanceDesk>

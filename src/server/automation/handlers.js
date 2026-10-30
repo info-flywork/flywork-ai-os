@@ -8,8 +8,7 @@ import { createGmailApi } from "@/server/google/gmail";
 import { importGmailInvoices, InvoiceScanRetryError, invoiceSummary } from "@/server/google/invoices";
 import { analyzeGmail, mailSummary } from "@/server/google/mailbox";
 import { GoogleOAuthError } from "@/server/google/oauth";
-import { publicHoliday } from "@/server/meals/holidays";
-import { istanbulClock, MEAL_SETTINGS_ID } from "@/server/meals/schedule";
+import { DEFAULT_MEAL_WEEKDAYS, istanbulClock, mealDispatchDecision, MEAL_SETTINGS_ID } from "@/server/meals/schedule";
 import { mealOrderTotals } from "@/server/meals/totals";
 import { pushInvoiceProblem, pushInvoiceScan } from "@/server/telegram/invoicePush";
 import { pushPendingLeaveApprovals } from "@/server/telegram/leaveDigest";
@@ -61,6 +60,8 @@ function waitingInvoice() {
     duplicates: [],
     rejected: [],
     errors: [],
+    skipped: 0,
+    outgoing: 0,
     retryable: 0,
     statements: 0,
     driveUploaded: false,
@@ -209,7 +210,7 @@ function invoiceFailureText(error) {
 async function invoiceAlertDue(db) {
   const running = await db.automationJob.findFirst({
     where: {
-      key: { in: ["invoice.morning", "invoice.evening"] },
+      key: "invoice.daily",
       lockToken: { not: null },
     },
     select: { retryCount: true, maxRetries: true },
@@ -245,9 +246,18 @@ export async function runInvoiceScan(db, runtime = {}) {
       }
       gmail = createGmailApi(access.token, runtime.fetchImpl);
     }
+    const previous = await db.automationJob.findFirst({
+      where: {
+        key: "invoice.daily",
+        lastSuccessAt: { not: null },
+      },
+      orderBy: { lastSuccessAt: "desc" },
+      select: { lastSuccessAt: true },
+    });
     const report = await importGmailInvoices(db, gmail, {
       fetchImpl: runtime.fetchImpl,
       commitActorId: await scanActorId(db),
+      since: previous?.lastSuccessAt ?? undefined,
     });
     await saveScanNotice(db, invoiceSummary(report));
     await pushInvoiceScan(db, report);
@@ -304,12 +314,16 @@ async function dayRoster(db, date) {
   };
 }
 
-export async function runMealClose(db, now) {
-  const clock = istanbulClock(now);
-  if (publicHoliday(clock.date)) {
-    return { state: "SUCCEEDED", summary: "Resmi tatil. Yemek siparişi yok." };
+export async function runMealClose(db, now, context = {}) {
+  const settings = await db.mealSettings.findUnique({
+    where: { id: MEAL_SETTINGS_ID },
+    select: { weekdays: true },
+  });
+  const decision = mealDispatchDecision(now, context.scheduledFor, settings?.weekdays ?? DEFAULT_MEAL_WEEKDAYS);
+  if (!decision.send) {
+    return { state: "SUCCEEDED", summary: decision.summary };
   }
-  const { menu, roster } = await dayRoster(db, clock.date);
+  const { menu, roster } = await dayRoster(db, decision.date);
   const totals = mealOrderTotals(menu?.orders ?? []);
   const lines = totals.rows.map((row) => `${row.name}: ${row.count}`);
   if (totals.absent > 0) {
@@ -321,29 +335,29 @@ export async function runMealClose(db, now) {
       : "Sipariş penceresi kapandı. İptal edilmeyen sipariş yok."
     : "Bugün yayımlanmış menü yok. Kapanış kaydı oluşturuldu.";
   await savePanelNotice(db, {
-    dedupeKey: `ops.meal-close:${clock.date}`,
+    dedupeKey: `ops.meal-close:${decision.date}`,
     title: "Yemek siparişi kapandı",
     body,
   });
   return { state: "SUCCEEDED", summary: `${body} Liste 11:05'te Telegram'a gider. Sipariş: ${roster.length}.` };
 }
 
-export async function runMealRoster(db, now) {
-  const clock = istanbulClock(now);
-  if (publicHoliday(clock.date)) {
-    return { state: "SUCCEEDED", summary: "Resmi tatil. Yemek listesi gönderilmedi." };
-  }
-  const { roster } = await dayRoster(db, clock.date);
+export async function runMealRoster(db, now, context = {}) {
   const settings = await db.mealSettings.findUnique({
     where: { id: MEAL_SETTINGS_ID },
-    select: { catererPhone: true },
+    select: { catererPhone: true, weekdays: true },
   });
-  const sent = await pushMealRoster(db, clock.date, roster, settings?.catererPhone);
+  const decision = mealDispatchDecision(now, context.scheduledFor, settings?.weekdays ?? DEFAULT_MEAL_WEEKDAYS);
+  if (!decision.send) {
+    return { state: "SUCCEEDED", summary: decision.summary };
+  }
+  const { roster } = await dayRoster(db, decision.date);
+  const sent = await pushMealRoster(db, decision.date, roster, settings?.catererPhone);
   const body = sent > 0
     ? "Günün yemek listesi Telegram'a iletildi."
     : "Günün yemek listesi Telegram'a iletilemedi.";
   await savePanelNotice(db, {
-    dedupeKey: `ops.meal-roster:${clock.date}`,
+    dedupeKey: `ops.meal-roster:${decision.date}`,
     title: "Yemekçi listesi",
     body,
   });
@@ -391,8 +405,7 @@ async function skipMailSummary() {
 export const JOB_HANDLERS = {
   "gmail.morning": skipMailSummary,
   "gmail.evening": skipMailSummary,
-  "invoice.morning": (db) => runInvoiceScan(db),
-  "invoice.evening": (db) => runInvoiceScan(db),
+  "invoice.daily": (db) => runInvoiceScan(db),
   "ops.meal-close": (db, now) => runMealClose(db, now),
   "ops.meal-roster": (db, now) => runMealRoster(db, now),
   "ops.leave-pending": (db, now) => runLeavePending(db, now),

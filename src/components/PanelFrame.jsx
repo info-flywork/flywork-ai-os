@@ -7,8 +7,6 @@ import AppSidebar from "@/components/AppSidebar";
 
 export default function PanelFrame({
   user,
-  alertBadge = null,
-  alertDot = null,
   children,
 }
 
@@ -39,8 +37,6 @@ export default function PanelFrame({
       ) : null}
       <AppSidebar
         user={user}
-        alertBadge={alertBadge}
-        alertDot={alertDot}
         open={open}
         collapsed={collapsed}
         onNavigate={() => setOpen(false)}

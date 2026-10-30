@@ -303,6 +303,20 @@ export const invoiceSchema = z
     path: ["dueOn"],
   });
 
+export const invoiceLineSchema = z.object({
+  invoiceId: z.string().min(1).optional(),
+  expenseId: z.string().min(1).optional(),
+  vendor: z.string().trim().min(2, "Tedarikçi adı gerekli.").max(160),
+  description: z.string().trim().min(2, "Açıklama en az 2 karakter olmalı.").max(160),
+  quantity: z.coerce.number().int().min(1, "Adet en az 1 olmalı.").max(9999),
+  amount: money,
+  currency: z.enum(["TRY", "USD", "EUR"]),
+  paymentMethod: z.enum(["CARD", "TRANSFER", "CASH", "OTHER"]),
+  accountLabel: z.string().trim().max(80).optional(),
+  issuedOn: isoDate,
+  person: z.string().trim().min(1, "Harcamayı yapan kişiyi seçin.").max(80),
+});
+
 export const subscriptionSchema = z.object({
   name: z.string().trim().min(2).max(160),
   vendor: z.string().trim().min(2).max(160),
@@ -453,6 +467,7 @@ export const workTaskSchema = z.object({
   endsAt: clock.nullable().optional(),
   dueOn: isoDate.nullable().optional(),
   assigneeIds: z.array(z.string().min(1)).max(12),
+  items: z.array(z.string().trim().min(1).max(300)).max(30).optional(),
 }).superRefine((value, context) => {
   if (value.startsOn && value.dueOn && value.startsOn > value.dueOn) {
     context.addIssue({ code: "custom", message: "Başlangıç tarihi bitiş tarihinden sonra olamaz.", path: ["startsOn"] });
@@ -465,6 +480,11 @@ export const workTaskSchema = z.object({
 
 export const workCommentSchema = z.object({
   taskId: z.string().min(1),
+  body: z.string().trim().min(1, "Yorum boş olamaz.").max(2000),
+});
+
+export const workCommentUpdateSchema = z.object({
+  id: z.string().min(1),
   body: z.string().trim().min(1, "Yorum boş olamaz.").max(2000),
 });
 
@@ -492,6 +512,12 @@ export const moveWorkTaskSchema = z.object({
   taskId: z.string().min(1),
   column: workColumn,
   orderedIds: z.array(z.string().min(1)).min(1).max(300),
+  items: z.array(z.string().trim().min(1).max(300)).max(30).optional(),
+});
+
+export const workRevisionSchema = z.object({
+  id: z.string().min(1),
+  done: z.boolean(),
 });
 
 export function parseInput(schema, input) {

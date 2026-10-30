@@ -6,6 +6,7 @@ const TONES = {
   blue: "bg-sky-50 text-sky-600",
   violet: "bg-violet-50 text-violet-600",
   orange: "bg-orange-50 text-orange-500",
+  red: "bg-red-50 text-red-600",
 } ;
 
 export default function StatCard({
@@ -15,6 +16,8 @@ export default function StatCard({
   hint,
   icon,
   tone = "green",
+  className = "",
+  valueClassName = "text-slate-900",
 }
 
 
@@ -29,15 +32,15 @@ export default function StatCard({
         <p className="text-sm text-slate-500">{label}</p>
         {icon ? <span className={`rounded-2xl p-2.5 ${TONES[tone]}`}>{icon}</span> : null}
       </div>
-      <div className="mt-4 text-[1.65rem] font-semibold leading-tight tracking-tight text-slate-900">{value}</div>
+      <div className={`mt-4 text-[1.65rem] font-semibold leading-tight tracking-tight ${valueClassName}`}>{value}</div>
       {hint ? <p className="mt-2 text-sm text-slate-400">{hint}</p> : null}
     </>
   );
   if (!href) {
-    return <article className="panel-card">{body}</article>;
+    return <article className={`panel-card ${className}`}>{body}</article>;
   }
   return (
-    <Link href={href} className="panel-card block hover:border-[#03624c]">
+    <Link href={href} className={`panel-card block hover:border-[#03624c] ${className}`}>
       {body}
     </Link>
   );

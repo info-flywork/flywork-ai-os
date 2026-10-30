@@ -318,7 +318,9 @@ describe.skipIf(!databaseReady)("google veritabanı", () => {
     });
     expect(second.imported).toEqual([]);
     expect(second.queued).toBe(0);
-    expect(second.duplicates).toHaveLength(3);
+    expect(second.duplicates).toHaveLength(0);
+    expect(second.skipped).toBe(4);
+    expect(second.found).toBe(0);
     expect(second.driveUploaded).toBe(false);
     expect(await db.invoice.count({ where: { number: "FW-FAZ8" } })).toBe(0);
     expect(await db.invoiceReview.count({ where: { number: "FW-FAZ8" } })).toBe(1);

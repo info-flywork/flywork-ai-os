@@ -7,6 +7,14 @@ export const GMAIL_QUERIES = {
   invoices: "has:attachment filename:pdf newer_than:14d",
 } ;
 
+export function invoiceMailboxQuery(since) {
+  if (!(since instanceof Date) || Number.isNaN(since.getTime())) {
+    return GMAIL_QUERIES.invoices;
+  }
+  const after = Math.floor(since.getTime() / 1000) - 120;
+  return `${GMAIL_QUERIES.invoices} after:${after}`;
+}
+
  
 
 

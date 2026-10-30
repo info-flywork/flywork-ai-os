@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const ADMIN_MEAL_TABS = [
   ["siparis", "Sipariş ver"],
   ["bugun", "Bugünkü siparişler"],
@@ -52,9 +54,9 @@ export default function MealTabs({
           );
         }
         return (
-          <a key={id} className={className} href={hrefFor?.(id) ?? "/yemek-yonetimi"}>
+          <Link key={id} className={className} href={hrefFor?.(id) ?? "/yemek-yonetimi"}>
             {label}
-          </a>
+          </Link>
         );
       })}
     </div>

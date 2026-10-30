@@ -3,6 +3,7 @@ import "server-only";
 import { can, assertCan } from "@/server/auth/permissions";
 import { dateOnly, formatIstanbulDateTime, istanbulToday, toIsoDate } from "@/server/dates";
 import { withDatabase } from "@/server/db";
+import { isOwnCompanyName } from "@/server/finance/ownCompany";
 import { numberList } from "@/server/jsonList";
 import { istanbulClock, MEAL_SETTINGS_ID } from "@/server/meals/schedule";
 
@@ -197,13 +198,14 @@ export async function getDashboardSummary(actor, now = new Date()) {
           ? db.technologySubscription.count({ where: { active: true, renewsOn: { lt: today } } })
           : Promise.resolve(0),
         company
-          ? db.invoiceReview.count({
+          ? db.invoiceReview.findMany({
               where: {
                 status: "PENDING",
                 documentType: { not: "STATEMENT" },
                 ...invoiceReviewMonthWhere(month.label),
               },
-            })
+              select: { vendor: true },
+            }).then((rows) => rows.filter((row) => !isOwnCompanyName(row.vendor)).length)
           : Promise.resolve(null),
         company
           ? db.automationRun.findMany({

@@ -166,7 +166,7 @@ describe.skipIf(!databaseReady)("bildirim merkezi", () => {
         aiSnapshot: {},
       },
     });
-    const job = await db.automationJob.findUnique({ where: { key: "invoice.morning" } });
+    const job = await db.automationJob.findUnique({ where: { key: "invoice.daily" } });
     const run = job
       ? await db.automationRun.create({
           data: {
@@ -185,17 +185,20 @@ describe.skipIf(!databaseReady)("bildirim merkezi", () => {
     try {
       const company = await listAlerts(admin, now);
       const own = await listAlerts(employee, now);
-      const invoiceKey = `invoice.review:${invoice.id}`;
-      expect(company.filter((alert) => alert.key === invoiceKey)).toHaveLength(1);
-      expect(company.find((alert) => alert.key === invoiceKey)?.href).toBe(`/otomasyon/inceleme/${invoice.id}`);
+      const invoiceAlert = company.find((alert) => alert.key === `invoice.review:${invoice.id}` || alert.key === "invoice.review:group");
+      expect(invoiceAlert?.level).toBe("action");
+      expect(invoiceAlert?.href === `/otomasyon/inceleme/${invoice.id}` || invoiceAlert?.href === "/otomasyon/inceleme").toBe(true);
       expect(company.some((alert) => alert.key === `invoice.review:${statement.id}`)).toBe(false);
-      expect(company.some((alert) => alert.body.includes("Faz9 Yakin") && alert.body.includes("2098-06-15"))).toBe(true);
+      const renewal = company.find((alert) => alert.key.startsWith("subscription.renewal"));
+      expect(renewal?.level).toBe("info");
+      expect(renewal?.body.includes("Faz9 Yakin") && renewal.body.includes("2098-06-15")).toBe(true);
       expect(company.some((alert) => alert.body.includes("Faz9 Uzak"))).toBe(false);
       expect(company.some((alert) => alert.key.startsWith("technology.draft:"))).toBe(false);
       expect(own.some((alert) => alert.key.startsWith("invoice.review:"))).toBe(false);
       expect(own.some((alert) => alert.key.startsWith("technology.draft:"))).toBe(false);
       expect(own.some((alert) => alert.key.startsWith("automation.failed:"))).toBe(false);
-      expect(own.map((alert) => alert.key)).toEqual([`leave.request:${ownLeave.id}`]);
+      expect(own.some((alert) => alert.key === `leave.request:${ownLeave.id}`)).toBe(false);
+      expect(own.every((alert) => alert.key.startsWith("work."))).toBe(true);
       expect(JSON.stringify(own)).not.toContain(otherRow.name);
       expect(JSON.stringify(own)).not.toContain("faz9-ekstre");
       if (run) {
@@ -205,6 +208,7 @@ describe.skipIf(!databaseReady)("bildirim merkezi", () => {
       }
       expect(await db.technologySubscription.count({ where: { name: { in: ["Cursor Pro", "Rive"] } } })).toBe(namedBefore);
 
+      const invoiceKey = invoiceAlert.key;
       await markAlertRead(admin, invoiceKey, now);
       await markAlertRead(admin, invoiceKey, now);
       expect(await db.panelAlertRead.count({

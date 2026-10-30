@@ -6,7 +6,7 @@ import { assertCan } from "@/server/auth/permissions";
 import { dateOnly, formatIstanbulDateTime, istanbulToday, toIsoDate } from "@/server/dates";
 import { withDatabase } from "@/server/db";
 import { AppError } from "@/server/errors";
-import { cardsForScope, isSpenderName, SPENDER_NAMES, summarizeCards } from "@/server/finance/cards";
+import { cardsForScope, isSpenderName, presetCardCharge, SPENDER_NAMES, summarizeCards } from "@/server/finance/cards";
 import {
   categoryFitsScope,
   normalizeAccountLabel,
@@ -36,6 +36,7 @@ import {
   expenseReviewSchema,
   expenseSchema,
   expenseUpdateSchema,
+  invoiceLineSchema,
   invoiceSchema,
   parseInput,
   subscriptionSchema,
@@ -802,14 +803,15 @@ export async function getInvoicePage(actor, month, scope) {
   const period = /^\d{4}-\d{2}$/.test(month) ? month : istanbulToday().slice(0, 7);
   return withDatabase(async (db) => {
     const link = await readGoogleLink(db);
-    const [invoices, expenses, cardRows] = await Promise.all([
+    const periodWhere = {
+      gte: dateOnly(`${period}-01`),
+      lte: dateOnly(lastDay(period)),
+    };
+    const [invoices, expenses, cardRows, people, openExpenses] = await Promise.all([
       db.invoice.findMany({
         where: {
           ...(scope ? { scope } : {}),
-          issuedOn: {
-            gte: dateOnly(`${period}-01`),
-            lte: dateOnly(lastDay(period)),
-          },
+          issuedOn: periodWhere,
         },
         include: {
           document: { select: { id: true, fileName: true } },
@@ -818,9 +820,10 @@ export async function getInvoicePage(actor, month, scope) {
               id: true,
               title: true,
               scope: true,
+              category: true,
               paymentMethod: true,
               accountLabel: true,
-              user: { select: { name: true } },
+              user: { select: { id: true, name: true } },
             },
           },
         },
@@ -845,6 +848,32 @@ export async function getInvoicePage(actor, month, scope) {
             select: { amount: true, currency: true, accountLabel: true, status: true, vendor: true, paymentMethod: true },
           })
         : Promise.resolve([]),
+      db.user.findMany({
+        where: { name: { in: [...SPENDER_NAMES] } },
+        select: { id: true, name: true },
+      }),
+      db.expense.findMany({
+        where: {
+          invoiceId: null,
+          status: { not: "REJECTED" },
+          ...(scope ? { scope } : {}),
+          spentOn: periodWhere,
+        },
+        select: {
+          id: true,
+          title: true,
+          vendor: true,
+          scope: true,
+          category: true,
+          amount: true,
+          currency: true,
+          spentOn: true,
+          paymentMethod: true,
+          accountLabel: true,
+          user: { select: { id: true, name: true } },
+        },
+        orderBy: [{ spentOn: "asc" }, { createdAt: "asc" }],
+      }),
     ]);
     const counted = cardRows.map(moneyRow);
     return {
@@ -868,37 +897,306 @@ export async function getInvoicePage(actor, month, scope) {
         currency: expense.currency,
         spentOn: toIsoDate(expense.spentOn),
       })),
-      invoices: invoices.map((invoice) => {
-        const expense = invoice.expenses[0];
-        const amount = Number(invoice.amount.toString());
-        return {
-        id: invoice.id,
-        number: invoice.number,
-        vendor: invoice.vendor,
-        scope: invoice.scope,
-        amount: amount.toFixed(2),
-        currency: invoice.currency,
-        description: expense?.title || invoice.note || "",
-        quantity: invoice.quantity,
-        paymentLabel: paymentText(expense?.paymentMethod ?? invoice.paymentMethod),
-        card: redactAccountLabel(expense?.accountLabel ?? invoice.accountLabel) ?? "",
-        person: invoice.spenderName || expense?.user?.name || "",
-        issuedOn: toIsoDate(invoice.issuedOn),
-        dueOn: invoice.dueOn ? toIsoDate(invoice.dueOn) : null,
-        status: invoice.status,
-        source: invoice.source,
-        note: invoice.note,
-        document: invoice.document,
-        expenses: invoice.expenses,
-        archive: planDriveArchive({
-          issuedOn: toIsoDate(invoice.issuedOn),
-          vendor: invoice.vendor,
-          number: invoice.number,
+      people: [...people].sort(
+        (left, right) => SPENDER_NAMES.indexOf(left.name) - SPENDER_NAMES.indexOf(right.name),
+      ),
+      invoices: [
+        ...invoices.map((invoice) => {
+          const expense = invoice.expenses[0];
+          const amount = Number(invoice.amount.toString());
+          const issuedOn = toIsoDate(invoice.issuedOn);
+          return {
+            id: invoice.id,
+            invoiceId: invoice.id,
+            expenseId: expense?.id ?? null,
+            number: invoice.number,
+            vendor: invoice.vendor,
+            scope: invoice.scope,
+            amount: amount.toFixed(2),
+            currency: invoice.currency,
+            description: expense?.title || invoice.note || "",
+            quantity: invoice.quantity,
+            category: expense?.category ?? "OTHER",
+            paymentMethod: expense?.paymentMethod ?? invoice.paymentMethod ?? "OTHER",
+            paymentLabel: paymentText(expense?.paymentMethod ?? invoice.paymentMethod),
+            card: redactAccountLabel(expense?.accountLabel ?? invoice.accountLabel) ?? "",
+            person: invoice.spenderName || expense?.user?.name || "",
+            userId: expense?.user?.id ?? null,
+            issuedOn,
+            dueOn: invoice.dueOn ? toIsoDate(invoice.dueOn) : null,
+            status: invoice.status,
+            source: invoice.source,
+            note: invoice.note,
+            document: invoice.document,
+            expenses: invoice.expenses,
+            archive: planDriveArchive({
+              issuedOn,
+              vendor: invoice.vendor,
+              number: invoice.number,
+            }),
+          };
         }),
-        };
-      }),
+        ...openExpenses.map((expense) => ({
+          id: `expense:${expense.id}`,
+          invoiceId: null,
+          expenseId: expense.id,
+          number: "",
+          vendor: expense.vendor ?? "",
+          scope: expense.scope,
+          amount: Number(expense.amount.toString()).toFixed(2),
+          currency: expense.currency,
+          description: expense.title,
+          quantity: 1,
+          category: expense.category,
+          paymentMethod: expense.paymentMethod,
+          paymentLabel: paymentText(expense.paymentMethod),
+          card: redactAccountLabel(expense.accountLabel) ?? "",
+          person: expense.user.name,
+          userId: expense.user.id,
+          issuedOn: toIsoDate(expense.spentOn),
+          dueOn: null,
+          status: null,
+          source: null,
+          note: null,
+          document: null,
+          expenses: [],
+          archive: null,
+        })),
+      ].sort((left, right) => left.issuedOn.localeCompare(right.issuedOn) || left.vendor.localeCompare(right.vendor, "tr")),
     };
   });
+}
+
+function lineAccountLabel(scope, paymentMethod, accountLabel) {
+  if (paymentMethod !== "CARD") return null;
+  const cards = cardsForScope(scope);
+  const picked = accountLabel?.trim() ?? "";
+  if (!cards.includes(picked)) {
+    throw new AppError("Ödeme kartını listeden seçin.", "VALIDATION", 400);
+  }
+  return picked;
+}
+
+export async function updateInvoiceLine(actor, input) {
+  assertCan(actor, "invoice:write");
+  assertCan(actor, "expense:review");
+  const data = parseInput(invoiceLineSchema, input);
+  if (!data.invoiceId && !data.expenseId) {
+    throw new AppError("Düzenlenecek satır bulunamadı.", "NOT_FOUND", 404);
+  }
+
+  await withDatabase((db) =>
+    db.$transaction(async (tx) => {
+      const invoice = data.invoiceId
+        ? await tx.invoice.findUnique({
+            where: { id: data.invoiceId },
+            include: { expenses: { select: { id: true, userId: true } } },
+          })
+        : null;
+      if (data.invoiceId && !invoice) {
+        throw new AppError("Fatura bulunamadı.", "NOT_FOUND", 404);
+      }
+      const expenseId = data.expenseId ?? invoice?.expenses[0]?.id ?? null;
+      const expense = expenseId ? await tx.expense.findUnique({ where: { id: expenseId } }) : null;
+      if (data.expenseId && !expense) {
+        throw new AppError("Harcama bulunamadı.", "NOT_FOUND", 404);
+      }
+      if (invoice && expense && expense.invoiceId && expense.invoiceId !== invoice.id) {
+        throw new AppError("Harcama bu faturaya bağlı değil.", "CONFLICT", 409);
+      }
+      const scope = invoice?.scope ?? expense?.scope;
+      if (scope !== "COMPANY" && scope !== "OFFICE") {
+        throw new AppError("Bu satır düzenlenemez.", "VALIDATION", 400);
+      }
+      const accountLabel = lineAccountLabel(scope, data.paymentMethod, data.accountLabel);
+      let userId = expense?.userId ?? null;
+      let spenderName = invoice?.spenderName ?? null;
+      if (data.person === "otomatik") {
+        spenderName = "Otomatik";
+        userId = userId ?? actor.id;
+      } else {
+        userId = await spenderId(tx, actor, data.person);
+        const chosen = await tx.user.findUnique({ where: { id: userId }, select: { name: true } });
+        if (!chosen || !isSpenderName(chosen.name)) {
+          throw new AppError("Harcamayı yapan kişi listede yok.", "VALIDATION", 400);
+        }
+        spenderName = chosen.name;
+      }
+      if (invoice) {
+        try {
+          await tx.invoice.update({
+            where: { id: invoice.id },
+            data: {
+              vendor: data.vendor.trim(),
+              vendorKey: vendorKey(data.vendor),
+              amount: data.amount,
+              currency: data.currency,
+              quantity: data.quantity,
+              issuedOn: dateOnly(data.issuedOn),
+              paymentMethod: data.paymentMethod,
+              accountLabel,
+              spenderName,
+              note: expense ? invoice.note : data.description,
+            },
+          });
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            throw new AppError("Bu tedarikçi ve fatura numarası zaten kayıtlı.", "CONFLICT", 409);
+          }
+          throw error;
+        }
+      }
+      if (!expense || !userId) return;
+      const before = snapshot(expense);
+      const next = await tx.expense.update({
+        where: { id: expense.id },
+        data: {
+          userId,
+          title: data.description,
+          vendor: data.vendor.trim(),
+          amount: data.amount,
+          currency: data.currency,
+          paymentMethod: data.paymentMethod,
+          accountLabel,
+          spentOn: dateOnly(data.issuedOn),
+        },
+      });
+      await writeAudit(tx, actor.id, expense.id, "UPDATE", diff(before, snapshot(next)));
+    }),
+  );
+}
+
+export async function attachInvoiceFile(actor, invoiceId, expenseId, file) {
+  assertCan(actor, "invoice:write");
+  const inspected = inspectFinanceFile(file);
+  const hash = documentHash(inspected.bytes);
+  const storageKey = randomBytes(16).toString("hex");
+  await saveFinanceFile(storageKey, inspected.bytes);
+  try {
+    await withDatabase((db) =>
+      db.$transaction(async (tx) => {
+        const duplicate = await tx.invoiceDocument.findUnique({ where: { contentHash: hash }, select: { id: true } });
+        if (duplicate) {
+          throw new AppError("Bu fatura zaten kayıtlı.", "CONFLICT", 409);
+        }
+        let targetId = invoiceId || null;
+        if (!targetId) {
+          const expense = await tx.expense.findUnique({ where: { id: expenseId } });
+          if (!expense || expense.invoiceId) {
+            throw new AppError("Fatura eklenecek harcama bulunamadı.", "NOT_FOUND", 404);
+          }
+          const vendor = (expense.vendor || expense.title).trim();
+          if (vendor.length < 2) {
+            throw new AppError("Fatura eklemeden önce tedarikçi adını yazın.", "VALIDATION", 400);
+          }
+          const created = await tx.invoice.create({
+            data: {
+              number: `EK-${randomBytes(4).toString("hex")}`,
+              vendor,
+              vendorKey: vendorKey(vendor),
+              scope: expense.scope,
+              amount: expense.amount,
+              currency: expense.currency,
+              issuedOn: expense.spentOn,
+              source: "UPLOAD",
+              paymentMethod: expense.paymentMethod,
+              accountLabel: expense.accountLabel,
+              spenderName: null,
+            },
+          });
+          const linked = await tx.expense.updateMany({
+            where: { id: expense.id, invoiceId: null },
+            data: { invoiceId: created.id },
+          });
+          if (linked.count !== 1) {
+            throw new AppError("Harcama bağlanamadı.", "CONFLICT", 409);
+          }
+          const user = await tx.user.findUnique({ where: { id: expense.userId }, select: { name: true } });
+          if (user) {
+            await tx.invoice.update({ where: { id: created.id }, data: { spenderName: user.name } });
+          }
+          targetId = created.id;
+        }
+        const invoice = await tx.invoice.findUnique({
+          where: { id: targetId },
+          include: { document: { select: { id: true } } },
+        });
+        if (!invoice) {
+          throw new AppError("Fatura bulunamadı.", "NOT_FOUND", 404);
+        }
+        if (invoice.document) {
+          throw new AppError("Bu satırın faturası zaten var.", "CONFLICT", 409);
+        }
+        await tx.invoiceDocument.create({
+          data: {
+            invoiceId: invoice.id,
+            storageKey,
+            fileName: inspected.fileName,
+            contentType: inspected.contentType,
+            sizeBytes: inspected.bytes.length,
+            contentHash: hash,
+          },
+        });
+      }),
+    );
+  } catch (error) {
+    await removeFinanceFile(storageKey);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new AppError("Bu fatura zaten kayıtlı.", "CONFLICT", 409);
+    }
+    if (error instanceof AppError && error.message === "Bu kayıt zaten var.") {
+      throw new AppError("Bu fatura zaten kayıtlı.", "CONFLICT", 409);
+    }
+    throw error;
+  }
+}
+
+export async function deleteInvoiceLine(actor, invoiceId, expenseId) {
+  assertCan(actor, "invoice:write");
+  assertCan(actor, "expense:review");
+  if (!invoiceId && !expenseId) {
+    throw new AppError("Silinecek satır bulunamadı.", "NOT_FOUND", 404);
+  }
+  const keys = await withDatabase((db) =>
+    db.$transaction(async (tx) => {
+      const removable = [];
+      if (invoiceId) {
+        const invoice = await tx.invoice.findUnique({
+          where: { id: invoiceId },
+          include: {
+            document: true,
+            review: { select: { storageKey: true } },
+            expenses: { include: { document: true } },
+          },
+        });
+        if (!invoice) {
+          throw new AppError("Fatura bulunamadı.", "NOT_FOUND", 404);
+        }
+        for (const expense of invoice.expenses) {
+          if (expense.document) removable.push(expense.document.storageKey);
+          await tx.expense.delete({ where: { id: expense.id } });
+        }
+        if (invoice.document && invoice.document.storageKey !== invoice.review?.storageKey) {
+          removable.push(invoice.document.storageKey);
+        }
+        await tx.invoice.delete({ where: { id: invoice.id } });
+        return removable;
+      }
+      const expense = await tx.expense.findUnique({
+        where: { id: expenseId },
+        include: { document: true },
+      });
+      if (!expense || expense.invoiceId) {
+        throw new AppError("Harcama bulunamadı.", "NOT_FOUND", 404);
+      }
+      if (expense.document) removable.push(expense.document.storageKey);
+      await tx.expense.delete({ where: { id: expense.id } });
+      return removable;
+    }),
+  );
+  for (const key of keys) {
+    await removeFinanceFile(key);
+  }
 }
 
 export async function createInvoice(actor, input, file) {
@@ -1081,7 +1379,7 @@ export async function importFlyworkInvoiceFile(actor, file) {
             issuedOn: dateOnly(issuedOn),
             source: "UPLOAD",
             note: null,
-            paymentMethod: "OTHER",
+            ...presetCardCharge(vendor),
             spenderName: actor.name,
           },
         });
@@ -1094,7 +1392,7 @@ export async function importFlyworkInvoiceFile(actor, file) {
             vendor,
             amount,
             currency,
-            paymentMethod: "OTHER",
+            ...presetCardCharge(vendor),
             spentOn: dateOnly(issuedOn),
             status: "APPROVED",
             reimbursement: "NOT_REQUIRED",

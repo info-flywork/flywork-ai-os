@@ -30,17 +30,20 @@ describe("otomasyon zamanı", () => {
     expect(windowKeyFromInstant(nextOccurrence(roster, thursdayAfter))).toBe("2026-10-22T11:05");
   });
 
-  it("fatura taramasını günde iki kez çalıştırır ve ikinci bir görev açmaz", () => {
+  it("fatura taramasını günde bir kez 09:00'da çalıştırır", () => {
     const invoiceJobs = JOB_DEFINITIONS.filter((job) => job.agent === "invoice");
-    expect(invoiceJobs.map((job) => job.key)).toEqual(["invoice.morning", "invoice.evening"]);
-    expect(invoiceJobs.map((job) => [job.hour, job.minute, job.weekdays])).toEqual([
-      [9, 0, []],
-      [18, 30, []],
-    ]);
-    const beforeMorning = istanbulInstant("2026-10-21", 8, 59);
-    expect(windowKeyFromInstant(nextOccurrence(invoiceJobs[0], beforeMorning))).toBe("2026-10-21T09:00");
-    const afterEvening = istanbulInstant("2026-10-21", 18, 30);
-    expect(windowKeyFromInstant(nextOccurrence(invoiceJobs[1], afterEvening))).toBe("2026-10-22T18:30");
+    expect(invoiceJobs.map((job) => job.key)).toEqual(["invoice.daily"]);
+    expect(invoiceJobs[0]).toMatchObject({
+      name: "Günlük fatura taraması",
+      hour: 9,
+      minute: 0,
+      weekdays: [],
+      scheduleEditable: true,
+    });
+    const before = istanbulInstant("2026-10-21", 8, 59);
+    expect(windowKeyFromInstant(nextOccurrence(invoiceJobs[0], before))).toBe("2026-10-21T09:00");
+    const after = istanbulInstant("2026-10-21", 9, 0);
+    expect(windowKeyFromInstant(nextOccurrence(invoiceJobs[0], after))).toBe("2026-10-22T09:00");
   });
 
   it("hata sonrası deneme aralığını büyütür", () => {

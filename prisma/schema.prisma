@@ -187,6 +187,9 @@ model User {
   workAssignments       WorkTaskAssignee[]
   workComments          WorkTaskComment[]  @relation("WorkCommentAuthor")
   workMentions          WorkTaskMention[]
+  workSessions          WorkSession[]
+  workMoves             WorkTaskMove[]
+  workCardSeen          WorkCardSeen[]
   feedbackNotes         FeedbackNote[]     @relation("FeedbackAuthor")
   feedbackReviews       FeedbackNote[]     @relation("FeedbackReviewer")
 }
@@ -245,6 +248,11 @@ model MealDish {
   photoLink  MealPhotoLink?
 
   @@index([categoryId, active])
+}
+
+model MealPhotoBlob {
+  storageKey String @id @db.VarChar(64)
+  bytes      Bytes  @db.LongBlob
 }
 
 model MealPhotoReview {
@@ -769,6 +777,8 @@ model PanelAlertRead {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   dedupeKey String
   readAt    DateTime @default(now())
+  dismissed Boolean  @default(false)
+  signature String?  @db.VarChar(64)
 
   @@unique([userId, dedupeKey])
   @@index([userId])
@@ -821,6 +831,13 @@ model TelegramPairingCode {
 model TelegramUpdateReceipt {
   updateId  String   @id
   createdAt DateTime @default(now())
+}
+
+model TelegramWorkReply {
+  telegramUserId String   @id
+  taskId         String
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
 }
 
 model TelegramDispatch {
@@ -999,9 +1016,11 @@ model WorkTask {
   startsAt    String?
   endsAt      String?
   dueOn       DateTime?          @db.Date
-  completed   Boolean            @default(false)
-  sortOrder   Int                @default(0)
-  createdById String
+  completed     Boolean            @default(false)
+  sortOrder     Int                @default(0)
+  revisionCount Int                @default(0)
+  enforced      Boolean            @default(false)
+  createdById   String
   createdBy   User               @relation("WorkTaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
@@ -1009,8 +1028,65 @@ model WorkTask {
   comments    WorkTaskComment[]
   links       WorkTaskLink[]
   images      WorkTaskImage[]
+  sessions    WorkSession[]
+  revisions   WorkRevisionItem[]
+  moves       WorkTaskMove[]
+  seenBy      WorkCardSeen[]
 
   @@index([spaceId, column, sortOrder])
+}
+
+model WorkCardSeen {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId String
+  task   WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  seenAt DateTime @default(now())
+
+  @@unique([userId, taskId])
+  @@index([taskId])
+}
+
+model WorkSession {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId    String?
+  task      WorkTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  taskTitle String    @db.VarChar(255)
+  startedAt DateTime  @default(now())
+  pausedAt  DateTime?
+  pausedMs  Int       @default(0)
+  endedAt   DateTime?
+  done      Boolean   @default(false)
+
+  @@index([userId, endedAt])
+  @@index([startedAt])
+}
+
+model WorkRevisionItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  body      String   @db.VarChar(300)
+  done      Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([taskId, sortOrder])
+}
+
+model WorkTaskMove {
+  id        String     @id @default(cuid())
+  taskId    String
+  task      WorkTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  column    WorkColumn
+  actorId   String
+  actor     User       @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt DateTime   @default(now())
+
+  @@index([taskId, createdAt])
 }
 
 model WorkTaskComment {
@@ -1081,11 +1157,21 @@ model FeedbackNote {
 }
 
 model WorkTaskAssignee {
-  id     String   @id @default(cuid())
-  taskId String
-  task   WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId String
-  user   User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id         String   @id @default(cuid())
+  taskId     String
+  task       WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  assignedAt DateTime @default(now())
 
   @@unique([taskId, userId])
+}
+
+model InvoiceAutoRule {
+  id        String   @id @default("default")
+  enabled   Boolean  @default(false)
+  maxAmount Decimal  @default(0) @db.Decimal(12, 2)
+  currency  String   @default("TRY")
+  vendors   Json     @default("[]")
+  updatedAt DateTime @updatedAt
 }

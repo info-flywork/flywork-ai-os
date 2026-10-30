@@ -217,7 +217,7 @@ describe.skipIf(!databaseReady)("dashboard ve kullanıcı", () => {
         aiSnapshot: {},
       },
     });
-    const job = await db.automationJob.findUnique({ where: { key: "invoice.morning" } });
+    const job = await db.automationJob.findUnique({ where: { key: "invoice.daily" } });
     const run = job
       ? await db.automationRun.create({
           data: {

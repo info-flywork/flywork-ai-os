@@ -1,6 +1,7 @@
 import "server-only";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { withDatabase } from "@/server/db";
 import { AppError } from "@/server/errors";
 
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -51,26 +52,58 @@ function resolveKey(storageKey) {
   return target;
 }
 
-export async function writeMealPhoto(storageKey, bytes) {
+async function rememberBlob(storageKey, bytes) {
+  const body = Buffer.from(bytes);
+  await withDatabase((db) =>
+    db.mealPhotoBlob.upsert({
+      where: { storageKey },
+      create: { storageKey, bytes: body },
+      update: { bytes: body },
+    }),
+  );
+  return body;
+}
+
+async function cacheOnDisk(storageKey, bytes) {
   const target = resolveKey(storageKey);
   await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, bytes, { flag: "wx" });
+  try {
+    await writeFile(target, bytes, { flag: "wx" });
+  } catch {
+    return;
+  }
+}
+
+export async function writeMealPhoto(storageKey, bytes) {
+  resolveKey(storageKey);
+  const body = await rememberBlob(storageKey, bytes);
+  await cacheOnDisk(storageKey, body);
 }
 
 export async function readMealPhoto(storageKey) {
+  const target = resolveKey(storageKey);
   try {
-    return await readFile(resolveKey(storageKey));
+    return await readFile(target);
   } catch (error) {
-    if (error && error.code === "ENOENT") {
-      throw new AppError("Fotoğraf bulunamadı.", "NOT_FOUND", 404);
+    if (!error || error.code !== "ENOENT") {
+      throw error;
     }
-    throw error;
   }
+  const stored = await withDatabase((db) =>
+    db.mealPhotoBlob.findUnique({ where: { storageKey }, select: { bytes: true } }),
+  );
+  if (!stored) {
+    throw new AppError("Fotoğraf bulunamadı.", "NOT_FOUND", 404);
+  }
+  const body = Buffer.from(stored.bytes);
+  await cacheOnDisk(storageKey, body);
+  return body;
 }
 
 export async function removeMealPhoto(storageKey) {
   if (!storageKey || !/^[a-f0-9]{32}$/.test(storageKey)) {
     return;
   }
+  await withDatabase((db) => db.mealPhotoBlob.deleteMany({ where: { storageKey } }));
   await rm(resolveKey(storageKey), { force: true });
 }

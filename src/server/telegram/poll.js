@@ -68,16 +68,21 @@ export async function runLocalTelegramPoll(options) {
       }
       let delivered = false;
       try {
-        const response = await fetchImpl(options.endpoint, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-telegram-bot-api-secret-token": options.secret,
-          },
-          body: JSON.stringify(update),
-          signal: options.signal,
-        });
-        delivered = response.ok;
+        if (options.onUpdate) {
+          await options.onUpdate(update);
+          delivered = true;
+        } else {
+          const response = await fetchImpl(options.endpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-telegram-bot-api-secret-token": options.secret,
+            },
+            body: JSON.stringify(update),
+            signal: options.signal,
+          });
+          delivered = response.ok;
+        }
       } catch {
         delivered = false;
       }

@@ -8,6 +8,7 @@ import {
   istanbulClock,
   managerMayEditClosedDay,
   mealDayWindow,
+  mealDispatchDecision,
   orderableMealDates,
   orderWindow,
   reportRange,
@@ -24,6 +25,24 @@ const schedule = {
   closesAt: "10:30",
   weekdays: [1, 2, 4],
 };
+
+describe("yemek listesinin gönderileceği gün", () => {
+  const days = [1, 2, 4];
+
+  it("yemek günü olmayan günde ve zamanı geçmiş kayıtta listeyi göndermez", () => {
+    const friday = new Date("2026-10-30T06:40:00Z");
+    expect(mealDispatchDecision(friday, friday, days).send).toBe(false);
+    expect(mealDispatchDecision(friday, new Date("2026-10-22T08:05:00Z"), days)).toMatchObject({
+      send: false,
+      summary: "Zamanı geçmiş yemek kaydı gönderilmedi.",
+    });
+    expect(mealDispatchDecision(new Date("2026-10-29T08:05:00Z"), new Date("2026-10-29T08:05:00Z"), days).send).toBe(false);
+    expect(mealDispatchDecision(new Date("2026-11-02T08:05:00Z"), new Date("2026-11-02T08:05:00Z"), days)).toMatchObject({
+      send: true,
+      date: "2026-11-02",
+    });
+  });
+});
 
 function at(iso) {
   return orderWindow(istanbulClock(new Date(iso)), schedule);

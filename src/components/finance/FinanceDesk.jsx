@@ -1,8 +1,10 @@
 
 
+import Link from "next/link";
+
 const TABS = [
-  ["ofis", "Ofis Harcamaları", "/harcama"],
-  ["flywork", "Flywork Faturaları", "/harcama?sekme=flywork"],
+  ["flywork", "Flywork Faturaları", "/harcama"],
+  ["ofis", "Ofis Harcamaları", "/harcama?sekme=ofis"],
 ] ;
 
 export default function FinanceDesk({
@@ -19,9 +21,9 @@ export default function FinanceDesk({
       </header>
       <div className="flex flex-wrap gap-2">
         {TABS.map(([id, label, href]) => (
-          <a key={id} href={href} className={id === active ? "btn-primary" : "btn-secondary"}>
+          <Link key={id} href={href} className={id === active ? "btn-primary" : "btn-secondary"}>
             {label}
-          </a>
+          </Link>
         ))}
       </div>
       {children}

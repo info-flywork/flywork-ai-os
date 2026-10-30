@@ -1,0 +1,2 @@
+ALTER TABLE `PanelAlertRead` ADD COLUMN `dismissed` BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE `PanelAlertRead` ADD COLUMN `signature` VARCHAR(64) NULL;

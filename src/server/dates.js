@@ -39,3 +39,16 @@ export function formatIstanbulDateTime(value) {
     hourCycle: "h23",
   }).format(value);
 }
+
+// MySQL DATETIME İstanbul duvar saatidir. Sürücü bu rakamları UTC anı gibi okur.
+export function formatMysqlDateTime(value) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(value);
+}

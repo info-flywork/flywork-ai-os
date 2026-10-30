@@ -326,7 +326,7 @@ describe.skipIf(!databaseReady)("telegram altyapısı", () => {
         active: true,
       },
     });
-    const job = await db.automationJob.findUnique({ where: { key: "invoice.morning" } });
+    const job = await db.automationJob.findUnique({ where: { key: "invoice.daily" } });
     if (!job) {
       throw new Error("Fatura tarama görevi yok.");
     }

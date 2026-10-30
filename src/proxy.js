@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 
 
 export function proxy(request) {
+  const host = request.headers.get("host")?.split(":")[0] ?? "";
+  if (host === "apppanel.localhost") {
+    return NextResponse.next();
+  }
+
   const { pathname } = request.nextUrl;
   if (pathname === "/giris") {
     return NextResponse.next();
@@ -22,7 +27,8 @@ export function proxy(request) {
   const leavePage = pathname === "/izin" || pathname.startsWith("/izin/");
   const taskPage = pathname === "/is-takibi" || pathname.startsWith("/is-takibi/");
   const feedbackPage = pathname === "/oneri" || pathname.startsWith("/oneri/");
-  if ((mealOnly && !mealPage) || (staff && !mealPage && !leavePage && !taskPage && !feedbackPage)) {
+  const productPage = pathname === "/urunler" || pathname.startsWith("/urunler/");
+  if ((mealOnly && !mealPage) || (staff && !mealPage && !leavePage && !taskPage && !feedbackPage && !productPage)) {
     const url = request.nextUrl.clone();
     url.pathname = "/yemek-yonetimi";
     url.search = "";

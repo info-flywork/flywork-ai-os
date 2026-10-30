@@ -55,7 +55,7 @@ export async function pushInvoiceScan(db, report) {
       dedupeKey: `invoice.ask:${item.reviewId}`,
       kind: "invoice.ask",
       text: formatInvoiceQuestion(item),
-      buttons: item.canApprove ? invoiceDecisionButtons(item.reviewId) : undefined,
+      buttons: invoiceDecisionButtons(item.reviewId),
     })),
   ];
   if (report.retryable > 0 || report.errors.length > 0) {

@@ -23,6 +23,7 @@ import {
 
 } from "@/server/meals/schedule";
 import { publicHoliday } from "@/server/meals/holidays";
+import { LEAVE_ABSENCE_NOTE, markMenuAbsentForApprovedLeave } from "@/server/meals/leaveAbsence";
 import { planMenuRevision } from "@/server/meals/menuRevision";
 import { parseCatalogPrice } from "@/server/meals/importCatalog";
 import { resolveMealSelection } from "@/server/meals/selection";
@@ -257,6 +258,9 @@ export async function saveMealMenu(actor, input) {
         },
         include: { items: { orderBy: { sortOrder: "asc" } } },
       });
+      if (data.published) {
+        await markMenuAbsentForApprovedLeave(db, { id: menu.id, date: data.date });
+      }
       return serializeMenu(menu, true);
     }
 
@@ -269,6 +273,9 @@ export async function saveMealMenu(actor, input) {
       },
       include: { items: { orderBy: { sortOrder: "asc" } } },
     });
+    if (data.published) {
+      await markMenuAbsentForApprovedLeave(db, { id: menu.id, date: data.date });
+    }
     return serializeMenu(menu, true);
   });
 }
@@ -610,7 +617,7 @@ export async function getEmployeeMealView(actor, now = new Date()) {
               sideItemId: order.sideItemId,
               dessertItemId: order.dessertItemId,
               absent: order.absent,
-              note: order.note,
+              note: order.note === LEAVE_ABSENCE_NOTE ? "" : order.note,
               status: order.status,
             }
           : null,
@@ -1096,6 +1103,9 @@ export async function publishCatalogMenu(actor, input, now = new Date()) {
         },
         select: { id: true, published: true },
       });
+      if (data.published) {
+        await markMenuAbsentForApprovedLeave(db, { id: menu.id, date: data.date });
+      }
       return { ...menu, conflicts: []  };
     }
 
@@ -1165,6 +1175,9 @@ export async function publishCatalogMenu(actor, input, now = new Date()) {
       });
     });
 
+    if (data.published) {
+      await markMenuAbsentForApprovedLeave(db, { id: existing.id, date: data.date });
+    }
     return { id: existing.id, published: data.published, conflicts: plan.conflicts };
   });
 }

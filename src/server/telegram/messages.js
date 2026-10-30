@@ -106,15 +106,50 @@ export function formatInvoiceQuestion(input
     input.number.trim() || "Numara yok",
     input.amount ? moneyLabel(input.amount, input.currency) : "Tutar belirsiz",
     input.reason,
-    "Onaylarsan işlenir.",
+    "Onayla, Reddet ya da Evet fatura yaz.",
   ].join("\n");
 }
 
 export function invoiceDecisionButtons(reviewId) {
   return [[
     { text: "Onayla", data: `yi:${reviewId}` },
-    { text: "Fatura değil", data: `yn:${reviewId}` },
+    { text: "Reddet", data: `yn:${reviewId}` },
   ]];
+}
+
+export function workReplyCallback(taskId) {
+  return `wc:${taskId}`;
+}
+
+export function parseWorkReplyCallback(data) {
+  const match = data.match(/^wc:([a-z0-9]{8,32})$/i);
+  if (!match) {
+    return null;
+  }
+  return { taskId: match[1] };
+}
+
+export function formatWorkReplyPrompt(title, names) {
+  const clean = title.replace(/\s+/g, " ").trim();
+  const short = clean.length > 120 ? `${clean.slice(0, 117)}...` : clean;
+  return [
+    "Cevabını yaz.",
+    short,
+    "Etiket için @ ve adı olduğu gibi yaz.",
+    ...names.slice(0, 20).map((name) => `@${name}`),
+    "Vazgeçmek için /vazgec yaz.",
+  ].join("\n");
+}
+
+export function parseInvoiceReply(text) {
+  const value = text.trim().toLocaleLowerCase("tr").replace(/[,.!;]+/g, " ").replace(/\s+/g, " ").trim();
+  if (/^evet(\s+fatura)?$/.test(value) || /^onay(la|lıyorum)?$/.test(value)) {
+    return "approve";
+  }
+  if (/^(hayır|hayir|reddet)$/.test(value) || /^fatura\s+(değil|degil)$/.test(value)) {
+    return "reject";
+  }
+  return null;
 }
 
 export function parseInvoiceCallback(data) {

@@ -1,24 +1,26 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  Bell,
   CalendarDays,
   CheckCircle2,
-  Cpu,
   FileText,
   Receipt,
   XCircle,
 } from "lucide-react";
+import DashboardRefresh from "@/components/dashboard/DashboardRefresh";
+import TaskHome from "@/components/dashboard/TaskHome";
 import EmptyState from "@/components/ui/EmptyState";
-import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
 import { getDashboardSummary } from "@/server/dashboard/summary";
+import { getWorkPulse } from "@/server/dashboard/workPulse";
 import { toPublicError } from "@/server/errors";
 import { listAlerts } from "@/server/services/alerts";
 import { syncTechnologyNotices } from "@/server/services/technology";
 import { TECHNOLOGY_DRAFTS } from "@/server/technology/drafts";
+
 export const instant = false;
 
 const LEAVE_LABELS = {
@@ -33,7 +35,7 @@ const RUN_TONE = {
   FAILED: "bad",
   RUNNING: "info",
   WAITING_CONNECTION: "warn",
-} ;
+};
 
 const RUN_LABELS = {
   RUNNING: "Çalışıyor",
@@ -41,13 +43,6 @@ const RUN_LABELS = {
   FAILED: "Hatalı",
   WAITING_CONNECTION: "Bağlantı bekleniyor",
 };
-
-function alertIcon(key) {
-  if (key.startsWith("invoice.review:")) return <FileText size={18} />;
-  if (key.startsWith("leave.request:")) return <CalendarDays size={18} />;
-  if (key.startsWith("technology.draft:")) return <Cpu size={18} />;
-  return <Bell size={18} />;
-}
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("tr-TR", {
@@ -60,60 +55,51 @@ function currencyName(code) {
   return code === "TRY" ? "TL" : code;
 }
 
-function todayLabel() {
-  return new Intl.DateTimeFormat("tr-TR", {
-    timeZone: "Europe/Istanbul",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    weekday: "long",
-  }).format(new Date());
-}
-
 export default async function DashboardPage() {
   const user = await requireUser();
-  if (user.role !== "ADMIN") {
-    redirect("/yemek-yonetimi");
-  }
-  let summary = null;
-  let message = "Özet okunamadı.";
-  try {
-    if (user.role === "ADMIN") {
-      await syncTechnologyNotices(user);
-    }
-    summary = await getDashboardSummary(user);
-  } catch (error) {
-    message = toPublicError(error).message;
-  }
-
-  if (!summary) {
-    return (
-      <div>
-        <PageHeader title="Dashboard" />
-        <p>{message}</p>
-      </div>
-    );
-  }
-
-  const company = summary.scope === "company";
-  let alertCount = 0;
-  let alerts = [];
-  try {
-    const monthAlerts = await listAlerts(user, new Date(), summary.month);
-    alerts = monthAlerts.slice(0, 6);
-    alertCount = monthAlerts.filter((alert) => !alert.read).length;
-  } catch {
-    alertCount = 0;
-  }
-  const expenseRows = summary.monthlyExpenses.filter((row) => row.count > 0);
+  redirectMealOnlyUser(user);
+  const admin = user.role === "ADMIN";
+  const [pulseResult, alertResult, summaryResult] = await Promise.all([
+    getWorkPulse(user).then((value) => ({ ok: true, value })).catch((error) => ({ ok: false, message: toPublicError(error).message })),
+    listAlerts(user).then((value) => ({ ok: true, value })).catch(() => ({ ok: false })),
+    admin
+      ? Promise.all([
+          syncTechnologyNotices(user).catch(() => undefined),
+          getDashboardSummary(user),
+        ]).then(([, value]) => ({ ok: true, value })).catch((error) => ({ ok: false, message: toPublicError(error).message }))
+      : Promise.resolve(null),
+  ]);
+  const pulse = pulseResult.ok ? pulseResult.value : null;
+  const pulseMessage = pulseResult.ok ? "" : pulseResult.message;
+  const alertCount = alertResult.ok
+    ? alertResult.value.filter((alert) => alert.level === "action" && !alert.read).length
+    : 0;
+  const summary = summaryResult?.ok ? summaryResult.value : null;
+  const summaryMessage = summaryResult && !summaryResult.ok ? summaryResult.message : "Finans özeti okunamadı.";
 
   return (
     <div>
-      <PageHeader
-        title="Dashboard"
-        description={company ? undefined : "Yalnızca sizin kayıtlarınız."}
-        actions={<p className="text-sm text-slate-400">{todayLabel()}</p>}
-      />
+      <DashboardRefresh />
+      {pulse ? <TaskHome pulse={pulse} alertCount={alertCount} /> : <p>{pulseMessage}</p>}
+      {user.role === "ADMIN" ? <FinanceOps summary={summary} message={summaryMessage} /> : null}
+    </div>
+  );
+}
+
+function FinanceOps({ summary, message }) {
+  if (!summary) {
+    return (
+      <section className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold">Finans ve Operasyon</h2>
+        <p>{message}</p>
+      </section>
+    );
+  }
+  const company = summary.scope === "company";
+  const expenseRows = summary.monthlyExpenses.filter((row) => row.count > 0);
+  return (
+    <section className="mt-8">
+      <h2 className="mb-3 text-lg font-semibold">Finans ve Operasyon</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           href="/harcama"
@@ -156,36 +142,9 @@ export default async function DashboardPage() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <section className="panel-card xl:col-span-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-base font-semibold">
-              <Bell size={18} className="text-slate-500" />
-              Bildirimler
-              {alertCount > 0 ? <span className="rounded-full bg-[#ff5a5f] px-1.5 text-xs text-white">{alertCount}</span> : null}
-            </h2>
-            <Link className="text-sm font-semibold text-[#03624c]" href="/bildirimler">Tümünü gör</Link>
-          </div>
-          {alerts.length === 0 ? <EmptyState title="Açık bildirim yok." icon={<Bell size={28} />} /> : (
-            <ul>
-              {alerts.map((alert) => (
-                <li key={alert.key} className="border-b border-slate-100 last:border-b-0">
-                  <Link href={alert.href} className="flex items-center gap-3 py-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-500">{alertIcon(alert.key)}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">{alert.title}</span>
-                      <span className="block truncate text-sm text-slate-500">{alert.body}</span>
-                    </span>
-                    <span className={`h-2.5 w-2.5 rounded-full ${alert.read ? "bg-sky-400" : "bg-[#ff5a5f]"}`} aria-hidden="true" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
         <section className="panel-card xl:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold">{summary.month} giderleri</h2>
+            <h3 className="text-base font-semibold">{summary.month} giderleri</h3>
             <Link className="text-sm font-semibold text-[#03624c]" href="/harcama">Detayı gör</Link>
           </div>
           {expenseRows.length === 0 ? (
@@ -198,30 +157,14 @@ export default async function DashboardPage() {
             </ul>
           )}
           <p className="mt-1 text-sm text-slate-400">Yalnızca bu ay. Para birimleri birbirine çevrilmez.</p>
-          <ul className="mt-5 space-y-3 text-sm">
-            {summary.monthlyExpenses.filter((row) => row.count > 0).map((row) => (
-              <li key={row.currency} className="flex items-center justify-between">
-                <span className="text-slate-500">{currencyName(row.currency)}</span>
-                <span className="tabular-nums">{formatMoney(row.total)} · {row.count} kayıt</span>
-              </li>
-            ))}
-          </ul>
         </section>
-      </div>
-
-      <div className={`mt-4 grid grid-cols-1 gap-4 ${company ? "lg:grid-cols-2" : ""}`}>
-        <section className="panel-card">
+        <section className="panel-card xl:col-span-3">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-base font-semibold"><CalendarDays size={18} /> Bekleyen izinler</h2>
+            <h3 className="flex items-center gap-2 text-base font-semibold"><CalendarDays size={18} /> Bekleyen izinler</h3>
             <Link className="text-sm font-semibold text-[#03624c]" href="/izin">Tümünü gör</Link>
           </div>
           {summary.leave.requests.length === 0 ? (
-            <EmptyState
-              title={`${summary.leave.pending} talep bekliyor`}
-              body="Bekleyen izin talebi yok."
-              icon={<CalendarDays size={32} />}
-              action={<Link className="btn-primary" href="/izin">Yeni izin talebi</Link>}
-            />
+            <EmptyState title="Bekleyen izin talebi yok." icon={<CalendarDays size={32} />} />
           ) : (
             <ul className="space-y-2 text-sm">
               {summary.leave.requests.map((request) => (
@@ -233,44 +176,44 @@ export default async function DashboardPage() {
             </ul>
           )}
         </section>
+      </div>
 
-        {company ? (
-          <section className="panel-card">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-base font-semibold">Yaklaşan yenilemeler</h2>
-              <Link className="text-sm font-semibold text-[#03624c]" href="/teknoloji">Tümünü gör</Link>
-            </div>
-            {summary.upcomingRenewals.length === 0 ? (
-              <p className="text-sm text-slate-500">Önümüzdeki 30 günde kayıtlı yenileme yok.</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {summary.upcomingRenewals.map((item) => (
-                  <li key={item.id}>{item.name}: {item.renewsOn} ({item.daysUntil} gün)</li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-2 text-sm text-slate-500">Geciken ödeme: {summary.overdueRenewals}.</p>
-            <ul className="mt-3 space-y-2">
-              {TECHNOLOGY_DRAFTS.map((draft) => (
-                <li key={draft.id}>
-                  <Link href={`/teknoloji?taslak=${draft.id}`} className="flex items-center justify-between rounded-xl px-1 py-2 hover:bg-slate-50">
-                    <span>
-                      <span className="block text-sm font-semibold">{draft.name}</span>
-                      <span className="block text-xs text-slate-500">{draft.known[0]}</span>
-                    </span>
-                    <StatusBadge tone="warn">Taslak</StatusBadge>
-                  </Link>
-                </li>
+      {company ? (
+        <section className="panel-card mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-base font-semibold">Yaklaşan yenilemeler</h3>
+            <Link className="text-sm font-semibold text-[#03624c]" href="/teknoloji">Tümünü gör</Link>
+          </div>
+          {summary.upcomingRenewals.length === 0 ? (
+            <p className="text-sm text-slate-500">Önümüzdeki 30 günde kayıtlı yenileme yok.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {summary.upcomingRenewals.map((item) => (
+                <li key={item.id}>{item.name}: {item.renewsOn} ({item.daysUntil} gün)</li>
               ))}
             </ul>
-          </section>
-        ) : null}
-      </div>
+          )}
+          <p className="mt-2 text-sm text-slate-500">Geciken ödeme: {summary.overdueRenewals}.</p>
+          <ul className="mt-3 space-y-2">
+            {TECHNOLOGY_DRAFTS.map((draft) => (
+              <li key={draft.id}>
+                <Link href={`/teknoloji?taslak=${draft.id}`} className="flex items-center justify-between rounded-xl px-1 py-2 hover:bg-slate-50">
+                  <span>
+                    <span className="block text-sm font-semibold">{draft.name}</span>
+                    <span className="block text-xs text-slate-500">{draft.known[0]}</span>
+                  </span>
+                  <StatusBadge tone="warn">Taslak</StatusBadge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {company && summary.recentRuns ? (
         <section className="panel-card mt-4">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Son otomasyon çalışmaları</h2>
+            <h3 className="text-base font-semibold">Son otomasyon çalışmaları</h3>
             <Link className="text-sm font-semibold text-[#03624c]" href="/otomasyon">Tümünü gör</Link>
           </div>
           {summary.recentRuns.length === 0 ? <EmptyState title="Henüz çalışma yok." /> : (
@@ -283,13 +226,13 @@ export default async function DashboardPage() {
                     <p className="truncate text-sm text-slate-500">{run.error ?? run.summary}</p>
                   </div>
                   <p className="text-sm text-slate-400">{run.startedAt}</p>
-                  <StatusBadge tone={RUN_TONE[run.state ] ?? "neutral"}>{RUN_LABELS[run.state] ?? run.state}</StatusBadge>
+                  <StatusBadge tone={RUN_TONE[run.state] ?? "neutral"}>{RUN_LABELS[run.state] ?? run.state}</StatusBadge>
                 </li>
               ))}
             </ul>
           )}
         </section>
       ) : null}
-    </div>
+    </section>
   );
 }

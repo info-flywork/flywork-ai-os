@@ -6,8 +6,15 @@ import {
   formatMailSummary,
   formatMealReminder,
   formatMealCloseMessage,
+  formatInvoiceQuestion,
   formatPendingLeaveApprovals,
+  invoiceDecisionButtons,
   leaveApprovalButtons,
+  formatWorkReplyPrompt,
+  parseInvoiceCallback,
+  parseInvoiceReply,
+  parseWorkReplyCallback,
+  workReplyCallback,
   leaveCallback,
   parseLeaveCallback,
   parseTelegramCommand,
@@ -68,6 +75,30 @@ describe("telegram kuralları", () => {
     expect(summary).toBe("Akşam posta özeti\nYanıt bekleyen\nAda · Teklif\nPosta değiştirilmedi.");
     expect(summary).not.toContain("@");
     expect(formatMailSummary("Sabah", { important: [], pendingReplies: [], tasks: [] })).toContain("Yeni posta yok.");
+    const question = formatInvoiceQuestion({
+      vendor: "Eleven Labs Inc.",
+      fileName: "eleven.pdf",
+      number: "",
+      amount: "44.10",
+      currency: "USD",
+      reason: "Eksik veya belirsiz: Fatura numarası, Vergi.",
+    });
+    expect(question).toContain("Bu belge fatura mı?");
+    expect(question).toContain("Evet fatura yaz.");
+    const invoiceButtons = invoiceDecisionButtons("cm1234567890abcd");
+    expect(invoiceButtons[0].map((button) => button.text)).toEqual(["Onayla", "Reddet"]);
+    expect(parseInvoiceCallback(invoiceButtons[0][0].data)).toEqual({ decision: "approve", reviewId: "cm1234567890abcd" });
+    expect(parseInvoiceCallback(invoiceButtons[0][1].data)?.decision).toBe("reject");
+    expect(parseInvoiceReply("Evet fatura")).toBe("approve");
+    expect(parseInvoiceReply("Reddet")).toBe("reject");
+    expect(parseInvoiceReply("merhaba")).toBeNull();
+    const replyData = workReplyCallback("cm1234567890abcd");
+    expect(parseWorkReplyCallback(replyData)).toEqual({ taskId: "cm1234567890abcd" });
+    expect(parseWorkReplyCallback("yi:cm1234567890abcd")).toBeNull();
+    const prompt = formatWorkReplyPrompt("Maliyet düşümü", ["Furkan Kazım Çam", "Tunahan Avşar"]);
+    expect(prompt).toContain("Cevabını yaz.");
+    expect(prompt).toContain("@Furkan Kazım Çam");
+    expect(prompt).toContain("/vazgec");
     const reminder = formatMealReminder("Tunahan Avşar", "Pazartesi 26.10.2026", "11:00");
     expect(reminder).toContain("Pazartesi 26.10.2026");
     expect(reminder).toContain("Yemek siparişinizi verin ve seçiminizi tamamlayın.");

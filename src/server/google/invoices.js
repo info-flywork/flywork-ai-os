@@ -9,10 +9,12 @@ import {
 } from "@/server/finance/readDocument";
 import { commitReadyReview } from "@/server/finance/commitReview";
 import { queuePendingReview } from "@/server/finance/reviewQueue";
-import { canAutoApprove, emptyDraft, reviewIssues, REVIEW_LABELS } from "@/server/finance/reviewRules";
+import { matchesAutoApprove } from "@/server/finance/autoRule";
+import { emptyDraft, REVIEW_LABELS } from "@/server/finance/reviewRules";
 import { formatIstanbul } from "@/server/automation/schedule";
 import { stringList } from "@/server/jsonList";
-import { GMAIL_QUERIES, listMessageIds } from "@/server/google/gmail";
+import { isOwnCompanyName } from "@/server/finance/ownCompany";
+import { invoiceMailboxQuery, listMessageIds } from "@/server/google/gmail";
 
 
 
@@ -76,15 +78,18 @@ export async function importGmailInvoices(
     imported: [],
     duplicates: [],
     rejected: [],
+    skipped: 0,
+    outgoing: 0,
     errors: [],
     retryable: 0,
     statements: 0,
     driveUploaded: false,
     archivePattern: "Flywork/Faturalar/{yil}/{ay}/{tedarikci}-{fatura-no}.pdf",
   };
+  const autoRule = options.autoRule ?? await db.invoiceAutoRule.findUnique({ where: { id: "default" } });
   const analyze = options.analyze ?? ((bytes, fileName) =>
     analyzeFinanceDocument(bytes, fileName, { useVision: true, fetchImpl: options.fetchImpl }));
-  const messageIds = await listMessageIds(gmail, GMAIL_QUERIES.invoices, INVOICE_LIMIT);
+  const messageIds = await listMessageIds(gmail, invoiceMailboxQuery(options.since), INVOICE_LIMIT);
   for (const messageId of messageIds) {
     try {
       const message = await gmail.listPdfAttachments(messageId);
@@ -94,15 +99,15 @@ export async function importGmailInvoices(
       }
       for (const attachment of message.attachments) {
         const attachmentId = attachment.attachmentId ?? `inline:${attachment.filename}`;
-        report.found += 1;
         if (await alreadySeen(db, messageId, attachmentId)) {
-          report.duplicates.push({ messageId, number: "", vendor: "" });
+          report.skipped += 1;
           continue;
         }
+        report.found += 1;
         const bytes = attachment.data ?? (attachment.attachmentId
           ? await gmail.getAttachment(messageId, attachment.attachmentId)
           : Buffer.alloc(0));
-        await importOne(db, analyze, report, options.commitActorId, {
+        await importOne(db, analyze, report, options.commitActorId, autoRule, {
           messageId,
           threadId: message.threadId,
           attachmentId,
@@ -144,6 +149,7 @@ async function alreadySeen(db, messageId, attachmentId) {
 
 async function rememberAbsence(db, report, messageId, threadId) {
   if (await alreadySeen(db, messageId, "")) {
+    report.skipped += 1;
     return;
   }
   await remember(db, {
@@ -193,6 +199,7 @@ async function importOne(
   analyze,
   report,
   commitActorId,
+  autoRule,
   input
 
 
@@ -231,6 +238,10 @@ async function importOne(
     return;
   }
   const preview = readFinanceDocument(input.bytes, input.fileName);
+  if (isOwnCompanyName(preview.fields?.vendor)) {
+    await markOutgoing(db, report, input, preview.fields.vendor ?? "");
+    return;
+  }
   if (preview.kind === "STATEMENT") {
     await keepStatement(db, report, input, preview);
     return;
@@ -255,6 +266,10 @@ async function importOne(
   }
   const vendor = reading.fields.vendor ?? "";
   const number = reading.fields.number ?? "";
+  if (isOwnCompanyName(vendor)) {
+    await markOutgoing(db, report, input, vendor);
+    return;
+  }
   const identity = await knownIdentity(db, vendor, number);
   if (identity) {
     await duplicate(number, vendor, identity);
@@ -308,8 +323,8 @@ async function importOne(
   const savedDraft = { ...draft };
   const missingFields = stringList(stored.missingFields);
   const uncertainFields = stringList(stored.uncertainFields);
-  if (commitActorId && canAutoApprove(savedDraft, missingFields, uncertainFields)) {
-    const committed = await commitReadyReview(db, stored.id, commitActorId);
+  if (commitActorId && matchesAutoApprove(autoRule, savedDraft, missingFields, uncertainFields)) {
+    const committed = await commitReadyReview(db, stored.id, commitActorId, "AUTO_APPROVE");
     if (committed === "approved" || committed === "drive-failed") {
       report.processed.push({
         reviewId: stored.id,
@@ -323,7 +338,6 @@ async function importOne(
       return;
     }
   }
-  const filled = { ...savedDraft, documentType: savedDraft.documentType || "INVOICE" };
   const reason = savedDraft.documentType !== "INVOICE" && savedDraft.documentType !== "RECEIPT"
     ? "Belgenin fatura olup olmadığı belirsiz."
     : `Eksik veya belirsiz: ${[...missingFields, ...uncertainFields].map((field) => REVIEW_LABELS[field ] ?? field).join(", ") || "alanlar"}.`;
@@ -335,10 +349,20 @@ async function importOne(
     currency: stored.currency ?? "",
     fileName: stored.fileName,
     reason,
-    canApprove: reviewIssues(filled).length === 0,
   });
   report.queued += 1;
   report.imported.push({ messageId: input.messageId, number, vendor });
+}
+
+async function markOutgoing(db, report, input, vendor) {
+  await remember(db, {
+    gmailMessageId: input.messageId,
+    attachmentId: input.attachmentId,
+    threadId: input.threadId,
+    outcome: "OUTGOING",
+  });
+  report.outgoing += 1;
+  console.info(`Giden fatura gider listesine eklenmedi: ${vendor || input.fileName}`);
 }
 
 async function keepStatement(
@@ -421,5 +445,7 @@ export function invoiceSummary(report) {
     return "Fatura taraması beklemede. Posta okunmadı ve dosya Drive'a yüklenmedi.";
   }
   const error = report.retryable > 0 ? " Görsel analiz yeniden denenecek." : "";
-  return `Bulunan ${report.found}, işlenen ${report.processed.length}, onay bekleyen ${report.queued}, ekstre ${report.statements}, mükerrer ${report.duplicates.length}, elenen ${report.rejected.length}.${error}`;
+  const outgoing = report.outgoing > 0 ? ` Giden fatura ${report.outgoing}.` : "";
+  const handled = report.processed.length + (report.queued ?? 0);
+  return `Yeni bulunan ${report.found}, işlenen ${handled}, atlanan ${report.skipped ?? 0}, hata ${report.errors.length}.${outgoing}${error}`;
 }

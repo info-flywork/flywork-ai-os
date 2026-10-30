@@ -2,7 +2,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Prisma } from "@/generated/prisma/client";
 import { dateOnly, toIsoDate } from "@/server/dates";
+import { presetCardCharge } from "@/server/finance/cards";
 import { vendorKey } from "@/server/finance/catalog";
+import { isOwnCompanyName } from "@/server/finance/ownCompany";
 import { planDriveArchive } from "@/server/finance/google";
 import {
   canAutoApprove,
@@ -30,6 +32,7 @@ export async function ensureInvoiceExpense(
     return;
   }
   const vendor = draft.vendor.trim();
+  const charge = presetCardCharge(vendor);
   await db.expense.create({
     data: {
       userId: actorId,
@@ -39,7 +42,8 @@ export async function ensureInvoiceExpense(
       vendor: vendor || null,
       amount: draft.amount,
       currency: draft.currency,
-      paymentMethod: "OTHER",
+      paymentMethod: charge.paymentMethod,
+      accountLabel: charge.accountLabel,
       spentOn: dateOnly(draft.issuedOn),
       status: "APPROVED",
       reimbursement: "NOT_REQUIRED",
@@ -101,9 +105,9 @@ async function uploadPdf(db, folder, fileName, bytes) {
   return drive.uploadPdf(fileName, parentId, bytes);
 }
 
-export async function commitReadyReview(db, reviewId, actorId) {
+export async function commitReadyReview(db, reviewId, actorId, auditAction = "APPROVE") {
   const review = await db.invoiceReview.findUnique({ where: { id: reviewId } });
-  if (!review || review.documentType === "STATEMENT" || review.status === "REJECTED") {
+  if (!review || review.documentType === "STATEMENT" || review.status === "REJECTED" || isOwnCompanyName(review.vendor)) {
     return "skipped";
   }
   if (review.status === "APPROVED" || review.driveFileId) {
@@ -132,6 +136,7 @@ export async function commitReadyReview(db, reviewId, actorId) {
             source: "UPLOAD",
             status: "ISSUED",
             note: draft.documentType === "RECEIPT" ? "Fiş" : null,
+            ...presetCardCharge(draft.vendor),
           },
         });
         await tx.invoiceDocument.create({
@@ -176,7 +181,7 @@ export async function commitReadyReview(db, reviewId, actorId) {
       data: { status: "APPROVED", archived: true, driveFileId, driveError: null },
     });
     await db.invoiceReviewAudit.create({
-      data: { reviewId: review.id, actorId, action: "APPROVE", corrections: {} },
+      data: { reviewId: review.id, actorId, action: auditAction, corrections: {} },
     });
     return "approved";
   } catch {

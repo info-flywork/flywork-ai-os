@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatWorkDeadlineReminder, reminderKind, taskDeadline } from "@/lib/workDeadline";
-import { workCardNotice, workCommentNotice, workNoticeRecipients } from "@/server/work/notify";
+import { commentNoticeRecipients, workCardNotice, workCommentNotice, workNoticeRecipients } from "@/server/work/notify";
 
 const task = {
   dueOn: "2026-10-26",
@@ -39,15 +39,17 @@ describe("görev bitiş hatırlatması", () => {
     })).toContain("6 saat kaldı");
   });
 
-  it("kart, yorum ve etiket mesajını işlemi yapan kişiye yazmaz", () => {
-    expect(workNoticeRecipients(["a", "b", "a"], "a")).toEqual(["b"]);
+  it("kendine atanan kart ve kendi etiketi bildirim gider, yazdığı yorum yankılanmaz", () => {
+    expect(workNoticeRecipients(["a", "b", "a"])).toEqual(["a", "b"]);
+    expect(commentNoticeRecipients(["a"], [], "a")).toEqual([]);
+    expect(commentNoticeRecipients(["a", "b"], ["a"], "a")).toEqual(["b", "a"]);
     expect(workCardNotice("Tunahan Avşar", "deneme")).toBe("Tunahan Avşar bir iş kartı açtı\ndeneme");
     expect(workCommentNotice({
       actor: "Sena Özyiğit",
       title: "deneme",
       body: "buna bakar mısın",
       mentioned: false,
-    })).toBe("Sena Özyiğit bir yorum yazdı\ndeneme\nbuna bakar mısın");
+    })).toBe("Sena Özyiğit bir yorum yazdı\ndeneme\nbuna bakar mısın\nCevaplamak için Cevapla'ya bas.");
     expect(workCommentNotice({
       actor: "Sena Özyiğit",
       title: "deneme",

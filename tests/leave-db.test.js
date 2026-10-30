@@ -69,6 +69,7 @@ describe.skipIf(!databaseReady)("izin veritabanı", () => {
       for (const document of documents) {
         await removeLeaveFile(document.storageKey);
       }
+      await db.mealOrder.deleteMany({ where: { userId: { in: userIds } } });
       await db.leaveRequest.deleteMany({ where: { userId: { in: userIds } } });
       await db.leaveBalance.deleteMany({ where: { userId: { in: userIds } } });
       await db.leaveAudit.deleteMany({ where: { userId: { in: userIds } } });

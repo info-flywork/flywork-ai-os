@@ -77,6 +77,19 @@ export function validCurrency(value) {
   return (CURRENCIES ).includes(value);
 }
 
+export function confirmedInvoiceDraft(draft, reviewId, today) {
+  const suffix = reviewId.replace(/[^a-z0-9]/gi, "").slice(-8) || "belge";
+  return {
+    vendor: draft.vendor.trim(),
+    number: draft.number.trim() || `EK-${suffix}`,
+    issuedOn: validDate(draft.issuedOn.trim()) ? draft.issuedOn.trim() : today,
+    amount: draft.amount.trim(),
+    currency: draft.currency.trim().toUpperCase(),
+    tax: validTax(draft.tax.trim()) ? draft.tax.trim() : "",
+    documentType: draft.documentType === "RECEIPT" ? "RECEIPT" : "INVOICE",
+  };
+}
+
 export function canAutoApprove(draft, missing, uncertain) {
   if (missing.length > 0 || uncertain.length > 0) {
     return false;

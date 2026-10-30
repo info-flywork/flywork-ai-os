@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import Link from "next/link";
+import { useActionState, useFormStatus } from "react";
 import Notice from "@/components/Notice";
 import { LeaveRequestDesk } from "@/components/leave/EmployeeLeave";
 import {
@@ -112,6 +113,15 @@ function remainingText(value) {
 
 function tabHref(tab) {
   return `/izin?sekme=${tab}`;
+}
+
+function BusyButton({ children, pendingLabel, className }) {
+  const { pending } = useFormStatus();
+  return (
+    <button className={className} type="submit" disabled={pending}>
+      {pending ? pendingLabel : children}
+    </button>
+  );
 }
 
 function StateForm({
@@ -232,13 +242,13 @@ function RequestCard({ request, canReview }) {
               <input type="checkbox" name="balanceException" />
               Bakiye yetersiz olsa da onayla
             </label>
-            <button className="btn-primary" type="submit">Onayla</button>
+            <BusyButton className="btn-primary" pendingLabel="Onaylanıyor…">Onayla</BusyButton>
           </StateForm>
           <StateForm action={reviewLeaveAction}>
             <input type="hidden" name="requestId" value={request.id} />
             <input type="hidden" name="decision" value="REJECTED" />
             <input name="reviewNote" required minLength={2} placeholder="Ret gerekçesi" className="field" />
-            <button className="btn-secondary" type="submit">Reddet</button>
+            <BusyButton className="btn-secondary" pendingLabel="Kaydediliyor…">Reddet</BusyButton>
           </StateForm>
         </div>
       ) : null}
@@ -285,9 +295,9 @@ export default function AdminLeave({
       </header>
       <div className="flex flex-wrap gap-2">
         {TABS.map(([id, label]) => (
-          <a key={id} className={id === view.tab ? "btn-primary" : "btn-secondary"} href={tabHref(id)}>
+          <Link key={id} className={id === view.tab ? "btn-primary" : "btn-secondary"} href={tabHref(id)}>
             {label}
-          </a>
+          </Link>
         ))}
       </div>
 
@@ -303,7 +313,7 @@ export default function AdminLeave({
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {view.roster.map((row) => (
-                  <a key={row.id} className="panel-card flex min-h-44 flex-col justify-between no-underline hover:border-[#03624c]" href={`/izin?sekme=ozet&calisan=${row.id}`}>
+                  <Link key={row.id} className="panel-card flex min-h-44 flex-col justify-between no-underline hover:border-[#03624c]" href={`/izin?sekme=ozet&calisan=${row.id}`}>
                     <span>
                       <span className="block text-lg font-semibold text-slate-900">{row.name}</span>
                       {row.startedOn ? (
@@ -324,7 +334,7 @@ export default function AdminLeave({
                         <span className={`mt-1 block font-semibold text-slate-900 ${row.remainingDays === null ? "text-base" : "text-2xl"}`}>{remainingText(row.remainingDays)}</span>
                       </span>
                     </span>
-                  </a>
+                  </Link>
                 ))}
               </div>
             )}
@@ -333,7 +343,7 @@ export default function AdminLeave({
 
         {view.tab === "ozet" && person ? (
           <div className="panel-card">
-            <a className="text-sm font-semibold text-[#03624c] no-underline" href={tabHref("ozet")}>Listeye dön</a>
+            <Link className="text-sm font-semibold text-[#03624c] no-underline" href={tabHref("ozet")}>Listeye dön</Link>
             <div className="mt-3">
               <h3 className="text-lg font-semibold">{person.name}</h3>
               {person.startedOn ? <p className="mt-1 text-sm text-slate-500">İşe başlama: {startLabel(person.startedOn)}</p> : null}

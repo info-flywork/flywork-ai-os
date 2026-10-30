@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import Notice from "@/components/Notice";
 
@@ -185,7 +186,7 @@ function ServiceForm({
       )}
       <div className="flex flex-wrap gap-2 sm:col-span-2">
         <button disabled={pending} className="btn-primary">{pending ? "Kaydediliyor…" : "Kaydet"}</button>
-        {locked ? <a className="btn-secondary" href="/teknoloji">Vazgeç</a> : null}
+        {locked ? <Link className="btn-secondary" href="/teknoloji">Vazgeç</Link> : null}
       </div>
     </form>
   );
@@ -250,7 +251,7 @@ export default function TechnologyBoard({
                   <p className="font-semibold">{row.name}</p>
                   <p className="text-sm text-slate-500">{row.cycle} · Devam ediyor</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <a className="btn-secondary" href={`/teknoloji?odeme=${row.id}`}>Düzenle</a>
+                    <Link className="btn-secondary" href={`/teknoloji?odeme=${row.id}`}>Düzenle</Link>
                     <DeleteButton id={row.id} field="id" remove={deletePaidSubscriptionAction} confirm="Bu abonelik silinsin mi?" />
                   </div>
                 </div>
@@ -288,7 +289,7 @@ export default function TechnologyBoard({
                 </p>
                 {service.note ? <p className="mt-2 text-sm text-slate-600">{service.note}</p> : null}
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <a className="btn-secondary" href={`/teknoloji?kayit=${service.id}`}>Düzenle</a>
+                  <Link className="btn-secondary" href={`/teknoloji?kayit=${service.id}`}>Düzenle</Link>
                   <DeleteButton id={service.id} field="subscriptionId" remove={deleteTechnologyAction} confirm="Bu hizmet silinsin mi?" />
                 </div>
               </article>

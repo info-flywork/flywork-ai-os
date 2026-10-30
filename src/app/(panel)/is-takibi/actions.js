@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
-import { addWorkComment, addWorkImage, addWorkLink, createWorkSpace, deleteWorkImage, deleteWorkLink, deleteWorkTask, moveWorkTask, saveWorkTask, setWorkTaskCompleted } from "@/server/services/work";
+import { addWorkComment, addWorkImage, addWorkLink, createWorkSpace, deleteWorkImage, deleteWorkLink, deleteWorkTask, finishWorkSession, moveWorkTask, saveWorkTask, seeWorkCard, setRevisionItem, setWorkFocus, setWorkTaskCompleted, updateWorkComment } from "@/server/services/work";
 
  
 
@@ -47,6 +47,40 @@ export async function moveTaskAction(input) {
   }
 }
 
+export async function setWorkFocusAction(taskId) {
+  try {
+    const actor = await requireUser();
+    const status = await setWorkFocus(actor, taskId || null);
+    revalidatePath("/is-takibi");
+    const message = status === "paused" ? "İş durduruldu." : status === "resumed" ? "İşe devam ediyorsun." : status === "started" ? "Bu işe başladın." : "Çalışan iş yok.";
+    return { ok: true, message };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function finishWorkAction(taskId) {
+  try {
+    const actor = await requireUser();
+    await finishWorkSession(actor, taskId);
+    revalidatePath("/is-takibi");
+    return { ok: true, message: "İş bitti." };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function setRevisionAction(input) {
+  try {
+    const actor = await requireUser();
+    await setRevisionItem(actor, input);
+    revalidatePath("/is-takibi");
+    return { ok: true, message: "Revize maddesi güncellendi." };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
 export async function setTaskCompletedAction(input) {
   try {
     const actor = await requireUser();
@@ -58,12 +92,34 @@ export async function setTaskCompletedAction(input) {
   }
 }
 
+export async function seeCardAction(taskId) {
+  try {
+    const actor = await requireUser();
+    await seeWorkCard(actor, taskId);
+    revalidatePath("/is-takibi");
+    return { ok: true };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
 export async function addCommentAction(input) {
   try {
     const actor = await requireUser();
     await addWorkComment(actor, input);
     revalidatePath("/is-takibi");
     return { ok: true, message: "Yorum eklendi." };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function updateCommentAction(input) {
+  try {
+    const actor = await requireUser();
+    await updateWorkComment(actor, input);
+    revalidatePath("/is-takibi");
+    return { ok: true, message: "Yorum güncellendi." };
   } catch (error) {
     return finish(error);
   }

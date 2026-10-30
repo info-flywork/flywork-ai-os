@@ -7,11 +7,14 @@ import { toPublicError } from "@/server/errors";
 import {
   createExpense,
   createInvoice,
+  attachInvoiceFile,
+  deleteInvoiceLine,
   importFlyworkInvoiceFile,
   markExpensePaid,
   reviewExpense,
   setExpenseSettlement,
   updateExpense,
+  updateInvoiceLine,
 } from "@/server/services/finance";
 import { runGoogleJobNow } from "@/server/services/automation";
 
@@ -211,6 +214,69 @@ export async function createInvoiceAction(
   }
 }
 
+export async function updateInvoiceLineAction(_state, formData) {
+  try {
+    const actor = await requireUser();
+    const invoiceId = String(formData.get("invoiceId") ?? "");
+    const expenseId = String(formData.get("expenseId") ?? "");
+    await updateInvoiceLine(actor, {
+      invoiceId: invoiceId || undefined,
+      expenseId: expenseId || undefined,
+      vendor: String(formData.get("vendor") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      quantity: String(formData.get("quantity") ?? ""),
+      amount: postedAmount(String(formData.get("amount") ?? "")),
+      currency: String(formData.get("currency") ?? ""),
+      paymentMethod: String(formData.get("paymentMethod") ?? ""),
+      accountLabel: String(formData.get("accountLabel") ?? ""),
+      issuedOn: String(formData.get("issuedOn") ?? ""),
+      person: String(formData.get("person") ?? ""),
+    });
+    refreshFinance();
+    return { ok: true, message: "Satır güncellendi." };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { ok: false, message: toPublicError(error).message };
+  }
+}
+
+export async function attachInvoiceFileAction(_state, formData) {
+  try {
+    const actor = await requireUser();
+    const file = await uploadedFile(formData);
+    if (!file) {
+      return { ok: false, message: "Fatura dosyası seçin." };
+    }
+    await attachInvoiceFile(
+      actor,
+      String(formData.get("invoiceId") ?? ""),
+      String(formData.get("expenseId") ?? ""),
+      file,
+    );
+    refreshFinance();
+    return { ok: true, message: "Fatura eklendi." };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { ok: false, message: toPublicError(error).message };
+  }
+}
+
+export async function deleteInvoiceLineAction(_state, formData) {
+  try {
+    const actor = await requireUser();
+    await deleteInvoiceLine(
+      actor,
+      String(formData.get("invoiceId") ?? ""),
+      String(formData.get("expenseId") ?? ""),
+    );
+    refreshFinance();
+    return { ok: true, message: "Harcama silindi." };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { ok: false, message: toPublicError(error).message };
+  }
+}
+
 export async function scanGmailAction(
   state,
   formData,
@@ -219,7 +285,7 @@ export async function scanGmailAction(
   void formData;
   try {
     const actor = await requireUser();
-    const result = await runGoogleJobNow(actor, "invoice.morning");
+    const result = await runGoogleJobNow(actor, "invoice.daily");
     refreshFinance();
     revalidatePath("/otomasyon");
     return {

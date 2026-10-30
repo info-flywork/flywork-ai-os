@@ -165,6 +165,22 @@ export function addIsoDays(date, days) {
   return value.toISOString().slice(0, 10);
 }
 
+export function mealDispatchDecision(now, scheduledFor, weekdays = DEFAULT_MEAL_WEEKDAYS) {
+  const today = istanbulClock(now);
+  const slot = istanbulClock(scheduledFor ?? now);
+  if (slot.date !== today.date) {
+    return { send: false, summary: "Zamanı geçmiş yemek kaydı gönderilmedi." };
+  }
+  if (publicHoliday(today.date)) {
+    return { send: false, summary: "Resmi tatil. Yemek listesi gönderilmedi." };
+  }
+  const days = (weekdays ?? []).map(Number);
+  if (!days.includes(today.weekday)) {
+    return { send: false, summary: "Bugün yemek günü değil. Liste gönderilmedi." };
+  }
+  return { send: true, date: today.date };
+}
+
 export function orderableMealDates(now, schedule, count) {
   const clock = istanbulClock(now);
   const closes = minutesOfDay(schedule.closesAt);

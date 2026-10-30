@@ -21,6 +21,18 @@ function clientKnowsCurrentUser(client) {
   return names.has("mealOnly") && names.has("approver") && leaveNames.has("settlement");
 }
 
+function clientKnowsAlertDismiss(client) {
+  const model = (client)._runtimeDataModel?.models?.PanelAlertRead;
+  const names = new Set(model?.fields?.map((field) => field.name) ?? []);
+  return names.has("dismissed") && names.has("signature");
+}
+
+function clientKnowsWorkPause(client) {
+  const model = (client)._runtimeDataModel?.models?.WorkSession;
+  const names = new Set(model?.fields?.map((field) => field.name) ?? []);
+  return names.has("pausedAt") && names.has("pausedMs");
+}
+
 function clientMatchesLoadedSchema(client) {
   return (
     client.constructor === PrismaClient &&
@@ -28,10 +40,12 @@ function clientMatchesLoadedSchema(client) {
     "invoiceReview" in client &&
     "expenseAudit" in client &&
     "panelAlertRead" in client &&
+    clientKnowsAlertDismiss(client) &&
     "telegramLink" in client &&
     "telegramUpdateReceipt" in client &&
     "mealCategory" in client &&
     "mealDish" in client &&
+    "mealPhotoBlob" in client &&
     "mealPhotoReview" in client &&
     "mealPhotoLink" in client &&
     "mealGuestOrder" in client &&
@@ -41,12 +55,16 @@ function clientMatchesLoadedSchema(client) {
     "workSpace" in client &&
     "workTask" in client &&
     "workTaskComment" in client &&
+    "workSession" in client &&
+    clientKnowsWorkPause(client) &&
     "feedbackNote" in client &&
-    "telegramLinkRequest" in client
+    "telegramLinkRequest" in client &&
+    "telegramWorkReply" in client &&
+    "workCardSeen" in client
   );
 }
 
-const POOL_VERSION = 2;
+const POOL_VERSION = 8;
 
 export function getPrisma() {
   if (!process.env.DATABASE_URL) {

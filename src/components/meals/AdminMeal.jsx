@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import Notice from "@/components/Notice";
 import AdminOrderDesk from "@/components/meals/AdminOrderDesk";
@@ -239,7 +240,7 @@ export default function AdminMeal({
 
       {tab === "katalog" ? <section className="panel-card">
         <h2 className="section-title">Yemek kataloğu</h2>
-        <a href="/yemek-yonetimi?sekme=fotograflar" className={reviewing ? "btn-primary mb-3" : "btn-secondary mb-3"}>Fotoğraf incelemesi</a>
+        <Link href="/yemek-yonetimi?sekme=fotograflar" className={reviewing ? "btn-primary mb-3" : "btn-secondary mb-3"}>Fotoğraf incelemesi</Link>
         <p className="mb-3 text-sm text-slate-600">
           Katalog bakımı ayrıdır. Gün menüsü yukarıdaki plandan hazırlanır.
         </p>

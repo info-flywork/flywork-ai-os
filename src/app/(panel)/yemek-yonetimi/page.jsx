@@ -54,13 +54,12 @@ export default async function YemekYonetimiPage({
 }
 
 ) {
-  const user = await requireUser();
-  const telegramLinked = await isTelegramLinked(user.id);
-  const params = await searchParams;
+  const [user, params] = await Promise.all([requireUser(), searchParams]);
+  const telegramPromise = isTelegramLinked(user.id);
   const tab = mealTab(params.sekme, user.role);
 
   if (user.role !== "ADMIN") {
-    const view = await getEmployeeMealView(user);
+    const [view, telegramLinked] = await Promise.all([getEmployeeMealView(user), telegramPromise]);
     return (
       <EmployeeMeal
         today={view.today}
@@ -79,12 +78,13 @@ export default async function YemekYonetimiPage({
   const needsAdmin = tab === "bugun" || tab === "plan";
   const needsCatalog = tab === "plan" || tab === "katalog" || params.sekme === "fotograflar";
   const needsSpend = tab === "gunluk" || tab === "aylik";
-  const [view, catalog, orderView, spend, photoReview] = await Promise.all([
+  const [view, catalog, orderView, spend, photoReview, telegramLinked] = await Promise.all([
     needsAdmin ? getAdminMealView(user, date, selectedMode(params.rapor)) : Promise.resolve(null),
     needsCatalog ? listMealCatalog(user) : Promise.resolve([]),
     needsOrder ? getEmployeeMealView(user) : Promise.resolve(null),
     needsSpend ? getMealSpendReport(user, year) : Promise.resolve(null),
     params.sekme === "fotograflar" ? listMealPhotoReviews(user) : Promise.resolve(null),
+    telegramPromise,
   ]);
   const mealView = view ?? {
     today,

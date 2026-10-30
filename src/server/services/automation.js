@@ -1,10 +1,12 @@
 import "server-only";
+import { randomBytes } from "node:crypto";
 import { assertCan } from "@/server/auth/permissions";
 import { connectionReport } from "@/server/automation/connections";
 import { runControlledInvoicePreview } from "@/server/finance/invoicePreview";
-import { ensureAutomationJobs } from "@/server/automation/engine";
+import { isOwnCompanyName } from "@/server/finance/ownCompany";
+import { ensureAutomationJobs, JOB_COOLDOWN_MS, JOB_LOCK_MS } from "@/server/automation/engine";
 import { runInvoiceScan } from "@/server/automation/handlers";
-import { formatIstanbul } from "@/server/automation/schedule";
+import { formatDuration, formatIstanbul, nextOccurrence } from "@/server/automation/schedule";
 import { withDatabase } from "@/server/db";
 import { numberList, stringList } from "@/server/jsonList";
 import { AppError } from "@/server/errors";
@@ -82,6 +84,9 @@ export async function getAutomationPage(actor) {
         summary: run.summary,
         error: run.error,
         startedAt: formatIstanbul(run.startedAt),
+        finishedAt: run.finishedAt ? formatIstanbul(run.finishedAt) : null,
+        duration: formatDuration(run.startedAt, run.finishedAt),
+        stats: runStats(run.report),
       })),
       notices: notices.map((notice) => ({
         id: notice.id,
@@ -100,7 +105,7 @@ export async function getAutomationPage(actor) {
         decisionNote: action.decisionNote,
       })),
       statementCount,
-      invoiceReviews: reviews.map((review) => ({
+      invoiceReviews: reviews.filter((review) => !isOwnCompanyName(review.vendor)).map((review) => ({
         id: review.id,
         status: review.status,
         vendor: review.vendor,
@@ -122,6 +127,27 @@ export async function getAutomationPage(actor) {
 }
 
 
+
+function runStats(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const row = value;
+  const committed = Array.isArray(row.processed) ? row.processed.length : 0;
+  const queued = typeof row.queued === "number" ? row.queued : 0;
+  const errors = Array.isArray(row.errors) ? row.errors.length : 0;
+  if (typeof row.found !== "number" && !Array.isArray(row.processed)) {
+    return null;
+  }
+  return {
+    found: typeof row.found === "number" ? row.found : 0,
+    processed: committed + queued,
+    skipped: typeof row.skipped === "number"
+      ? row.skipped
+      : Array.isArray(row.duplicates) ? row.duplicates.length : 0,
+    errors,
+  };
+}
 
 function asItems(value) {
   if (!Array.isArray(value)) {
@@ -175,6 +201,7 @@ function previewInvoice(value) {
   }
   const row = value ;
   const imported = Array.isArray(row.imported) ? row.imported.length : 0;
+  const committed = Array.isArray(row.processed) ? row.processed.length : 0;
   const duplicates = Array.isArray(row.duplicates) ? row.duplicates.length : 0;
   const rejected = Array.isArray(row.rejected) ? row.rejected.length : 0;
   const errors = Array.isArray(row.errors)
@@ -184,12 +211,38 @@ function previewInvoice(value) {
     scannedAt: typeof row.scannedAt === "string" ? row.scannedAt : null,
     found: typeof row.found === "number" ? row.found : imported + duplicates + rejected,
     queued: typeof row.queued === "number" ? row.queued : imported,
+    processed: committed + (typeof row.queued === "number" ? row.queued : imported),
     imported,
     duplicates,
+    skipped: typeof row.skipped === "number" ? row.skipped : 0,
+    outgoing: typeof row.outgoing === "number" ? row.outgoing : 0,
     rejected,
     errors,
     driveUploaded: row.driveUploaded === true,
   };
+}
+
+export async function setInvoiceScanSchedule(actor, jobId, hour, minute) {
+  assertCan(actor, "automation:write");
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
+    throw new AppError("Saat 00:00 ile 23:59 arasında olmalı.", "VALIDATION", 400);
+  }
+  return withDatabase(async (db) => {
+    const job = await db.automationJob.findUnique({ where: { id: jobId } });
+    if (!job || job.key !== "invoice.daily") {
+      throw new AppError("Günlük fatura taraması bulunamadı.", "NOT_FOUND", 404);
+    }
+    const now = new Date();
+    if (job.lockToken && job.lockedUntil && job.lockedUntil > now) {
+      return { ok: false, code: "kilit" };
+    }
+    const slot = nextOccurrence({ weekdays: [], hour, minute }, now);
+    await db.automationJob.update({
+      where: { id: job.id },
+      data: { hour, minute, nextRunAt: slot, scheduledFor: slot },
+    });
+    return { ok: true };
+  });
 }
 
 export async function setAutomationJobState(actor, jobId, state) {
@@ -248,7 +301,7 @@ export async function previewInvoiceReader(actor) {
 
 export async function runGoogleJobNow(actor, key) {
   assertCan(actor, "automation:write");
-  if (key !== "invoice.morning") {
+  if (key !== "invoice.daily") {
     throw new AppError("Posta özeti kapalı. Yalnızca faturalar taranır.", "VALIDATION", 400);
   }
   return withDatabase(async (db) => {
@@ -257,33 +310,70 @@ export async function runGoogleJobNow(actor, key) {
     if (!job) {
       throw new AppError("Görev bulunamadı.", "NOT_FOUND", 404);
     }
-    const result = await runInvoiceScan(db);
     const now = new Date();
-    await db.automationRun.create({
+    if (job.lockToken && job.lockedUntil && job.lockedUntil > now) {
+      console.info(`Otomasyon atlandı (${job.key}): aynı görev zaten çalışıyor.`);
+      return { state: "SUCCEEDED", summary: "Fatura taraması zaten çalışıyor. Yeni çalışma atlandı." };
+    }
+    if (job.lastSuccessAt && now.getTime() - job.lastSuccessAt.getTime() < JOB_COOLDOWN_MS) {
+      console.info(`Otomasyon atlandı (${job.key}): son 5 dakika içinde çalıştı.`);
+      return { state: "SUCCEEDED", summary: "Fatura taraması son 5 dakika içinde çalıştı. Yeni çalışma atlandı." };
+    }
+    const token = randomBytes(16).toString("hex");
+    const claimed = await db.automationJob.updateMany({
+      where: {
+        id: job.id,
+        OR: [{ lockToken: null }, { lockedUntil: null }, { lockedUntil: { lt: now } }],
+      },
       data: {
-        jobId: job.id,
-        windowKey: `manual:${now.toISOString()}`,
-        attempt: 1,
-        state: result.state,
-        startedAt: now,
-        finishedAt: now,
-        summary: result.summary,
-        report: result.report ?? undefined,
-        error: result.state === "WAITING_CONNECTION" ? result.summary : null,
+        lockToken: token,
+        lockedUntil: new Date(now.getTime() + JOB_LOCK_MS),
+        lastStartedAt: now,
       },
     });
-    if (result.state === "SUCCEEDED" && job.state === "WAITING_CONNECTION") {
-      await db.automationJob.update({
-        where: { id: job.id },
-        data: { state: "ACTIVE", lastSuccessAt: now, lastFinishedAt: now, lastError: null },
-      });
+    if (claimed.count !== 1) {
+      console.info(`Otomasyon atlandı (${job.key}): aynı görev zaten çalışıyor.`);
+      return { state: "SUCCEEDED", summary: "Fatura taraması zaten çalışıyor. Yeni çalışma atlandı." };
     }
-    if (result.state === "WAITING_CONNECTION") {
-      await db.automationJob.update({
-        where: { id: job.id },
-        data: { lastFinishedAt: now, lastError: result.summary.slice(0, 500) },
+    const started = new Date();
+    try {
+      const result = await runInvoiceScan(db);
+      const finished = new Date();
+      await db.automationRun.create({
+        data: {
+          jobId: job.id,
+          windowKey: `manual:${started.toISOString()}`,
+          attempt: 1,
+          state: result.state,
+          startedAt: started,
+          finishedAt: finished,
+          summary: result.summary,
+          report: result.report ?? undefined,
+          error: result.state === "WAITING_CONNECTION" ? result.summary : null,
+        },
       });
+      await db.automationJob.updateMany({
+        where: { id: job.id, lockToken: token },
+        data: {
+          lockToken: null,
+          lockedUntil: null,
+          lastFinishedAt: finished,
+          ...(result.state === "SUCCEEDED"
+            ? {
+                state: "ACTIVE",
+                lastSuccessAt: finished,
+                lastError: null,
+              }
+            : { lastError: result.summary.slice(0, 500) }),
+        },
+      });
+      return { state: result.state, summary: result.summary };
+    } catch (error) {
+      await db.automationJob.updateMany({
+        where: { id: job.id, lockToken: token },
+        data: { lockToken: null, lockedUntil: null },
+      });
+      throw error;
     }
-    return { state: result.state, summary: result.summary };
   });
 }

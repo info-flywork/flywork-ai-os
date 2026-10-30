@@ -108,7 +108,7 @@ export default function FeedbackDesk({
           </div>
           <div>
             <button type="submit" disabled={pending} className="btn-primary">
-              {pending ? "Gönderiliyor…" : "Gönder"}
+              {pending ? "Gönderiliyor…" : "Anonim olarak gönder"}
             </button>
           </div>
         </form>

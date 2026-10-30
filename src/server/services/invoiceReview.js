@@ -2,12 +2,15 @@ import "server-only";
 
 import { assertCan } from "@/server/auth/permissions";
 import { formatIstanbul } from "@/server/automation/schedule";
+import { presetCardCharge } from "@/server/finance/cards";
 import { vendorKey } from "@/server/finance/catalog";
+import { isOwnCompanyName } from "@/server/finance/ownCompany";
 import { stringList } from "@/server/jsonList";
 import { dateOnly, toIsoDate } from "@/server/dates";
 import { parseMoney } from "@/server/finance/money";
 import { readFinanceFile } from "@/server/finance/documents";
 import { ensureInvoiceExpense } from "@/server/finance/commitReview";
+import { settleAlerts } from "@/server/services/alerts";
 import { planDriveArchive } from "@/server/finance/google";
 import {
   approvalRoute,
@@ -148,7 +151,7 @@ export async function listInvoiceReviews(actor) {
       orderBy: { createdAt: "desc" },
       take: 50,
     });
-    return rows.map((row) => ({
+    return rows.filter((row) => !isOwnCompanyName(row.vendor)).map((row) => ({
       id: row.id,
       status: row.status ,
       fileName: row.fileName,
@@ -236,6 +239,9 @@ export async function decideInvoiceReview(
     if (review.documentType === "STATEMENT") {
       throw new AppError("Ekstre fatura kuyruğundan ayrı tutulur. Onay, gider ve Drive işlemi yapılmadı.", "VALIDATION", 400);
     }
+    if (isOwnCompanyName(review.vendor) || isOwnCompanyName(draft.vendor)) {
+      throw new AppError("Bu faturayı kendi şirketimiz kesmiş. Giden fatura gider listesine eklenmez.", "VALIDATION", 400);
+    }
     if (decision === "hold" || decision === "reject") {
       if (review.status === "APPROVED" || review.status === "DRIVE_FAILED") {
         throw new AppError(
@@ -257,6 +263,7 @@ export async function decideInvoiceReview(
           corrections: fieldCorrections(snapshotDraft(review.aiSnapshot), draft),
         },
       });
+      await settleAlerts(actor.id, [`invoice.review:${id}`]);
       return { outcome: decision === "hold" ? "held" : "rejected", invoiceId: null };
     }
 
@@ -307,6 +314,7 @@ export async function decideInvoiceReview(
             source: "UPLOAD",
             status: "ISSUED",
             note: draft.documentType === "RECEIPT" ? "Fiş" : null,
+            ...presetCardCharge(draft.vendor),
           },
         });
         await tx.invoiceDocument.create({
@@ -367,6 +375,7 @@ export async function decideInvoiceReview(
           corrections,
         },
       });
+      await settleAlerts(actor.id, [`invoice.review:${id}`]);
       return { outcome: "approved", invoiceId };
     } catch (error) {
       await db.invoiceReview.update({
@@ -381,6 +390,7 @@ export async function decideInvoiceReview(
           corrections,
         },
       });
+      await settleAlerts(actor.id, [`invoice.review:${id}`]);
       return { outcome: "drive-failed", invoiceId };
     }
   });
