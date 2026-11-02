@@ -157,6 +157,7 @@ model User {
   mealOnly     Boolean  @default(false)
   approver     Boolean  @default(false)
   active       Boolean  @default(true)
+  hidden       Boolean  @default(false)
   startedOn    DateTime? @db.Date
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

@@ -18,7 +18,7 @@ function clientKnowsCurrentUser(client) {
 
 )._runtimeDataModel?.models?.LeaveRequest;
   const leaveNames = new Set(leave?.fields?.map((field) => field.name) ?? []);
-  return names.has("mealOnly") && names.has("approver") && leaveNames.has("settlement");
+  return names.has("mealOnly") && names.has("approver") && names.has("hidden") && leaveNames.has("settlement");
 }
 
 function clientKnowsAlertDismiss(client) {
@@ -35,7 +35,7 @@ function clientKnowsWorkPause(client) {
 
 function clientMatchesLoadedSchema(client) {
   return (
-    client.constructor === PrismaClient &&
+    typeof client?.user?.findMany === "function" &&
     clientKnowsCurrentUser(client) &&
     "invoiceReview" in client &&
     "expenseAudit" in client &&
@@ -67,7 +67,32 @@ function clientMatchesLoadedSchema(client) {
   );
 }
 
-const POOL_VERSION = 11;
+const POOL_VERSION = 12;
+
+function hideTester(args) {
+  return { ...args, where: { AND: [args.where ?? {}, { hidden: false }] } };
+}
+
+function withHiddenUsersExcluded(client) {
+  const extended = client.$extends({
+    query: {
+      user: {
+        findMany({ args, query }) {
+          return query(hideTester(args));
+        },
+        count({ args, query }) {
+          return query(hideTester(args));
+        },
+      },
+    },
+  });
+  if (!extended._runtimeDataModel) {
+    Object.defineProperty(extended, "_runtimeDataModel", {
+      value: client._runtimeDataModel,
+    });
+  }
+  return extended;
+}
 
 export function getPrisma() {
   if (!process.env.DATABASE_URL) {
@@ -86,7 +111,7 @@ export function getPrisma() {
     void cached.$disconnect().catch(() => undefined);
   }
   const adapter = createMysqlAdapter();
-  const client = new PrismaClient({ adapter });
+  const client = withHiddenUsersExcluded(new PrismaClient({ adapter }));
   globalForPrisma.flyworkPrisma = client;
   globalForPrisma.flyworkPoolVersion = POOL_VERSION;
   return client;
