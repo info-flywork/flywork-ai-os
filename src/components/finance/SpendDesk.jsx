@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import Notice from "@/components/Notice";
 import { createExpenseAction, setSettlementAction } from "@/app/(panel)/harcama/actions";
@@ -9,6 +9,7 @@ import {
   CATEGORY_LABELS,
 
 } from "@/server/finance/catalog";
+import { useQuietAction } from "@/client/refreshQuiet";
 import { OFFICE_SPENDERS, withAllCurrencies } from "@/server/finance/cards";
 
 
@@ -141,8 +142,8 @@ export default function SpendDesk({
 
 
 ) {
-  const [state, action] = useActionState(createExpenseAction, null);
-  const [settlementState, settlementAction] = useActionState(setSettlementAction, null);
+  const [state, action] = useQuietAction(createExpenseAction, null);
+  const [settlementState, settlementAction] = useQuietAction(setSettlementAction, null);
   const [showSettlement, setShowSettlement] = useState(false);
   useEffect(() => {
     if (!settlementState) return;

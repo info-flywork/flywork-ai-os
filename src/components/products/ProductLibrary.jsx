@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { refreshQuiet } from "@/client/refreshQuiet";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Folder, FolderPlus, FolderUp, Pencil, Trash2 } from "lucide-react";
@@ -89,6 +90,8 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [hidden, setHidden] = useState([]);
+  const [ghosts, setGhosts] = useState([]);
   const rootLabel = TABS.find(([id]) => id === kind)?.[1] ?? "Uygulamalar";
   const inKind = products.filter((product) => matchesKind(product, kind));
 
@@ -164,28 +167,33 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
     setTrail(next);
   }
 
-  async function createFolder(event) {
+  function createFolder(event) {
     event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setNotice(null);
-    const result = await createFolderAction({
-      kind,
-      productId: product?.id ?? null,
-      segments,
-      name: folderName,
-    });
-    setBusy(false);
-    if (!result.ok) {
-      setNotice({ ok: false, text: result.message });
-      return;
-    }
+    const name = folderName.trim();
+    if (!name) return;
+    const ghost = { id: `local-${Date.now()}`, name, parent: product?.id ?? "", segments: [...segments] };
+    setGhosts((current) => [...current, ghost]);
     setFolderName("");
     setNaming(false);
     setQuery("");
-    setNotice({ ok: true, text: result.message });
-    if (!product && result.id) setTrail([result.id]);
-    router.refresh();
+    setNotice(null);
+    void createFolderAction({
+      kind,
+      productId: product?.id ?? null,
+      segments,
+      name,
+    }).then((result) => {
+      if (!result.ok) {
+        setGhosts((current) => current.filter((item) => item.id !== ghost.id));
+        setFolderName(name);
+        setNaming(true);
+        setNotice({ ok: false, text: result.message });
+        return;
+      }
+      setNotice({ ok: true, text: result.message });
+      if (!product && result.id) setTrail([result.id]);
+      refreshQuiet(router);
+    });
   }
 
   async function uploadFiles(event) {
@@ -203,7 +211,7 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
     const result = await uploadProductFilesAction(body);
     setBusy(false);
     setNotice({ ok: result.ok, text: result.message });
-    if (result.ok) router.refresh();
+    if (result.ok) refreshQuiet(router);
   }
 
   async function uploadFolder(event) {
@@ -282,7 +290,7 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
         if (!result.ok) {
           setBusy(false);
           setNotice({ ok: false, text: result.message });
-          router.refresh();
+          refreshQuiet(router);
           return;
         }
         if (result.message === "Dosya eklendi.") added += 1;
@@ -301,7 +309,7 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
     });
     if (product) setTrail([product.id, ...segments, prepared.name]);
     else setTrail([prepared.id]);
-    router.refresh();
+    refreshQuiet(router);
   }
 
   function askDelete(target) {
@@ -309,25 +317,30 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
     setPendingDelete(target);
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete || busy) return;
-    setBusy(true);
+  function confirmDelete() {
+    if (!pendingDelete) return;
     const target = pendingDelete;
-    const result = await deleteEntryAction({
-      kind,
-      productId: target.productId,
-      segments: target.segments ?? [],
-      fileUrl: target.fileUrl ?? "",
-    });
-    setBusy(false);
+    const key = `${target.productId}|${(target.segments ?? []).join("/")}|${target.fileUrl ?? ""}`;
+    setHidden((current) => [...current, key]);
     setPendingDelete(null);
-    setNotice({ ok: result.ok, text: result.message });
-    if (!result.ok) return;
     if (target.folder) {
       const removed = [target.productId, ...(target.segments ?? [])];
       if (removed.every((part, index) => trail[index] === part)) setTrail(removed.slice(0, -1));
     }
-    router.refresh();
+    void deleteEntryAction({
+      kind,
+      productId: target.productId,
+      segments: target.segments ?? [],
+      fileUrl: target.fileUrl ?? "",
+    }).then((result) => {
+      if (!result.ok) {
+        setHidden((current) => current.filter((item) => item !== key));
+        setNotice({ ok: false, text: result.message });
+        return;
+      }
+      setNotice({ ok: true, text: result.message });
+      refreshQuiet(router);
+    });
   }
 
   return (
@@ -451,11 +464,11 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
             })}
           </nav>
           {!product ? (
-            inKind.length === 0 ? (
+            inKind.filter((item) => !hidden.includes(`${item.id}||`)).length === 0 && ghosts.every((item) => item.parent) ? (
               <p className="text-sm text-slate-500">Henüz klasör yok.</p>
             ) : (
               <DriveGrid>
-                {inKind.map((item) => (
+                {inKind.filter((item) => !hidden.includes(`${item.id}||`)).map((item) => (
                   <FolderTile
                     key={item.id}
                     name={item.name}
@@ -464,13 +477,16 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
                     onDelete={() => askDelete({ label: item.name, folder: true, productId: item.id, segments: [] })}
                   />
                 ))}
+                {ghosts.filter((item) => !item.parent).map((item) => (
+                  <FolderTile key={item.id} name={item.name} hint="Kaydediliyor" onOpen={() => {}} onDelete={() => setGhosts((current) => current.filter((row) => row.id !== item.id))} />
+                ))}
               </DriveGrid>
             )
-          ) : level.folders.length === 0 && level.files.length === 0 ? (
+          ) : level.folders.length === 0 && level.files.length === 0 && ghosts.every((item) => item.parent !== product.id || item.segments.join("/") !== segments.join("/")) ? (
             <p className="text-sm text-slate-500">Bu klasör boş.</p>
           ) : (
             <DriveGrid>
-              {level.folders.map((folder) => (
+              {[...level.folders, ...ghosts.filter((item) => item.parent === product.id && item.segments.join("/") === segments.join("/")).map((item) => ({ name: item.name, files: 0, folders: new Set() }))].filter((folder) => !hidden.includes(`${product.id}|${[...segments, folder.name].join("/")}|`)).map((folder) => (
                 <FolderTile
                   key={folder.name}
                   name={folder.name}
@@ -479,7 +495,7 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
                   onDelete={() => askDelete({ label: folder.name, folder: true, productId: product.id, segments: [...segments, folder.name] })}
                 />
               ))}
-              {level.files.map((file) => (
+              {level.files.filter((file) => !hidden.includes(`${product.id}||${file.url}`)).map((file) => (
                 <FileTile key={file.url} file={file} onDelete={() => askDelete({ label: file.name, folder: false, productId: product.id, fileUrl: file.url })} />
               ))}
             </DriveGrid>
@@ -665,30 +681,48 @@ function FigmaBoard({ area, links, apps }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [pendingId, setPendingId] = useState("");
-  const shown = links.filter((link) => link.area === area);
+  const [extra, setExtra] = useState([]);
+  const [removed, setRemoved] = useState([]);
+  useEffect(() => {
+    setExtra((current) => current.filter((item) => !links.some((link) => link.area === item.area && link.name === item.name && link.url === item.url)));
+    setRemoved((current) => current.filter((id) => links.some((link) => link.id === id)));
+  }, [links]);
+  const shown = [...links.filter((link) => link.area === area && !removed.includes(link.id)), ...extra.filter((link) => link.area === area && !removed.includes(link.id))];
 
-  async function save(event) {
+  function save(event) {
     event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setNotice(null);
-    const result = await saveFigmaLinkAction({ area, name, url });
-    setBusy(false);
-    setNotice({ ok: result.ok, text: result.message });
-    if (!result.ok) return;
+    const draft = { id: `local-${Date.now()}`, area, name, url };
+    setExtra((current) => [...current, draft]);
     setName("");
     setUrl("");
-    router.refresh();
+    setNotice(null);
+    void saveFigmaLinkAction({ area, name: draft.name, url: draft.url }).then((result) => {
+      if (!result.ok) {
+        setExtra((current) => current.filter((item) => item.id !== draft.id));
+        setName(draft.name);
+        setUrl(draft.url);
+        setNotice({ ok: false, text: result.message });
+        return;
+      }
+      setNotice({ ok: true, text: result.message });
+      refreshQuiet(router);
+    });
   }
 
-  async function remove(id) {
-    if (busy) return;
-    setBusy(true);
-    const result = await deleteFigmaLinkAction({ id });
-    setBusy(false);
+  function remove(id) {
+    setRemoved((current) => [...current, id]);
+    setExtra((current) => current.filter((item) => item.id !== id));
     setPendingId("");
-    setNotice({ ok: result.ok, text: result.message });
-    if (result.ok) router.refresh();
+    if (String(id).startsWith("local-")) return;
+    void deleteFigmaLinkAction({ id }).then((result) => {
+      if (!result.ok) {
+        setRemoved((current) => current.filter((item) => item !== id));
+        setNotice({ ok: false, text: result.message });
+        return;
+      }
+      setNotice({ ok: true, text: result.message });
+      refreshQuiet(router);
+    });
   }
 
   return (
@@ -744,7 +778,7 @@ function FigmaBoard({ area, links, apps }) {
               onCancel={() => setPendingId("")}
               onRemove={() => remove(link.id)}
               onNotice={setNotice}
-              onSaved={() => router.refresh()}
+              onSaved={() => refreshQuiet(router)}
             />
           ))}
         </div>

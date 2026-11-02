@@ -8,6 +8,7 @@ import { withDatabase } from "@/server/db";
 import { toPublicError } from "@/server/errors";
 import { reviewLeaveRequest } from "@/server/services/leave";
 import { addWorkComment } from "@/server/services/work";
+import { acceptTelegramChatReply } from "@/server/telegram/chatBridge";
 import { downloadTelegramFile } from "@/server/telegram/client";
 import { telegramBotToken } from "@/server/telegram/config";
 import { inspectWorkImage } from "@/server/work/images";
@@ -109,7 +110,12 @@ export function readTelegramUpdate(update) {
     if (!ids || spoken.length > 4096 || (spoken.length === 0 && !photoFileId) || photoFileId.length > 256) {
       return null;
     }
-    return { ...ids, text: spoken, photoFileId };
+    const telegramMessageId = Number.isInteger(message.message_id) ? String(message.message_id) : "";
+    const reply = "reply_to_message" in message && message.reply_to_message && typeof message.reply_to_message === "object"
+      ? message.reply_to_message
+      : null;
+    const replyToTelegramMessageId = reply && Number.isInteger(reply.message_id) ? String(reply.message_id) : "";
+    return { ...ids, text: spoken, photoFileId, telegramMessageId, replyToTelegramMessageId };
   }
   if ("callback_query" in update && update.callback_query && typeof update.callback_query === "object") {
     const query = update.callback_query;
@@ -438,6 +444,13 @@ async function handleIncoming(input) {
     return one(reply(input, "Yorum cevabı iptal edildi."));
   }
 
+  if ((input.text || input.photoFileId) && !command && input.replyToTelegramMessageId) {
+    const bridged = await acceptTelegramChatReply(input);
+    if (bridged) {
+      return one(reply(input, bridged));
+    }
+  }
+
   if ((input.text || input.photoFileId) && !command) {
     const pending = await pendingWorkReply(input.telegramUserId);
     if (pending === "expired") {
@@ -472,6 +485,8 @@ async function handleIncoming(input) {
 
   const actor = await linkedAdmin(input.telegramUserId, input.chatId);
   if (!actor) {
+    const bridged = await acceptTelegramChatReply(input);
+    if (bridged) return one(reply(input, bridged));
     return one(reply(input, "Bu Telegram hesabı yönetici olarak bağlı değil."));
   }
 
@@ -524,6 +539,8 @@ async function handleIncoming(input) {
 
   const decision = input.data ? parseLeaveCallback(input.data) : null;
   if (!decision) {
+    const bridged = await acceptTelegramChatReply(input);
+    if (bridged) return one(reply(input, bridged));
     return one(reply(input, "Komut anlaşılamadı. Yemek listesi için /yemek, bekleyen izinler için /izin yazın."));
   }
 

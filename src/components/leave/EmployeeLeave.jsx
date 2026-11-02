@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { LayoutGrid } from "lucide-react";
 import Notice from "@/components/Notice";
 import { cancelLeaveAction, createLeaveAction } from "@/app/(panel)/izin/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 const TYPE_LABELS = {
   ANNUAL: "Yıllık izin",
@@ -84,7 +85,7 @@ function formatQuantity(value) {
 }
 
 export function LeaveRequestDesk({ today, balance, requests, showTotals = true }) {
-  const [state, action, pending] = useActionState(createLeaveAction, undefined);
+  const [state, action, pending] = useQuietAction(createLeaveAction, undefined);
   const [duration, setDuration] = useState("HOURLY");
   const [type, setType] = useState("ANNUAL");
   const [fileName, setFileName] = useState(null);
@@ -309,7 +310,7 @@ export default function EmployeeLeave({
 }
 
 function CancelForm({ requestId }) {
-  const [state, action, pending] = useActionState(cancelLeaveAction, undefined);
+  const [state, action, pending] = useQuietAction(cancelLeaveAction, undefined);
   return (
     <form action={action} className="mt-3 space-y-2">
       <input type="hidden" name="requestId" value={requestId} />

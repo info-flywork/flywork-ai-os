@@ -41,16 +41,43 @@ export function formatDuration(startedAt, finishedAt) {
   return `${minutes} dk ${rest} sn`;
 }
 
+export function scheduleClocks(schedule) {
+  const interval = Number(schedule.intervalHours) || 0;
+  const count = interval > 0 && interval < 24 && 24 % interval === 0 ? 24 / interval : 1;
+  const clocks = [];
+  for (let index = 0; index < count; index += 1) {
+    clocks.push({
+      hour: (schedule.hour + index * interval) % 24,
+      minute: schedule.minute,
+    });
+  }
+  return clocks.sort((left, right) => left.hour - right.hour || left.minute - right.minute);
+}
+
+export function matchesSlot(schedule, instant) {
+  const [date, clock] = windowKeyFromInstant(instant).split("T");
+  if (schedule.weekdays.length > 0 && !schedule.weekdays.includes(weekdayOf(date))) {
+    return false;
+  }
+  return scheduleClocks(schedule).some((slot) => {
+    const text = `${String(slot.hour).padStart(2, "0")}:${String(slot.minute).padStart(2, "0")}`;
+    return clock === text;
+  });
+}
+
 export function nextOccurrence(schedule, after) {
   const start = istanbulClock(after).date;
+  const clocks = scheduleClocks(schedule);
   for (let offset = 0; offset < 8; offset += 1) {
     const date = addIsoDays(start, offset);
     if (schedule.weekdays.length > 0 && !schedule.weekdays.includes(weekdayOf(date))) {
       continue;
     }
-    const slot = istanbulInstant(date, schedule.hour, schedule.minute);
-    if (slot.getTime() > after.getTime()) {
-      return slot;
+    for (const clock of clocks) {
+      const slot = istanbulInstant(date, clock.hour, clock.minute);
+      if (slot.getTime() > after.getTime()) {
+        return slot;
+      }
     }
   }
   throw new Error("Sonraki çalışma zamanı bulunamadı.");

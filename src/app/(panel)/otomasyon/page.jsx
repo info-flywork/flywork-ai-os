@@ -6,6 +6,7 @@ import { redirectEmployeeFromAdminPages, redirectMealOnlyUser } from "@/server/a
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
 import { REVIEW_STATUS_LABELS } from "@/server/finance/reviewRules";
+import { scheduleClocks } from "@/server/automation/schedule";
 import { getAutomationPage } from "@/server/services/automation";
 export const instant = false;
 
@@ -52,7 +53,7 @@ function InvoiceScanControls({ job }) {
       <form action={setJobScheduleAction} className="flex flex-wrap items-center gap-2">
         <input type="hidden" name="jobId" value={job.id} />
         <label className="text-sm">
-          Saat
+          İlk saat
           <input type="time" name="clock" defaultValue={clockValue(job.hour, job.minute)} required className="field ml-2" />
         </label>
         <button className="btn-secondary">Saati kaydet</button>
@@ -65,12 +66,16 @@ function InvoiceScanControls({ job }) {
   );
 }
 
-function scheduleLabel(weekdays, hour, minute) {
-  const clock = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  if (weekdays.length === 0) {
-    return `Her gün ${clock}`;
+function clockText(hour, minute) {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function scheduleLabel(job) {
+  const clocks = scheduleClocks(job).map((slot) => clockText(slot.hour, slot.minute)).join(", ");
+  if (job.weekdays.length === 0) {
+    return `Her gün ${clocks}`;
   }
-  return `${weekdays.map((day) => WEEKDAYS[day] ?? String(day)).join(", ")} ${clock}`;
+  return `${job.weekdays.map((day) => WEEKDAYS[day] ?? String(day)).join(", ")} ${clocks}`;
 }
 
 export default async function OtomasyonPage({
@@ -109,7 +114,7 @@ export default async function OtomasyonPage({
         {jobs.map((job) => (
           <article key={job.id} className="panel-card">
             <p className="text-sm text-slate-500">{job.name}</p>
-            <p className="mt-2 text-2xl font-semibold">{scheduleLabel(job.weekdays, job.hour, job.minute)}</p>
+            <p className="mt-2 text-2xl font-semibold">{scheduleLabel(job)}</p>
             <p className="mt-2 text-sm">{STATE_LABELS[job.state]}</p>
           </article>
         ))}
@@ -186,7 +191,7 @@ export default async function OtomasyonPage({
           <article key={job.id} className="panel-card p-3 text-sm">
             <div className="font-medium">{job.name}</div>
             <div className="text-gray-600">{job.key}</div>
-            <p className="mt-1">{scheduleLabel(job.weekdays, job.hour, job.minute)}</p>
+            <p className="mt-1">{scheduleLabel(job)}</p>
             <p>{STATE_LABELS[job.state]} · sonraki {job.nextRunAt}</p>
             <p>{job.lastSuccessAt ? `Başarı ${job.lastSuccessAt}` : "Başarılı çalışma yok"}</p>
             {job.lastError ? <p>{job.lastError}</p> : null}
@@ -221,7 +226,7 @@ export default async function OtomasyonPage({
                   <div className="font-medium">{job.name}</div>
                   <div className="text-gray-600">{job.key}</div>
                 </td>
-                <td className="p-2">{scheduleLabel(job.weekdays, job.hour, job.minute)}</td>
+                <td className="p-2">{scheduleLabel(job)}</td>
                 <td className="p-2">{STATE_LABELS[job.state]}</td>
                 <td className="p-2">{job.nextRunAt}</td>
                 <td className="p-2">

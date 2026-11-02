@@ -14,11 +14,15 @@ export async function GET(
   try {
     const { id } = await params;
     const image = await openWorkImage(actor, id);
+    const download = image.fileName && !String(image.contentType).startsWith("image/");
+    const disposition = download
+      ? `attachment; filename*=UTF-8''${encodeURIComponent(image.fileName)}`
+      : "inline";
     return new NextResponse(new Uint8Array(image.bytes), {
       status: 200,
       headers: {
         "content-type": image.contentType,
-        "content-disposition": "inline",
+        "content-disposition": disposition,
         "cache-control": "private, no-store",
         "x-content-type-options": "nosniff",
       },

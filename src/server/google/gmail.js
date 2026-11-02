@@ -15,6 +15,15 @@ export function invoiceMailboxQuery(since) {
   return `${GMAIL_QUERIES.invoices} after:${after}`;
 }
 
+export function paymentMailboxQuery(since) {
+  const base = '("Ödeme alındı" OR "tutarındaki ödemeniz") newer_than:14d';
+  if (!(since instanceof Date) || Number.isNaN(since.getTime())) {
+    return base;
+  }
+  const after = Math.floor(since.getTime() / 1000) - 120;
+  return `${base} after:${after}`;
+}
+
  
 
 
@@ -127,6 +136,43 @@ function headerValue(headers, name) {
   return found.value.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
+function decodePart(data) {
+  if (!data) return "";
+  return Buffer.from(data, "base64url").toString("utf8");
+}
+
+function collectText(part, chunks) {
+  if (!part || typeof part !== "object") return;
+  const mime = typeof part.mimeType === "string" ? part.mimeType : "";
+  if ((mime === "text/plain" || mime === "text/html") && part.body?.data) {
+    chunks.push(decodePart(part.body.data));
+  }
+  if (Array.isArray(part.parts)) {
+    for (const child of part.parts) collectText(child, chunks);
+  }
+}
+
+export function textFromGmailPayload(payload) {
+  const chunks = [];
+  collectText(payload, chunks);
+  return chunks
+    .join("\n")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function payloadHasPdf(part) {
+  if (!part || typeof part !== "object") return false;
+  const filename = typeof part.filename === "string" ? part.filename : "";
+  if (filename.toLowerCase().endsWith(".pdf")) return true;
+  return Array.isArray(part.parts) && part.parts.some((child) => payloadHasPdf(child));
+}
+
 function collectPdfs(parts, out) {
   for (const part of parts ?? []) {
     const filename = (part.filename ?? "").slice(0, 120);
@@ -214,6 +260,28 @@ export function createGmailApi(token, fetchImpl = fetch) {
         from: headerValue(headers, "From"),
         subject: headerValue(headers, "Subject"),
         date: headerValue(headers, "Date"),
+      };
+    },
+    async readMessageText(id) {
+      const payload = await gmailGet(
+        token,
+        `messages/${encodeURIComponent(id)}?format=full`,
+        fetchImpl,
+        45_000,
+      );
+      const root =
+        payload && typeof payload === "object" && "payload" in payload && payload.payload &&
+        typeof payload.payload === "object"
+          ? payload.payload
+          : undefined;
+      const threadId =
+        payload && typeof payload === "object" && "threadId" in payload && typeof payload.threadId === "string"
+          ? payload.threadId
+          : "";
+      return {
+        threadId,
+        text: textFromGmailPayload(root),
+        hasPdf: payloadHasPdf(root),
       };
     },
     async listPdfAttachments(id) {

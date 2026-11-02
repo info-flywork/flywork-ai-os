@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import Notice from "@/components/Notice";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 import { deletePaidSubscriptionAction, deleteTechnologyAction, saveTechnologyAction } from "@/app/(panel)/teknoloji/actions";
 
@@ -91,7 +92,7 @@ function ServiceForm({
 
 
 ) {
-  const [state, action, pending] = useActionState(saveTechnologyAction, null);
+  const [state, action, pending] = useQuietAction(saveTechnologyAction, null);
   const locked = Boolean(editing || editingPayment);
   const [recordKind, setRecordKind] = useState(editingPayment ? "payment" : "service");
   const host = editing ? hostOf(editing) : "";
@@ -203,7 +204,7 @@ function DeleteButton({
 
 
 ) {
-  const [state, action, pending] = useActionState(remove, null);
+  const [state, action, pending] = useQuietAction(remove, null);
   return (
     <form
       action={action}

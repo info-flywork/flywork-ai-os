@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import Notice from "@/components/Notice";
 import AdminOrderDesk from "@/components/meals/AdminOrderDesk";
 import CatalogImport from "@/components/meals/CatalogImport";
@@ -9,6 +9,7 @@ import EmployeeMeal, { mealDayClass, mealDayLabel } from "@/components/meals/Emp
 import { DailySpend, MonthlySpend } from "@/components/meals/MealSpendBoard";
 import MenuPlanner from "@/components/meals/MenuPlanner";
 import PhotoReview from "@/components/meals/PhotoReview";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 import MealTabs, { ORDER_MEAL_TABS, } from "@/components/meals/MealTabs";
 import { publicHoliday } from "@/server/meals/holidays";
@@ -81,7 +82,7 @@ function ActionForm({
 
 
 ) {
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [state, formAction, pending] = useQuietAction(action, undefined);
   return (
     <form action={formAction} className="space-y-3">
       {state ? <Notice tone={state.ok ? "ok" : "err"}>{state.message}</Notice> : null}

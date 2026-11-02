@@ -204,6 +204,7 @@ export function parseAdileRows(rows) {
 
   function openGroup(title, price, slot) {
     const salad = section === "ETLİ YEMEKLER" || section === "MANTILAR";
+    const everySoup = salad || section === "TAVUKLU YEMEKLER" || section === "MAKARNALAR" || section === "PİLAV ÜSTÜ" || section === "SEBZELİ ÜRÜNLER";
     const next = {
       key: choiceSlug(title),
       title,
@@ -213,7 +214,7 @@ export function parseAdileRows(rows) {
       mains: [],
       soups: new Map(),
       sides: new Set(salad ? ["Salata"] : []),
-      allSoups: salad,
+      allSoups: everySoup,
       or: false,
       salad,
     };

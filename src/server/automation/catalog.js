@@ -36,6 +36,7 @@ export const JOB_DEFINITIONS = [
     weekdays: [],
     hour: 9,
     minute: 0,
+    intervalHours: 6,
     initialState: "WAITING_CONNECTION",
     scheduleEditable: true,
   },

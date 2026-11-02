@@ -63,11 +63,21 @@ function clientMatchesLoadedSchema(client) {
     "workCardSeen" in client &&
     "workCommentReaction" in client &&
     "workCommentImage" in client &&
-    "announcement" in client
+    "announcement" in client &&
+    "chatThread" in client &&
+    clientKnowsChatProfile(client)
   );
 }
 
-const POOL_VERSION = 12;
+function clientKnowsChatProfile(client) {
+  const user = client._runtimeDataModel?.models?.User;
+  const thread = client._runtimeDataModel?.models?.ChatThread;
+  const userFields = new Set(user?.fields?.map((field) => field.name) ?? []);
+  const threadFields = new Set(thread?.fields?.map((field) => field.name) ?? []);
+  return userFields.has("bio") && userFields.has("photoKey") && threadFields.has("photoKey");
+}
+
+const POOL_VERSION = 15;
 
 function hideTester(args) {
   return { ...args, where: { AND: [args.where ?? {}, { hidden: false }] } };

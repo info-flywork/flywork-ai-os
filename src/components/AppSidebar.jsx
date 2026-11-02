@@ -1,15 +1,46 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, PanelLeft, PanelLeftOpen } from "lucide-react";
 import PasswordForm from "@/components/account/PasswordForm";
 import { panelNav, profileNav } from "@/components/panelNav";
 
 
+function SidebarLink({ item, active, collapsed, rail, chatBadge, onNavigate, onWarm }) {
+  return (
+    <Link
+      href={item.path}
+      prefetch
+      title={item.name}
+      aria-label={item.name}
+      onMouseEnter={onWarm}
+      onFocus={onWarm}
+      onClick={onNavigate}
+      className="block"
+    >
+      <SidebarLinkBody item={item} active={active} collapsed={collapsed} rail={rail} chatBadge={chatBadge} />
+    </Link>
+  );
+}
+
+function SidebarLinkBody({ item, active, collapsed, rail, chatBadge }) {
+  const { pending } = useLinkStatus();
+  const on = active || pending;
+  const Icon = item.icon;
+  return (
+    <span className={`relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium ${collapsed ? "lg:justify-center lg:px-0" : ""} ${on ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50"}`}>
+      <Icon size={18} aria-hidden="true" />
+      <span className={`flex-1 ${rail}`}>{item.name}</span>
+      {item.path === "/flywork-chat" ? <span className={rail}>{chatBadge}</span> : null}
+    </span>
+  );
+}
+
 export default function AppSidebar({
   user,
+  chatBadge = null,
   open = false,
   collapsed = false,
   onNavigate,
@@ -30,6 +61,23 @@ export default function AppSidebar({
   const [message, setMessage] = useState(null);
   const role = user.role === "ADMIN" ? "Yönetici" : "Çalışan";
   const rail = collapsed ? "lg:hidden" : "";
+  const items = panelNav.filter((item) => item.roles.includes(user.role) && (!user.mealOnly || item.path === "/yemek-yonetimi"));
+  const accountItems = profileNav.filter((item) => item.roles.includes(user.role) && !user.mealOnly);
+
+  useEffect(() => {
+    const paths = [...items, ...accountItems].map((item) => item.path).filter((path) => path !== pathname);
+    let index = 0;
+    let timer = 0;
+    function warmNext() {
+      const path = paths[index];
+      if (!path) return;
+      router.prefetch(path, { kind: "full" });
+      index += 1;
+      timer = window.setTimeout(warmNext, 900);
+    }
+    timer = window.setTimeout(warmNext, 0);
+    return () => window.clearTimeout(timer);
+  }, [pathname, router, user.role, user.mealOnly]);
   const initial = user.name.trim().charAt(0).toLocaleUpperCase("tr") || "F";
 
   async function logout() {
@@ -65,27 +113,23 @@ export default function AppSidebar({
         </button>
       </div>
       <nav className={`flex-1 space-y-1 overflow-y-auto px-3 ${collapsed ? "lg:px-2" : ""}`}>
-        {panelNav
-          .filter((item) => item.roles.includes(user.role) && (!user.mealOnly || item.path === "/yemek-yonetimi"))
-          .map((item) => {
+        {items.map((item) => {
             const active = item.path === "/" ? pathname === "/" : pathname === item.path || pathname.startsWith(`${item.path}/`);
-            const Icon = item.icon;
             return (
-              <Link
+              <SidebarLink
                 key={item.path}
-                href={item.path}
-                title={item.name}
-                aria-label={item.name}
-                onClick={() => {
+                item={item}
+                active={active}
+                collapsed={collapsed}
+                rail={rail}
+                chatBadge={chatBadge}
+                onWarm={() => router.prefetch(item.path, { kind: "full" })}
+                onNavigate={() => {
                   setAccountOpen(false);
                   setPasswordOpen(false);
                   onNavigate?.();
                 }}
-                className={`relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium ${collapsed ? "lg:justify-center lg:px-0" : ""} ${active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50"}`}
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span className={`flex-1 ${rail}`}>{item.name}</span>
-              </Link>
+              />
             );
           })}
       </nav>
@@ -101,15 +145,15 @@ export default function AppSidebar({
               </>
             ) : (
               <>
-                {profileNav
-                  .filter((item) => item.roles.includes(user.role) && !user.mealOnly)
-                  .map((item) => {
+                {accountItems.map((item) => {
                     const active = pathname === item.path || pathname.startsWith(`${item.path}/`);
                     const Icon = item.icon;
                     return (
                       <Link
                         key={item.path}
                         href={item.path}
+                        prefetch
+                        onMouseEnter={() => router.prefetch(item.path, { kind: "full" })}
                         onClick={() => {
                           setAccountOpen(false);
                           onNavigate?.();

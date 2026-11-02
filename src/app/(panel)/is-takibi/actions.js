@@ -120,10 +120,16 @@ export async function addCommentAction(input) {
   try {
     const actor = await requireUser();
     if (input instanceof FormData) {
-      const files = input.getAll("file").filter((file) => file instanceof File && file.size > 0);
       const images = [];
-      for (const file of files) {
-        images.push(Buffer.from(await file.arrayBuffer()));
+      for (const file of input.getAll("image")) {
+        if (file instanceof File && file.size > 0) {
+          images.push({ bytes: Buffer.from(await file.arrayBuffer()), fileName: file.name, kind: "image" });
+        }
+      }
+      for (const file of input.getAll("file")) {
+        if (file instanceof File && file.size > 0) {
+          images.push({ bytes: Buffer.from(await file.arrayBuffer()), fileName: file.name, kind: "file" });
+        }
       }
       await addWorkComment(actor, {
         taskId: String(input.get("taskId") ?? ""),

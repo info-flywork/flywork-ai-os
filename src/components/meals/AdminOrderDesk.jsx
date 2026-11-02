@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useActionState } from "react";
 import Notice from "@/components/Notice";
 import { mealGroup, sharesGroup } from "@/server/meals/selection";
 import {
@@ -10,6 +9,7 @@ import {
   saveManagedOrderAction,
 
 } from "@/app/(panel)/yemek-yonetimi/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 
 
@@ -135,7 +135,7 @@ function ChoiceFields({
 }
 
 function RemindButton({ menuId, userId }) {
-  const [state, action, pending] = useActionState(remindMealAction, undefined);
+  const [state, action, pending] = useQuietAction(remindMealAction, undefined);
   return (
     <form action={action} className="shrink-0">
       <input type="hidden" name="menuId" value={menuId} />
@@ -188,8 +188,8 @@ export default function AdminOrderDesk({
   const [panel, setPanel] = useState(null);
   const [employeeUserId, setEmployeeUserId] = useState("");
   const [guestId, setGuestId] = useState("");
-  const [guestState, guestAction, guestPending] = useActionState(saveGuestOrderAction, undefined);
-  const [employeeState, employeeAction, employeePending] = useActionState(saveManagedOrderAction, undefined);
+  const [guestState, guestAction, guestPending] = useQuietAction(saveGuestOrderAction, undefined);
+  const [employeeState, employeeAction, employeePending] = useQuietAction(saveManagedOrderAction, undefined);
   const open = Boolean(menu?.published) && canEdit;
   const visibleOrders = orders.filter((order) => order.status !== "CANCELLED" && !order.absent);
   const selectedOrder = orders.find((order) => order.userId === employeeUserId && order.status !== "CANCELLED");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import Notice from "@/components/Notice";
 import StatusBadge from "@/components/ui/StatusBadge";
 import {
@@ -10,6 +10,7 @@ import {
   updateAccountAction,
 
 } from "@/app/(panel)/kullanicilar/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 
 
@@ -37,14 +38,14 @@ function roleLabel(role) {
 }
 
 function EditForm({ user, current }) {
-  const [state, action, pending] = useActionState(
+  const [state, action, pending] = useQuietAction(
     updateAccountAction,
     undefined,
   );
   const [role, setRole] = useState(user.role);
   const [mealOnly, setMealOnly] = useState(user.mealOnly);
   const needsStart = role === "EMPLOYEE" && !mealOnly;
-  const [removeState, removeAction, removePending] = useActionState(
+  const [removeState, removeAction, removePending] = useQuietAction(
     deleteAccountAction,
     undefined,
   );
@@ -114,7 +115,7 @@ function EditForm({ user, current }) {
 }
 
 function ActiveForm({ user }) {
-  const [state, action, pending] = useActionState(
+  const [state, action, pending] = useQuietAction(
     setActiveAction,
     undefined,
   );
@@ -140,7 +141,7 @@ export default function UserAdmin({
 
 
 ) {
-  const [state, action, pending] = useActionState(
+  const [state, action, pending] = useQuietAction(
     createAccountAction,
     undefined,
   );

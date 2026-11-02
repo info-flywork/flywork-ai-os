@@ -34,11 +34,24 @@ function iconFor(name) {
 
 export default function AlertList({ alerts }) {
   const [level, setLevel] = useState("action");
+  const [gone, setGone] = useState([]);
+  const [readIds, setReadIds] = useState([]);
+  const [clearedLevel, setClearedLevel] = useState("");
   const visible = useMemo(
-    () => alerts.filter((alert) => alert.level === level),
-    [alerts, level],
+    () => alerts
+      .filter((alert) => alert.level === level && !gone.includes(alert.key) && clearedLevel !== level)
+      .map((alert) => (readIds.includes(alert.key) ? { ...alert, read: true } : alert)),
+    [alerts, level, gone, readIds, clearedLevel],
   );
   const unread = visible.filter((alert) => !alert.read).length;
+
+  function hide(key) {
+    setGone((current) => (current.includes(key) ? current : [...current, key]));
+  }
+
+  function markRead(key) {
+    setReadIds((current) => (current.includes(key) ? current : [...current, key]));
+  }
 
   return (
     <div className="space-y-4">
@@ -54,19 +67,25 @@ export default function AlertList({ alerts }) {
           </button>
         ))}
         {unread > 0 ? (
-          <form action={markAllAlertsReadAction}>
-            <input type="hidden" name="level" value={level} />
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            setReadIds((current) => [...new Set([...current, ...visible.map((alert) => alert.key)])]);
+            const data = new FormData();
+            data.set("level", level);
+            void markAllAlertsReadAction(data);
+          }}>
             <button className="btn-secondary">Bu sekmedekileri okundu işaretle</button>
           </form>
         ) : null}
         {visible.length > 0 ? (
-          <form
-            action={dismissVisibleAlertsAction}
-            onSubmit={(event) => {
-              if (!window.confirm("Bu sekmedeki bildirimler silinsin mi?")) event.preventDefault();
-            }}
-          >
-            <input type="hidden" name="level" value={level} />
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            if (!window.confirm("Bu sekmedeki bildirimler silinsin mi?")) return;
+            setClearedLevel(level);
+            const data = new FormData();
+            data.set("level", level);
+            void dismissVisibleAlertsAction(data);
+          }}>
             <button className="btn-secondary">Bu sekmedekileri sil</button>
           </form>
         ) : null}
@@ -85,15 +104,9 @@ export default function AlertList({ alerts }) {
               action={(
                 <>
                   {alert.read ? null : (
-                    <form action={markAlertReadAction}>
-                      <input type="hidden" name="key" value={alert.key} />
-                      <button className="font-semibold text-slate-700">Okundu</button>
-                    </form>
+                    <button type="button" className="font-semibold text-slate-700" onClick={() => { markRead(alert.key); const data = new FormData(); data.set("key", alert.key); void markAlertReadAction(data); }}>Okundu</button>
                   )}
-                  <form action={dismissAlertAction}>
-                    <input type="hidden" name="key" value={alert.key} />
-                    <button className="font-semibold text-red-600">Sil</button>
-                  </form>
+                  <button type="button" className="font-semibold text-red-600" onClick={() => { hide(alert.key); const data = new FormData(); data.set("key", alert.key); void dismissAlertAction(data); }}>Sil</button>
                 </>
               )}
             />

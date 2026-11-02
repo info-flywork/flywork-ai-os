@@ -23,9 +23,13 @@ export function isSpenderName(name) {
 export function presetCardCharge(vendor) {
   const name = (vendor ?? "").toLocaleLowerCase("tr");
   if (name.includes("openai") || name.includes("claude")) {
-    return { paymentMethod: "CARD", accountLabel: "Anıl Bey kart" };
+    return mailCardCharge();
   }
   return { paymentMethod: "OTHER", accountLabel: null };
+}
+
+export function mailCardCharge() {
+  return { paymentMethod: "CARD", accountLabel: "Anıl Bey kart" };
 }
 
 function cardKey(value) {

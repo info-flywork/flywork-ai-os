@@ -1,0 +1,2 @@
+ALTER TABLE `MealDish` MODIFY `choiceKey` VARCHAR(2000) NULL;
+ALTER TABLE `MealMenuItem` MODIFY `choiceKey` VARCHAR(2000) NULL;

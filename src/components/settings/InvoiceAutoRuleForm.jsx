@@ -1,10 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
 import Notice from "@/components/Notice";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 export default function InvoiceAutoRuleForm({ action, rule }) {
-  const [state, formAction, pending] = useActionState(action, null);
+  const [state, formAction, pending] = useQuietAction(action, null);
 
   return (
     <form action={formAction} className="panel-card max-w-xl space-y-4 text-sm">

@@ -1,5 +1,8 @@
 
+import { mailCardCharge } from "@/server/finance/cards";
 import { vendorKey } from "@/server/finance/catalog";
+import { parsePaymentMail } from "@/server/finance/paymentMail";
+import { dateOnly } from "@/server/dates";
 import { aiDocumentEnv } from "@/server/finance/documentAi";
 import { documentHash } from "@/server/finance/pdfText";
 import {
@@ -14,7 +17,7 @@ import { emptyDraft, REVIEW_LABELS } from "@/server/finance/reviewRules";
 import { formatIstanbul } from "@/server/automation/schedule";
 import { stringList } from "@/server/jsonList";
 import { isOwnCompanyName } from "@/server/finance/ownCompany";
-import { invoiceMailboxQuery, listMessageIds } from "@/server/google/gmail";
+import { invoiceMailboxQuery, listMessageIds, paymentMailboxQuery } from "@/server/google/gmail";
 
 
 
@@ -123,6 +126,20 @@ export async function importGmailInvoices(
       report.errors.push("Gmail yanıt vermedi. Bu ileti yeniden denenecek.");
     }
   }
+  if (typeof gmail.readMessageText === "function") {
+    const paymentIds = await listMessageIds(gmail, paymentMailboxQuery(), INVOICE_LIMIT);
+    for (const messageId of paymentIds) {
+      try {
+        await importPaymentNotice(db, gmail, report, options.commitActorId, messageId);
+      } catch (error) {
+        if (!gmailTransportError(error)) {
+          throw error;
+        }
+        report.retryable += 1;
+        report.errors.push("Gmail yanıt vermedi. Ödeme bildirimi yeniden denenecek.");
+      }
+    }
+  }
   if (report.retryable > 0) {
     const gmailOnly = report.errors.length > 0 && report.errors.every((item) => item.startsWith("Gmail yanıt vermedi."));
     throw new InvoiceScanRetryError(
@@ -192,6 +209,115 @@ async function remember(
       throw error;
     }
   }
+}
+
+async function importPaymentNotice(db, gmail, report, actorId, messageId) {
+  if (await alreadySeen(db, messageId, "payment")) {
+    report.skipped += 1;
+    return;
+  }
+  const message = await gmail.readMessageText(messageId);
+  if (message.hasPdf) {
+    return;
+  }
+  const payment = parsePaymentMail(message.text);
+  if (!payment) return;
+  report.found += 1;
+  const identity = await knownIdentity(db, payment.vendor, payment.reference);
+  if (identity) {
+    await remember(db, {
+      gmailMessageId: messageId,
+      attachmentId: "payment",
+      threadId: message.threadId,
+      outcome: "DUPLICATE",
+      invoiceId: storedInvoiceId(identity),
+    });
+    report.duplicates.push({ messageId, number: payment.reference, vendor: payment.vendor });
+    return;
+  }
+  const userId = await paymentOwnerId(db, actorId);
+  if (!userId) {
+    report.errors.push("Ödeme bildirimi kaydedilemedi. Sorumlu yönetici bulunamadı.");
+    return;
+  }
+  const charge = mailCardCharge();
+  try {
+    const invoice = await db.invoice.create({
+      data: {
+        number: payment.reference,
+        vendor: payment.vendor,
+        vendorKey: vendorKey(payment.vendor),
+        scope: "COMPANY",
+        amount: payment.amount,
+        currency: payment.currency,
+        issuedOn: dateOnly(payment.issuedOn),
+        source: "MANUAL",
+        status: "PAID",
+        note: `Ödeme alındı. Referans ${payment.reference}. Fatura dosyası ayrıca eklenecek.`,
+        ...charge,
+        spenderName: "Anıl Can Mayancur",
+      },
+    });
+    await db.expense.create({
+      data: {
+        userId,
+        scope: "COMPANY",
+        category: "OTHER",
+        title: `Ödeme alındı · ${payment.reference}`.slice(0, 160),
+        vendor: payment.vendor,
+        amount: payment.amount,
+        currency: payment.currency,
+        ...charge,
+        spentOn: dateOnly(payment.issuedOn),
+        status: "APPROVED",
+        reimbursement: "NOT_REQUIRED",
+        source: "MANUAL",
+        note: `Ödeme alındı. Referans ${payment.reference}.`,
+        invoiceId: invoice.id,
+        reviewerId: userId,
+        reviewedAt: new Date(),
+      },
+    });
+    await remember(db, {
+      gmailMessageId: messageId,
+      attachmentId: "payment",
+      threadId: message.threadId,
+      outcome: "PAYMENT",
+      invoiceId: invoice.id,
+    });
+    report.processed.push({
+      reviewId: invoice.id,
+      vendor: payment.vendor,
+      number: payment.reference,
+      amount: payment.amount,
+      currency: payment.currency,
+      issuedOn: payment.issuedOn,
+      driveFailed: false,
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    await remember(db, {
+      gmailMessageId: messageId,
+      attachmentId: "payment",
+      threadId: message.threadId,
+      outcome: "DUPLICATE",
+    });
+    report.duplicates.push({ messageId, number: payment.reference, vendor: payment.vendor });
+  }
+}
+
+async function paymentOwnerId(db, actorId) {
+  const named = await db.user.findFirst({
+    where: { name: "Anıl Can Mayancur", active: true },
+    select: { id: true },
+  });
+  if (named) return named.id;
+  if (actorId) return actorId;
+  const admin = await db.user.findFirst({
+    where: { role: "ADMIN", active: true },
+    select: { id: true },
+  });
+  return admin?.id ?? null;
 }
 
 async function importOne(

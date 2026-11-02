@@ -118,13 +118,7 @@ export async function getDashboardSummary(actor, now = new Date()) {
   const serviceDay = istanbulClock(now).weekday;
 
   return withDatabase(async (db) => {
-    const settings = await db.mealSettings.findUnique({
-      where: { id: MEAL_SETTINGS_ID },
-      select: { weekdays: true },
-    });
-    const weekdays = numberList(settings?.weekdays);
-    const serviceWeekdays = weekdays.length ? weekdays : [1, 2, 4];
-    const [expenses, monthRows, orders, menu, awayToday, pendingCount, pendingRequests, renewals, overdueRenewals, invoicesPending, recentRuns] =
+    const [expenses, monthRows, orders, menu, awayToday, pendingCount, pendingRequests, renewals, overdueRenewals, invoicesPending, recentRuns, settings] =
       await Promise.all([
         db.expense.groupBy({
           by: ["scope"],
@@ -221,7 +215,13 @@ export async function getDashboardSummary(actor, now = new Date()) {
               },
             })
           : Promise.resolve(null),
+        db.mealSettings.findUnique({
+          where: { id: MEAL_SETTINGS_ID },
+          select: { weekdays: true },
+        }),
       ]);
+    const weekdays = numberList(settings?.weekdays);
+    const serviceWeekdays = weekdays.length ? weekdays : [1, 2, 4];
 
     const expensesByScope = emptyExpenses();
     for (const row of expenses) {

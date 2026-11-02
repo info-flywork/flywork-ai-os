@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Prisma } from "@/generated/prisma/client";
 import { dateOnly, toIsoDate } from "@/server/dates";
-import { presetCardCharge } from "@/server/finance/cards";
+import { mailCardCharge } from "@/server/finance/cards";
 import { vendorKey } from "@/server/finance/catalog";
 import { isOwnCompanyName } from "@/server/finance/ownCompany";
 import { planDriveArchive } from "@/server/finance/google";
@@ -32,7 +32,7 @@ export async function ensureInvoiceExpense(
     return;
   }
   const vendor = draft.vendor.trim();
-  const charge = presetCardCharge(vendor);
+  const charge = mailCardCharge();
   await db.expense.create({
     data: {
       userId: actorId,
@@ -136,7 +136,7 @@ export async function commitReadyReview(db, reviewId, actorId, auditAction = "AP
             source: "UPLOAD",
             status: "ISSUED",
             note: draft.documentType === "RECEIPT" ? "Fiş" : null,
-            ...presetCardCharge(draft.vendor),
+            ...mailCardCharge(),
           },
         });
         await tx.invoiceDocument.create({

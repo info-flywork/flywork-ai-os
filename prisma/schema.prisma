@@ -158,6 +158,8 @@ model User {
   approver     Boolean  @default(false)
   active       Boolean  @default(true)
   hidden       Boolean  @default(false)
+  bio          String?  @db.VarChar(160)
+  photoKey     String?  @db.VarChar(64)
   startedOn    DateTime? @db.Date
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -195,6 +197,12 @@ model User {
   feedbackNotes         FeedbackNote[]     @relation("FeedbackAuthor")
   feedbackReviews       FeedbackNote[]     @relation("FeedbackReviewer")
   announcements         Announcement[]
+  chatThreadsCreated    ChatThread[]       @relation("ChatCreator")
+  chatMemberships       ChatMember[]
+  chatMessages          ChatMessage[]      @relation("ChatAuthor")
+  chatReactions         ChatReaction[]
+  chatMentions          ChatMention[]
+  chatPins              ChatPinnedMessage[]
 }
 
 model Session {
@@ -241,7 +249,7 @@ model MealDish {
   slot        MealSlot
   active      Boolean      @default(true)
   price       Decimal?     @db.Decimal(12, 2)
-  choiceKey   String?
+  choiceKey   String?      @db.VarChar(2000)
   description String? @db.Text
   photoKey    String?
   photoType   String?
@@ -300,7 +308,7 @@ model MealMenuItem {
   name         String
   slot         MealSlot?
   price        Decimal?    @db.Decimal(12, 2)
-  choiceKey    String?
+  choiceKey    String?     @db.VarChar(2000)
   description  String? @db.Text
   sortOrder    Int
   available    Boolean     @default(true)
@@ -1126,6 +1134,7 @@ model WorkCommentImage {
   comment     WorkTaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
   storageKey  String          @unique
   contentType String
+  fileName    String?         @db.VarChar(180)
   createdAt   DateTime        @default(now())
 
   @@index([commentId])
@@ -1204,6 +1213,129 @@ model Announcement {
   createdAt   DateTime @default(now())
 
   @@index([createdAt])
+}
+
+enum ChatKind {
+  DIRECT
+  GROUP
+}
+
+model ChatThread {
+  id          String   @id @default(cuid())
+  kind        ChatKind
+  title       String   @default("") @db.VarChar(120)
+  topic       String?  @db.VarChar(280)
+  directKey   String?  @unique @db.VarChar(80)
+  systemKey   String?  @unique @db.VarChar(40)
+  photoKey    String?  @db.VarChar(64)
+  createdById String
+  createdBy   User     @relation("ChatCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members  ChatMember[]
+  messages ChatMessage[]
+  pins     ChatPinnedMessage[]
+
+  @@index([updatedAt])
+}
+
+model ChatMember {
+  id         String    @id @default(cuid())
+  threadId   String
+  thread     ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin      Boolean   @default(false)
+  pinned     Boolean   @default(false)
+  muted      Boolean   @default(false)
+  lastReadAt DateTime  @default(now())
+  joinedAt   DateTime  @default(now())
+  leftAt     DateTime?
+
+  @@unique([threadId, userId])
+  @@index([userId, leftAt])
+}
+
+model ChatMessage {
+  id        String    @id @default(cuid())
+  threadId  String
+  thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation("ChatAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  body      String    @db.Text
+  replyToId String?
+  replyTo   ChatMessage?  @relation("ChatReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[] @relation("ChatReply")
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+  deletedAt DateTime?
+
+  attachments ChatAttachment[]
+  reactions   ChatReaction[]
+  mentions    ChatMention[]
+  pin         ChatPinnedMessage?
+  telegramCopies ChatTelegramCopy[]
+
+  @@index([threadId, createdAt])
+}
+
+model ChatAttachment {
+  id          String      @id @default(cuid())
+  messageId   String
+  message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  storageKey  String      @unique @db.VarChar(64)
+  contentType String      @db.VarChar(160)
+  fileName    String      @db.VarChar(180)
+  byteSize    Int
+
+  @@index([messageId])
+}
+
+model ChatReaction {
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String      @db.VarChar(16)
+
+  @@unique([messageId, userId, emoji])
+}
+
+model ChatMention {
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+}
+
+model ChatTelegramCopy {
+  id                String      @id @default(cuid())
+  messageId         String
+  message           ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  telegramChatId    String      @db.VarChar(32)
+  telegramMessageId String      @db.VarChar(32)
+  createdAt         DateTime    @default(now())
+
+  @@unique([telegramChatId, telegramMessageId])
+  @@index([messageId])
+}
+
+model ChatPinnedMessage {
+  id        String      @id @default(cuid())
+  threadId  String
+  thread    ChatThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  messageId String      @unique
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt DateTime    @default(now())
+
+  @@index([threadId])
 }
 
 model InvoiceAutoRule {

@@ -7,7 +7,7 @@ import { dateOnly, formatMysqlDateTime, istanbulToday, toIsoDate } from "@/serve
 import { withDatabase } from "@/server/db";
 import { invalidate, remember } from "@/server/readCache";
 import { AppError } from "@/server/errors";
-import { inspectWorkImage, readWorkImage, removeWorkImage, writeWorkImage } from "@/server/work/images";
+import { inspectWorkFile, inspectWorkImage, readWorkImage, removeWorkImage, safeFileName, writeWorkImage } from "@/server/work/images";
 import { workReplyCallback } from "@/server/telegram/messages";
 import { visibleWorkDay, workDayView } from "@/server/work/day";
 import { settleAlerts } from "@/server/services/alerts";
@@ -53,29 +53,75 @@ const assignableUser = {
 
 // Modül yenilenince eski pano önbelleği silinen gün kayıtlarını tutmasın.
 invalidate("work:board");
+invalidate("work:pulse");
 
 export async function getWorkBoard(actor) {
   guard(actor, "task:read");
   const board = await remember("work:board", () => withDatabase(async (db) => {
-    const [tasks, people, spaces, sessions] = await Promise.all([
+    const [tasks, assignees, comments, reactions, commentImages, links, images, revisions, moves, people, spaces, sessions] = await Promise.all([
       db.workTask.findMany({
-        include: {
-          assignees: { select: { userId: true } },
-          createdBy: { select: { name: true } },
-          comments: {
-            include: {
-              author: { select: { name: true } },
-              reactions: { include: { user: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
-              images: { select: { id: true }, orderBy: { createdAt: "asc" } },
-            },
-            orderBy: { createdAt: "asc" },
-          },
-          links: { orderBy: { createdAt: "asc" } },
-          images: { select: { id: true }, orderBy: { createdAt: "asc" } },
-          revisions: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
-          moves: { include: { actor: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
-        },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          spaceId: true,
+          title: true,
+          detail: true,
+          column: true,
+          priority: true,
+          startsOn: true,
+          startsAt: true,
+          endsAt: true,
+          dueOn: true,
+          completed: true,
+          sortOrder: true,
+          enforced: true,
+          revisionCount: true,
+          createdById: true,
+          createdAt: true,
+          createdBy: { select: { name: true } },
+        },
+      }),
+      db.workTaskAssignee.findMany({ select: { taskId: true, userId: true } }),
+      db.workTaskComment.findMany({
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          taskId: true,
+          authorId: true,
+          body: true,
+          createdAt: true,
+          author: { select: { name: true } },
+        },
+      }),
+      db.workCommentReaction.findMany({
+        orderBy: { createdAt: "asc" },
+        select: { commentId: true, emoji: true, userId: true, user: { select: { name: true } } },
+      }),
+      db.workCommentImage.findMany({
+        orderBy: { createdAt: "asc" },
+        select: { id: true, commentId: true, contentType: true, fileName: true },
+      }),
+      db.workTaskLink.findMany({
+        orderBy: { createdAt: "asc" },
+        select: { id: true, taskId: true, url: true, label: true },
+      }),
+      db.workTaskImage.findMany({
+        orderBy: { createdAt: "asc" },
+        select: { id: true, taskId: true },
+      }),
+      db.workRevisionItem.findMany({
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true, taskId: true, body: true, done: true },
+      }),
+      db.workTaskMove.findMany({
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          taskId: true,
+          column: true,
+          createdAt: true,
+          actor: { select: { name: true } },
+        },
       }),
       db.user.findMany({
         where: assignableUser,
@@ -99,6 +145,32 @@ export async function getWorkBoard(actor) {
         take: 2000,
       }),
     ]);
+    const byTask = (rows) => {
+      const grouped = new Map();
+      for (const row of rows) {
+        const list = grouped.get(row.taskId);
+        if (list) list.push(row);
+        else grouped.set(row.taskId, [row]);
+      }
+      return grouped;
+    };
+    const byComment = (rows) => {
+      const grouped = new Map();
+      for (const row of rows) {
+        const list = grouped.get(row.commentId);
+        if (list) list.push(row);
+        else grouped.set(row.commentId, [row]);
+      }
+      return grouped;
+    };
+    const assigneesByTask = byTask(assignees);
+    const commentsByTask = byTask(comments);
+    const reactionsByComment = byComment(reactions);
+    const imagesByComment = byComment(commentImages);
+    const linksByTask = byTask(links);
+    const imagesByTask = byTask(images);
+    const revisionsByTask = byTask(revisions);
+    const movesByTask = byTask(moves);
     const today = istanbulToday();
     const day = workDayView(sessions.map((session) => ({
       id: session.id,
@@ -144,31 +216,31 @@ export async function getWorkBoard(actor) {
         dueOn: task.dueOn ? toIsoDate(task.dueOn) : null,
         completed: task.completed,
         sortOrder: task.sortOrder,
-        assigneeIds: task.assignees.map((assignee) => assignee.userId),
+        assigneeIds: (assigneesByTask.get(task.id) ?? []).map((assignee) => assignee.userId),
         createdById: task.createdById,
         createdByName: task.createdBy.name,
         createdAt: formatMysqlDateTime(task.createdAt),
-        commentCount: task.comments.length,
-        comments: task.comments.map((comment) => ({
+        commentCount: (commentsByTask.get(task.id) ?? []).length,
+        comments: (commentsByTask.get(task.id) ?? []).map((comment) => ({
           id: comment.id,
           authorId: comment.authorId,
           authorName: comment.author.name,
           body: comment.body,
           createdAt: formatMysqlDateTime(comment.createdAt),
           at: comment.createdAt.toISOString(),
-          images: comment.images.map((image) => ({ id: image.id })),
-          reactions: comment.reactions.map((reaction) => ({
+          images: (imagesByComment.get(comment.id) ?? []).map((image) => ({ id: image.id, contentType: image.contentType, fileName: image.fileName })),
+          reactions: (reactionsByComment.get(comment.id) ?? []).map((reaction) => ({
             emoji: reaction.emoji,
             userId: reaction.userId,
             userName: reaction.user.name,
           })),
         })),
-        links: task.links.map((link) => ({ id: link.id, url: link.url, label: link.label || link.url })),
-        images: task.images.map((image) => ({ id: image.id })),
+        links: (linksByTask.get(task.id) ?? []).map((link) => ({ id: link.id, url: link.url, label: link.label || link.url })),
+        images: (imagesByTask.get(task.id) ?? []).map((image) => ({ id: image.id })),
         enforced: task.enforced,
         revisionCount: task.revisionCount,
-        revisions: task.revisions.map((item) => ({ id: item.id, body: item.body, done: item.done })),
-        moves: task.moves.map((move) => ({
+        revisions: (revisionsByTask.get(task.id) ?? []).map((item) => ({ id: item.id, body: item.body, done: item.done })),
+        moves: (movesByTask.get(task.id) ?? []).map((move) => ({
           id: move.id,
           column: move.column,
           actorName: move.actor.name,
@@ -673,9 +745,14 @@ const COMMENT_IMAGE_TOTAL = 20 * 1024 * 1024;
 function takenCommentImages(input) {
   const list = Array.isArray(input) ? input : [];
   if (list.length > COMMENT_IMAGE_LIMIT) {
-    throw new AppError("Bir yoruma en fazla 6 görsel eklenebilir.", "VALIDATION", 400);
+    throw new AppError("Bir yoruma en fazla 6 dosya eklenebilir.", "VALIDATION", 400);
   }
-  const images = list.map((item) => inspectWorkImage(Buffer.isBuffer(item) ? item : Buffer.from(item)));
+  const images = list.map((item) => {
+    if (Buffer.isBuffer(item)) return { ...inspectWorkImage(item), fileName: null };
+    const bytes = Buffer.isBuffer(item.bytes) ? item.bytes : Buffer.from(item.bytes);
+    if (item.kind === "file") return inspectWorkFile(bytes, item.fileName);
+    return { ...inspectWorkImage(bytes), fileName: item.fileName ? safeFileName(item.fileName) : null };
+  });
   const total = images.reduce((sum, image) => sum + image.bytes.length, 0);
   if (total > COMMENT_IMAGE_TOTAL) {
     throw new AppError("Yorum görselleri birlikte 20 MB sınırını aşıyor.", "VALIDATION", 400);
@@ -709,7 +786,7 @@ export async function addWorkComment(actor, input) {
     for (const image of images) {
       const storageKey = randomBytes(16).toString("hex");
       await writeWorkImage(storageKey, image.bytes);
-      stored.push({ storageKey, contentType: image.contentType });
+      stored.push({ storageKey, contentType: image.contentType, fileName: image.fileName });
     }
     let comment;
     try {
@@ -854,8 +931,8 @@ export async function openWorkImage(actor, id) {
   guard(actor, "task:read");
   return withDatabase(async (db) => {
     const current = await db.workTaskImage.findUnique({ where: { id }, select: { storageKey: true, contentType: true } });
-    const commentImage = current ?? await db.workCommentImage.findUnique({ where: { id }, select: { storageKey: true, contentType: true } });
+    const commentImage = current ?? await db.workCommentImage.findUnique({ where: { id }, select: { storageKey: true, contentType: true, fileName: true } });
     if (!commentImage) throw new AppError("Görsel bulunamadı.", "NOT_FOUND", 404);
-    return { bytes: await readWorkImage(commentImage.storageKey), contentType: commentImage.contentType };
+    return { bytes: await readWorkImage(commentImage.storageKey), contentType: commentImage.contentType, fileName: commentImage.fileName ?? "" };
   });
 }

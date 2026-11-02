@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useActionState } from "react";
 import { Utensils } from "lucide-react";
 import Notice from "@/components/Notice";
 import { publishCatalogAction } from "@/app/(panel)/yemek-yonetimi/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 const SLOT_LABELS = {
   MAIN: "Ana yemek",
@@ -60,7 +60,7 @@ export default function MenuPlanner({
 
 
 ) {
-  const [state, action, pending] = useActionState(publishCatalogAction, undefined);
+  const [state, action, pending] = useQuietAction(publishCatalogAction, undefined);
   const dishes = useMemo(
     () =>
       catalog.flatMap((category) =>

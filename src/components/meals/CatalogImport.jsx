@@ -1,11 +1,12 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import Notice from "@/components/Notice";
 import { sourceFromBrowserFiles } from "@/components/meals/catalogSelection";
 import { importCatalogAction } from "@/app/(panel)/yemek-yonetimi/actions";
 import { CATALOG_IMPORT_TEMPLATE } from "@/server/meals/catalogTemplate";
 import { previewMatchesSource } from "@/server/meals/importCatalog";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 function downloadTemplate() {
   const blob = new Blob([`\uFEFF${CATALOG_IMPORT_TEMPLATE}\n`], { type: "text/csv;charset=utf-8" });
@@ -79,7 +80,7 @@ function Summary({ preview }) {
 }
 
 export default function CatalogImport() {
-  const [state, action, pending] = useActionState(
+  const [state, action, pending] = useQuietAction(
     importCatalogAction,
     undefined,
   );

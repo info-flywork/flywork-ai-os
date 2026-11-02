@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import Notice from "@/components/Notice";
 import StatusBadge from "@/components/ui/StatusBadge";
 import {
@@ -9,6 +9,7 @@ import {
   reviewFeedbackAction,
 
 } from "@/app/(panel)/oneri/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 
 
@@ -22,7 +23,7 @@ import {
 
 
 function DeleteButton({ id }) {
-  const [state, action, pending] = useActionState(
+  const [state, action, pending] = useQuietAction(
     deleteFeedbackAction,
     undefined,
   );
@@ -44,7 +45,7 @@ function DeleteButton({ id }) {
 }
 
 function ReviewButton({ id }) {
-  const [state, action, pending] = useActionState(
+  const [state, action, pending] = useQuietAction(
     reviewFeedbackAction,
     undefined,
   );
@@ -66,7 +67,7 @@ export default function FeedbackDesk({
 
 
 ) {
-  const [state, action, pending] = useActionState(
+  const [state, action, pending] = useQuietAction(
     createFeedbackAction,
     undefined,
   );

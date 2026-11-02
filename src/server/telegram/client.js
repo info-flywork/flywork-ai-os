@@ -15,7 +15,11 @@ export async function postTelegram(
     if (!response.ok) {
       return { ok: false, error: "Telegram isteği tamamlanamadı." };
     }
-    return { ok: true };
+    const payload = await response.json().catch(() => null);
+    const messageId = payload && typeof payload === "object" && payload.result && Number.isInteger(payload.result.message_id)
+      ? String(payload.result.message_id)
+      : "";
+    return { ok: true, messageId };
   } catch {
     return { ok: false, error: "Telegram erişilemedi." };
   }

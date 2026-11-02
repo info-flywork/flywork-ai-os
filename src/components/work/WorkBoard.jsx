@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Clock, MessageCircle, Pause, Pencil, Play } from "lucide-react";
+import { Bell, Check, Clock, MessageCircle, Pause, Pencil, Play, Plus, Search } from "lucide-react";
+import { refreshQuiet } from "@/client/refreshQuiet";
 import { COMMENT_EMOJIS } from "@/lib/commentReactions";
 import { reminderKind, taskDeadline } from "@/lib/workDeadline";
 import { WORK_FILTERS, matchesWorkFilter } from "@/lib/workPulse";
@@ -74,6 +75,20 @@ function initials(name) {
   const first = parts[0]?.[0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
   return `${first}${last}`.toLocaleUpperCase("tr");
+}
+
+function matchesSearch(task, needle, names) {
+  if (!needle) return true;
+  const bits = [
+    task.title,
+    task.detail,
+    task.createdByName,
+    ...task.assigneeIds.map((id) => names.get(id) ?? ""),
+    ...(task.comments ?? []).flatMap((comment) => [comment.body, comment.authorName]),
+    ...(task.revisions ?? []).map((item) => item.body),
+    ...(task.links ?? []).flatMap((link) => [link.label, link.url]),
+  ];
+  return bits.join("\n").toLocaleLowerCase("tr").includes(needle);
 }
 
 function personColors(people) {
@@ -178,6 +193,24 @@ function CommentBody({ body, people }) {
   return <>{nodes}</>;
 }
 
+function toggleGrouped(reactions, emoji, viewerName) {
+  const next = (reactions ?? []).map((item) => ({ ...item, names: [...(item.names ?? [])] }));
+  const found = next.find((item) => item.emoji === emoji);
+  if (found?.mine) {
+    found.count -= 1;
+    found.mine = false;
+    found.names = found.names.filter((name) => name !== viewerName);
+    return next.filter((item) => item.count > 0);
+  }
+  if (found) {
+    found.count += 1;
+    found.mine = true;
+    if (viewerName) found.names.push(viewerName);
+    return next;
+  }
+  return [...next, { emoji, count: 1, mine: true, names: viewerName ? [viewerName] : [] }];
+}
+
 function MentionChoices({ suggestions, activeMention, people, onHover, onPick }) {
   return (
     <ul role="listbox" className="absolute bottom-full z-10 mb-1 w-full rounded-xl border border-slate-400 bg-slate-200 p-1.5 shadow-lg">
@@ -217,6 +250,9 @@ function TaskDialog({
   onClose,
   onAskRevision,
   onToggleRevision,
+  patchTask,
+  report,
+  viewerName,
 }
 
 
@@ -236,17 +272,20 @@ function TaskDialog({
   const [target, setTarget] = useState(task?.column ?? column);
   const [comment, setComment] = useState("");
   const [commentFiles, setCommentFiles] = useState([]);
+  const [attachOpen, setAttachOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState("");
   const [brokenImages, setBrokenImages] = useState({});
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [state, setState] = useState(null);
-  const [pending, setPending] = useState(false);
+  const pending = false;
   const [mentionIndex, setMentionIndex] = useState(0);
   const [emojiFor, setEmojiFor] = useState(null);
   const commentRef = useRef(null);
   const editRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const mentionSource = editingId ? draft : comment;
   const mentionQuery = mentionSource.match(/(^|\s)@([^\n@]*)$/)?.[2] ?? null;
   const suggestions = mentionQuery === null ? [] : people.filter((person) => person.name.toLocaleLowerCase("tr").includes(mentionQuery.toLocaleLowerCase("tr"))).slice(0, 6);
@@ -343,8 +382,7 @@ function TaskDialog({
       });
       return;
     }
-    setPending(true);
-    const result = await saveTaskAction({
+    const payload = {
       ...(task ? { id: task.id } : { spaceId }),
       title,
       detail,
@@ -355,117 +393,178 @@ function TaskDialog({
       endsAt: endsAt || null,
       dueOn: dueOn || null,
       assigneeIds: selected,
-    });
-    setPending(false);
-    setState(result);
-    if (result.ok) onClose();
+    };
+    const note = comment;
+    const attachments = commentFiles;
+    const localId = task?.id ?? `local-${Date.now()}`;
+    const optimisticComment = task && (note.trim() || attachments.length > 0) ? {
+      id: `local-comment-${Date.now()}`,
+      authorId: viewerId,
+      authorName: viewerName || "Sen",
+      body: note.trim(),
+      createdAt: new Date().toISOString(),
+      images: attachments.map((item) => ({
+        id: item.id,
+        contentType: item.kind === "image" ? "image/jpeg" : "application/octet-stream",
+        fileName: item.name,
+        localUrl: item.url,
+      })),
+      reactions: [],
+    } : null;
+    if (task) {
+      patchTask(task.id, (current) => ({
+        ...current,
+        ...payload,
+        completed: target === "DONE" ? true : current.column === "DONE" && target !== "DONE" ? false : current.completed,
+        comments: optimisticComment ? [...current.comments, optimisticComment] : current.comments,
+        commentCount: current.commentCount + (optimisticComment ? 1 : 0),
+      }));
+    } else {
+      patchTask(localId, () => ({
+        id: localId,
+        spaceId,
+        title,
+        detail,
+        column: target,
+        priority,
+        startsOn: startsOn || null,
+        startsAt: startsAt || null,
+        endsAt: endsAt || null,
+        dueOn: dueOn || null,
+        assigneeIds: selected,
+        completed: target === "DONE",
+        sortOrder: Date.now(),
+        createdByName: viewerName || "",
+        createdById: viewerId,
+        commentCount: 0,
+        comments: [],
+        links: [],
+        images: [],
+        revisions: [],
+        revisionCount: 0,
+        unreadComments: 0,
+        enforced: false,
+        moves: [],
+      }));
+    }
+    onClose();
+    const result = await saveTaskAction(payload);
+    if (!result.ok) {
+      report(result.message);
+      refreshQuiet(router);
+      return;
+    }
+    const posted = await postComment();
+    if (!posted.ok) report(posted.message);
+    refreshQuiet(router);
   }
 
   async function remove() {
     if (!task || !window.confirm("Bu kart silinsin mi?")) return;
-    setPending(true);
-    const result = await deleteTaskAction(task.id);
-    setPending(false);
-    if (result.ok) onClose();
-    else setState(result);
+    const id = task.id;
+    patchTask(id, () => null);
+    onClose();
+    const result = await deleteTaskAction(id);
+    if (!result.ok) report(result.message);
+    refreshQuiet(router);
   }
 
-  function addCommentFiles(files) {
+  function addCommentFiles(files, kind) {
+    setAttachOpen(false);
     setCommentFiles((current) => {
       const next = [...current];
       for (const file of files) {
         if (next.length >= 6) break;
-        next.push({ file, url: URL.createObjectURL(file) });
+        next.push({ id: `${kind}-${file.name}-${file.size}-${next.length}`, file, kind, name: file.name, url: kind === "image" ? URL.createObjectURL(file) : "" });
       }
       return next;
     });
   }
 
-  function dropCommentFile(url) {
+  function dropCommentFile(id) {
     setCommentFiles((current) => {
-      const item = current.find((entry) => entry.url === url);
-      if (item) URL.revokeObjectURL(item.url);
-      return current.filter((entry) => entry.url !== url);
+      const item = current.find((entry) => entry.id === id);
+      if (item?.url) URL.revokeObjectURL(item.url);
+      return current.filter((entry) => entry.id !== id);
     });
   }
 
-  async function sendComment() {
-    if (!task || (!comment.trim() && commentFiles.length === 0)) return;
-    setPending(true);
+  async function postComment() {
+    if (!task || (!comment.trim() && commentFiles.length === 0)) return { ok: true, skipped: true };
     const form = new FormData();
     form.set("taskId", task.id);
     form.set("body", comment);
-    for (const item of commentFiles) form.append("file", item.file);
-    const result = await addCommentAction(form);
-    setPending(false);
-    setState(result);
-    if (result.ok) {
-      for (const item of commentFiles) URL.revokeObjectURL(item.url);
-      setCommentFiles([]);
-      setComment("");
-      router.refresh();
-    }
+    for (const item of commentFiles) form.append(item.kind === "file" ? "file" : "image", item.file);
+    return addCommentAction(form);
   }
 
-  async function leaveReaction(commentId, emoji) {
+  function leaveReaction(commentId, emoji) {
     if (!task) return;
-    setPending(true);
-    const result = await toggleCommentReactionAction({ commentId, emoji });
-    setPending(false);
-    if (!result.ok) setState(result);
-    else {
-      setEmojiFor(null);
-      router.refresh();
-    }
+    patchTask(task.id, (current) => ({
+      ...current,
+      comments: current.comments.map((comment) => comment.id === commentId ? { ...comment, reactions: toggleGrouped(comment.reactions, emoji, viewerName) } : comment),
+    }));
+    setEmojiFor(null);
+    void toggleCommentReactionAction({ commentId, emoji }).then((result) => {
+      if (!result.ok) report(result.message);
+      else refreshQuiet(router);
+    });
   }
 
-  async function saveComment() {
-    if (!editingId) return;
-    setPending(true);
-    const result = await updateCommentAction({ id: editingId, body: draft });
-    setPending(false);
-    setState(result);
-    if (result.ok) {
-      setEditingId(null);
-      setDraft("");
-      router.refresh();
-    }
+  function saveComment() {
+    if (!editingId || !task) return;
+    const commentId = editingId;
+    const body = draft;
+    patchTask(task.id, (current) => ({
+      ...current,
+      comments: current.comments.map((comment) => comment.id === commentId ? { ...comment, body } : comment),
+    }));
+    setEditingId(null);
+    setDraft("");
+    void updateCommentAction({ id: commentId, body }).then((result) => {
+      if (!result.ok) report(result.message);
+      else refreshQuiet(router);
+    });
   }
 
-  async function sendLink() {
+  function sendLink() {
     if (!task) return;
-    setPending(true);
-    const result = await addLinkAction({ taskId: task.id, url: linkUrl, label: linkLabel });
-    setPending(false);
-    setState(result);
-    if (result.ok) {
-      setLinkUrl("");
-      setLinkLabel("");
-      router.refresh();
-    }
+    const url = linkUrl;
+    const label = linkLabel;
+    patchTask(task.id, (current) => ({
+      ...current,
+      links: [...(current.links ?? []), { id: `local-link-${Date.now()}`, url, label: label || url }],
+    }));
+    setLinkUrl("");
+    setLinkLabel("");
+    void addLinkAction({ taskId: task.id, url, label }).then((result) => {
+      if (!result.ok) report(result.message);
+      refreshQuiet(router);
+    });
   }
 
-  async function sendImages(files) {
+  function sendImages(files) {
     if (!task || files.length === 0) return;
-    setPending(true);
-    let added = 0;
-    let failure = null;
-    for (const file of files) {
-      const form = new FormData();
-      form.set("taskId", task.id);
-      form.set("file", file);
-      const result = await addImageAction(form);
-      if (!result.ok) {
-        failure = result;
-        break;
+    const taskId = task.id;
+    const added = files.map((file) => ({
+      id: `local-image-${file.name}-${file.size}-${Date.now()}`,
+      localUrl: URL.createObjectURL(file),
+      file,
+    }));
+    patchTask(taskId, (current) => ({ ...current, images: [...current.images, ...added.map(({ id, localUrl }) => ({ id, localUrl }))] }));
+    void (async () => {
+      for (const item of added) {
+        const form = new FormData();
+        form.set("taskId", taskId);
+        form.set("file", item.file);
+        const result = await addImageAction(form);
+        if (!result.ok) {
+          report(result.message);
+          break;
+        }
       }
-      added += 1;
-    }
-    setPending(false);
-    if (failure) {
-      setState(added > 0 ? { ok: false, message: `${added} görsel eklendi. ${failure.message}` } : failure);
-    }
-    if (added > 0) router.refresh();
+      refreshQuiet(router);
+    })();
   }
 
   return (
@@ -536,11 +635,11 @@ function TaskDialog({
             </div>
           </div>
         </div>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" className="btn-primary" disabled={pending} onClick={() => void save()}>{pending ? "Kaydediliyor…" : "Kaydet"}</button>
-          <button type="button" className="btn-secondary" onClick={onClose}>Vazgeç</button>
-          {task && viewerAdmin ? <button type="button" className="btn-secondary text-red-600" disabled={pending} onClick={() => void remove()}>Sil</button> : null}
-        </div>
+        {!task ? (
+          <div className="mt-5">
+            <button type="button" className="btn-primary" disabled={pending} onClick={() => void save()}>{pending ? "Kaydediliyor…" : "Kaydet"}</button>
+          </div>
+        ) : null}
         {task ? (
           <div className="mt-6 space-y-4 border-t border-slate-200 pt-4">
             {(task.revisions ?? []).length > 0 ? (
@@ -582,7 +681,7 @@ function TaskDialog({
                 {task.links.map((link) => (
                   <li key={link.id} className="flex items-center gap-2 text-sm">
                     <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-semibold text-[#03624c] underline">{link.label}</a>
-                    <button type="button" className="text-slate-500" onClick={() => void removeLinkAction(link.id)}>Kaldır</button>
+                    <button type="button" className="text-slate-500" onClick={() => { patchTask(task.id, (current) => ({ ...current, links: (current.links ?? []).filter((item) => item.id !== link.id) })); void removeLinkAction(link.id).then((result) => { if (!result.ok) report(result.message); else refreshQuiet(router); }); }}>Kaldır</button>
                   </li>
                 ))}
               </ul>
@@ -600,16 +699,16 @@ function TaskDialog({
                     {brokenImages[image.id] ? (
                       <div className="flex min-h-24 items-center rounded-xl bg-slate-100 px-3 py-4 text-sm text-slate-500">Görsel dosyası bulunamadı. Yeniden ekleyin.</div>
                     ) : (
-                      <a href={`/api/is-gorsel/${image.id}`} target="_blank" rel="noreferrer">
+                      <a href={image.localUrl || `/api/is-gorsel/${image.id}`} target="_blank" rel="noreferrer">
                         <img
-                          src={`/api/is-gorsel/${image.id}`}
+                          src={image.localUrl || `/api/is-gorsel/${image.id}`}
                           alt=""
                           className="max-h-80 w-full rounded-xl bg-slate-50 object-contain"
                           onError={() => setBrokenImages((current) => ({ ...current, [image.id]: true }))}
                         />
                       </a>
                     )}
-                    {viewerAdmin ? <button type="button" className="absolute right-2 top-2 rounded-full bg-white px-2 py-0.5 text-xs font-semibold shadow" onClick={() => void removeImageAction(image.id)}>Sil</button> : null}
+                    {viewerAdmin ? <button type="button" className="absolute right-2 top-2 rounded-full bg-white px-2 py-0.5 text-xs font-semibold shadow" onClick={() => { patchTask(task.id, (current) => ({ ...current, images: current.images.filter((item) => item.id !== image.id) })); void removeImageAction(image.id).then((result) => { if (!result.ok) report(result.message); else refreshQuiet(router); }); }}>Sil</button> : null}
                   </figure>
                 ))}
               </div>
@@ -648,18 +747,24 @@ function TaskDialog({
                         {(item.images ?? []).length > 0 ? (
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             {item.images.map((image) => (
-                              <a key={image.id} href={`/api/is-gorsel/${image.id}`} target="_blank" rel="noreferrer">
-                                {brokenImages[image.id] ? (
-                                  <span className="block rounded-xl bg-white px-3 py-6 text-center text-xs text-slate-500">Görsel açılamadı</span>
-                                ) : (
-                                  <img
-                                    src={`/api/is-gorsel/${image.id}`}
-                                    alt=""
-                                    className="max-h-48 w-full rounded-xl bg-white object-contain"
-                                    onError={() => setBrokenImages((current) => ({ ...current, [image.id]: true }))}
-                                  />
-                                )}
-                              </a>
+                              image.contentType?.startsWith("image/") ? (
+                                <a key={image.id} href={image.localUrl || `/api/is-gorsel/${image.id}`} target="_blank" rel="noreferrer">
+                                  {brokenImages[image.id] ? (
+                                    <span className="block rounded-xl bg-white px-3 py-6 text-center text-xs text-slate-500">Görsel açılamadı</span>
+                                  ) : (
+                                    <img
+                                      src={image.localUrl || `/api/is-gorsel/${image.id}`}
+                                      alt=""
+                                      className="max-h-48 w-full rounded-xl bg-white object-contain"
+                                      onError={() => setBrokenImages((current) => ({ ...current, [image.id]: true }))}
+                                    />
+                                  )}
+                                </a>
+                              ) : (
+                                <a key={image.id} href={`/api/is-gorsel/${image.id}`} className="flex items-center rounded-xl bg-white px-3 py-3 text-sm font-semibold text-[#03624c] underline">
+                                  {image.fileName || "Dosya"}
+                                </a>
+                              )
                             ))}
                           </div>
                         ) : null}
@@ -698,7 +803,28 @@ function TaskDialog({
                 {!editingId && suggestions.length > 0 ? (
                   <MentionChoices suggestions={suggestions} activeMention={activeMention} people={people} onHover={setMentionIndex} onPick={insertMention} />
                 ) : null}
-                <textarea ref={commentRef} value={comment} onChange={(event) => setComment(event.target.value)} onKeyDown={onCommentKeyDown} rows={3} placeholder="Yorum yazın. Etiket için @ yazın." className="field" />
+                <textarea ref={commentRef} value={comment} onChange={(event) => setComment(event.target.value)} onKeyDown={onCommentKeyDown} rows={3} placeholder="Yorum yazın. Etiket için @ yazın." className="field pb-12" />
+                <div className="absolute bottom-2 left-2">
+                  <button type="button" aria-label="Dosya veya görsel ekle" aria-expanded={attachOpen} disabled={pending} onClick={() => setAttachOpen((current) => !current)} className="grid h-8 w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm">
+                    <Plus size={16} />
+                  </button>
+                  {attachOpen ? (
+                    <div className="absolute bottom-10 left-0 z-10 w-40 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                      <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => imageInputRef.current?.click()}>Görsel ekle</button>
+                      <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => fileInputRef.current?.click()}>Dosya ekle</button>
+                    </div>
+                  ) : null}
+                </div>
+                <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(event) => {
+                  const files = [...(event.target.files ?? [])];
+                  if (files.length > 0) addCommentFiles(files, "image");
+                  event.target.value = "";
+                }} />
+                <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.ppt,.pptx,.txt,.csv,.zip" multiple className="sr-only" onChange={(event) => {
+                  const files = [...(event.target.files ?? [])];
+                  if (files.length > 0) addCommentFiles(files, "file");
+                  event.target.value = "";
+                }} />
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
                 {COMMENT_EMOJIS.map((emoji) => (
@@ -710,23 +836,16 @@ function TaskDialog({
               {commentFiles.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {commentFiles.map((item) => (
-                    <span key={item.url} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1">
-                      <img src={item.url} alt="" className="h-12 w-12 rounded-lg object-cover" />
-                      <button type="button" className="pr-2 text-xs font-semibold text-slate-500" onClick={() => dropCommentFile(item.url)}>Kaldır</button>
+                    <span key={item.id} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1">
+                      {item.url ? <img src={item.url} alt="" className="h-12 w-12 rounded-lg object-cover" /> : <span className="max-w-40 truncate px-2 text-xs font-semibold text-slate-700">{item.name}</span>}
+                      <button type="button" className="pr-2 text-xs font-semibold text-slate-500" onClick={() => dropCommentFile(item.id)}>Kaldır</button>
                     </span>
                   ))}
                 </div>
               ) : null}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <label className="btn-secondary">
-                  Görsel ekle
-                  <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(event) => {
-                    const files = [...(event.target.files ?? [])];
-                    if (files.length > 0) addCommentFiles(files);
-                    event.target.value = "";
-                  }} />
-                </label>
-                <button type="button" className="btn-primary" disabled={pending || (!comment.trim() && commentFiles.length === 0)} onClick={() => void sendComment()}>Yorum ekle</button>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" className="btn-primary" disabled={pending} onClick={() => void save()}>{pending ? "Kaydediliyor…" : "Kaydet"}</button>
+                {viewerAdmin ? <button type="button" className="btn-secondary text-red-600" disabled={pending} onClick={() => void remove()}>Sil</button> : null}
               </div>
             </section>
           </div>
@@ -766,7 +885,13 @@ export default function WorkBoard({
   const [revision, setRevision] = useState(null);
   const [historyDay, setHistoryDay] = useState(data.today);
   const [clearedComments, setClearedComments] = useState({});
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const dragging = useRef(null);
+  const editorRef = useRef(null);
+  editorRef.current = editor;
+  const searchRef = useRef(null);
+  const queryJump = useRef("");
   const moved = useRef(false);
   const openedKart = useRef(false);
   const incoming = JSON.stringify(data.tasks);
@@ -792,52 +917,90 @@ export default function WorkBoard({
 
   useEffect(() => {
     if (!filtre) return;
-    if (tasks.some((task) => task.spaceId === spaceId && matchesWorkFilter(task, filtre, data.today))) return;
-    const next = data.spaces.find((space) => tasks.some((task) => task.spaceId === space.id && matchesWorkFilter(task, filtre, data.today)));
+    if (tasks.some((task) => task.spaceId === spaceId && matchesWorkFilter(task, filtre, data.today) && (!filtre || data.viewerRole === "ADMIN" || task.assigneeIds.includes(data.viewerId)))) return;
+    const next = data.spaces.find((space) => tasks.some((task) => task.spaceId === space.id && matchesWorkFilter(task, filtre, data.today) && (!filtre || data.viewerRole === "ADMIN" || task.assigneeIds.includes(data.viewerId))));
     if (next && next.id !== spaceId) setSpaceId(next.id);
-  }, [filtre, tasks, spaceId, data.spaces, data.today]);
+  }, [filtre, tasks, spaceId, data.spaces, data.today, data.viewerRole, data.viewerId]);
 
   useEffect(() => {
     if (!editor?.id) {
       return undefined;
     }
-    const timer = setInterval(() => router.refresh(), 5000);
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      refreshQuiet(router);
+    }, 5000);
     return () => clearInterval(timer);
   }, [editor?.id, router]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (dragging.current) return;
-      router.refresh();
+      if (dragging.current || document.hidden || editorRef.current) return;
+      refreshQuiet(router);
     }, 5000);
     return () => clearInterval(timer);
   }, [router]);
 
   const day = data.day ?? { now: [], earlier: [], log: [] };
+  const [sessionNow, setSessionNow] = useState(null);
+  const [sessionPaused, setSessionPaused] = useState(null);
+  useEffect(() => {
+    setSessionNow(null);
+    setSessionPaused(null);
+  }, [data.day]);
+  const nowList = sessionNow ?? day.now;
+  const pausedList = sessionPaused ?? (day.paused ?? []);
+  const viewerName = data.people.find((person) => person.id === data.viewerId)?.name ?? day.now.find((item) => item.userId === data.viewerId)?.userName ?? "";
   const lookingAt = day.team ? historyDay : data.today;
   const archive = day.team ? (day.log ?? []).filter((item) => item.day === lookingAt) : day.earlier;
   const oldestDay = shiftIsoDay(data.today, -60);
 
-  async function chooseFocus(taskId) {
-    setFocusing(true);
-    const result = await setWorkFocusAction(taskId);
-    setFocusing(false);
-    if (!result.ok) {
-      setMessage(result.message);
-      return;
-    }
-    router.refresh();
+  function patchTask(taskId, recipe) {
+    setTasks((current) => {
+      const index = current.findIndex((task) => task.id === taskId);
+      const base = index >= 0 ? current[index] : null;
+      const next = recipe(base ?? { id: taskId, comments: [], images: [], links: [], revisions: [] });
+      if (!next) return current.filter((task) => task.id !== taskId);
+      if (index < 0) return [...current, next];
+      return current.map((task) => (task.id === taskId ? next : task));
+    });
   }
 
-  async function finishFocus(taskId) {
-    setFocusing(true);
-    const result = await finishWorkAction(taskId);
-    setFocusing(false);
-    if (!result.ok) {
-      setMessage(result.message);
-      return;
+  function chooseFocus(taskId) {
+    const task = tasks.find((item) => item.id === taskId);
+    const previous = (sessionPaused ?? day.paused ?? []).find((item) => item.taskId === taskId && item.userId === data.viewerId)
+      ?? (sessionNow ?? day.now).find((item) => item.userId === data.viewerId);
+    setSessionNow([
+      ...(sessionNow ?? day.now).filter((item) => item.userId !== data.viewerId),
+      { id: `local-${taskId}`, userId: data.viewerId, userName: previous?.userName || viewerName, title: task?.title ?? previous?.title ?? "", taskId, startedLabel: "şimdi" },
+    ]);
+    setSessionPaused((sessionPaused ?? day.paused ?? []).filter((item) => !(item.userId === data.viewerId && item.taskId === taskId)));
+    void setWorkFocusAction(taskId).then((result) => {
+      if (!result.ok) {
+        setMessage(result.message);
+        setSessionNow(null);
+        setSessionPaused(null);
+        return;
+      }
+      refreshQuiet(router);
+    });
+  }
+
+  function finishFocus(taskId) {
+    const current = (sessionNow ?? day.now).find((item) => item.taskId === taskId && item.userId === data.viewerId);
+    setSessionNow((sessionNow ?? day.now).filter((item) => !(item.taskId === taskId && item.userId === data.viewerId)));
+    if (current) {
+      setSessionPaused([...(sessionPaused ?? day.paused ?? []), { ...current, pausedLabel: "şimdi" }]);
     }
-    router.refresh();
+    void finishWorkAction(taskId).then((result) => {
+      if (!result.ok) {
+        setMessage(result.message);
+        setSessionNow(null);
+        setSessionPaused(null);
+        return;
+      }
+      refreshQuiet(router);
+    });
   }
 
   function openFocused(item) {
@@ -848,6 +1011,25 @@ export default function WorkBoard({
   }
 
   const names = new Map(data.people.map((person) => [person.id, person.name]));
+  const needle = query.trim().toLocaleLowerCase("tr");
+
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (!needle) {
+      queryJump.current = "";
+      return;
+    }
+    if (queryJump.current === needle) return;
+    queryJump.current = needle;
+    const people = new Map(data.people.map((person) => [person.id, person.name]));
+    const own = (task) => !filtre || data.viewerRole === "ADMIN" || task.assigneeIds.includes(data.viewerId);
+    if (tasks.some((task) => task.spaceId === spaceId && matchesWorkFilter(task, filtre, data.today) && own(task) && matchesSearch(task, needle, people))) return;
+    const next = data.spaces.find((space) => tasks.some((task) => task.spaceId === space.id && matchesWorkFilter(task, filtre, data.today) && own(task) && matchesSearch(task, needle, people)));
+    if (next && next.id !== spaceId) setSpaceId(next.id);
+  }, [needle, tasks, spaceId, filtre, data.today, data.spaces, data.people]);
   const colors = personColors(data.people);
   const openTask = editor?.id ? tasks.find((task) => task.id === editor.id) ?? null : null;
   const openCommentCount = openTask?.commentCount ?? null;
@@ -857,16 +1039,22 @@ export default function WorkBoard({
     setClearedComments((current) => current[editor.id] === openCommentCount ? current : { ...current, [editor.id]: openCommentCount });
     let cancel = false;
     void seeCardAction(editor.id).then((result) => {
-      if (!cancel && result?.ok) router.refresh();
+      if (!cancel && result?.ok) refreshQuiet(router);
     });
     return () => {
       cancel = true;
     };
   }, [editor?.id, openCommentCount, router]);
 
+  function matchesBoard(task) {
+    if (!matchesWorkFilter(task, filtre, data.today)) return false;
+    if (!filtre || data.viewerRole === "ADMIN") return true;
+    return task.assigneeIds.includes(data.viewerId);
+  }
+
   function columnTasks(column) {
     return tasks
-      .filter((task) => task.spaceId === spaceId && task.column === column && matchesWorkFilter(task, filtre, data.today))
+      .filter((task) => task.spaceId === spaceId && task.column === column && matchesBoard(task) && matchesSearch(task, needle, names))
       .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "tr"));
   }
 
@@ -879,7 +1067,7 @@ export default function WorkBoard({
     setSpaceName("");
     setAdding(false);
     if (result.id) setSpaceId(result.id);
-    router.refresh();
+    refreshQuiet(router);
   }
 
   async function place(taskId, column, index, items) {
@@ -924,7 +1112,7 @@ export default function WorkBoard({
       setMessage(result.message);
       return result;
     }
-    if (column !== current.column) router.refresh();
+    if (column !== current.column) refreshQuiet(router);
     return result;
   }
 
@@ -942,21 +1130,30 @@ export default function WorkBoard({
     }
   }
 
-  async function confirmRevision(items) {
+  function confirmRevision(items) {
     if (!revision) return;
-    if (revision.mode === "move") {
-      const result = await place(revision.taskId, "REVISION", revision.index, items);
-      if (result?.ok) setRevision(null);
-      return;
-    }
-    const result = await saveTaskAction({ ...revision.payload, items });
-    if (!result.ok) {
-      setMessage(result.message);
-      return;
-    }
+    const current = revision;
     setRevision(null);
+    if (current.mode === "move") {
+      void place(current.taskId, "REVISION", current.index, items).then((result) => {
+        if (!result?.ok) setRevision(current);
+      });
+      return;
+    }
+    if (current.payload?.id) {
+      patchTask(current.payload.id, (task) => ({
+        ...task,
+        ...current.payload,
+        column: "REVISION",
+        revisions: items.map((body, index) => ({ id: `local-rev-${index}`, body, done: false })),
+        revisionCount: items.length,
+      }));
+    }
     setEditor(null);
-    router.refresh();
+    void saveTaskAction({ ...current.payload, items }).then((result) => {
+      if (!result.ok) setMessage(result.message);
+      refreshQuiet(router);
+    });
   }
 
   function dropOnColumn(column, targetId) {
@@ -995,7 +1192,8 @@ export default function WorkBoard({
   return (
     <div className="-mx-4 flex flex-col sm:-mx-6 lg:-mx-8">
       <header className="px-4 pb-3 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
           <h1 className="page-title">İş Takibi</h1>
           {filtre && WORK_FILTERS[filtre] ? (
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
@@ -1041,12 +1239,42 @@ export default function WorkBoard({
               </button>
             )}
           </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {searchOpen ? (
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="field w-56"
+                placeholder="Kart, kişi veya yorum"
+                aria-label="Kart ara"
+              />
+            ) : null}
+            <button
+              type="button"
+              className="btn-secondary gap-1.5"
+              aria-expanded={searchOpen}
+              aria-label={searchOpen ? "Aramayı kapat" : "Ara"}
+              onClick={() => {
+                if (searchOpen) {
+                  setQuery("");
+                  setSearchOpen(false);
+                  return;
+                }
+                setSearchOpen(true);
+              }}
+            >
+              <Search size={16} aria-hidden="true" />
+              {searchOpen ? "Kapat" : "Ara"}
+            </button>
+          </div>
         </div>
         {message ? <div className="mt-3"><Notice tone="err">{message}</Notice></div> : null}
         <section className="mt-3 grid gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 sm:grid-cols-[auto_1fr]">
           <p className="pt-1 text-xs font-bold uppercase tracking-wide text-[#03624c]">Şu an</p>
           <div className="flex min-w-0 flex-wrap gap-2">
-            {day.now.filter((item) => item.userId === data.viewerId).map((item) => (
+            {nowList.filter((item) => item.userId === data.viewerId).map((item) => (
               <span key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-full bg-emerald-50 py-1 pl-1 pr-2 text-sm">
                 <button type="button" className="inline-flex min-w-0 items-center gap-2" onClick={() => openFocused(item)}>
                   <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white" style={{ background: colors.get(item.userId) ?? "#03624c" }}>{initials(item.userName)}</span>
@@ -1072,15 +1300,15 @@ export default function WorkBoard({
                 </span>
               );
             }) : null}
-            {!day.team && day.now.every((item) => item.userId !== data.viewerId) ? (
+            {!day.team && nowList.every((item) => item.userId !== data.viewerId) ? (
               <p className="py-1 text-sm text-slate-500">Karttaki oynat düğmesiyle şu anki işini seç.</p>
             ) : null}
           </div>
-          {(day.paused ?? []).length > 0 ? (
+          {pausedList.length > 0 ? (
             <>
               <p className="pt-1 text-xs font-bold uppercase tracking-wide text-amber-700">Durdu</p>
               <div className="flex min-w-0 flex-wrap gap-2">
-                {day.paused.map((item) => (
+                {pausedList.map((item) => (
                   <span key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-full bg-amber-50 py-1 pl-3 pr-2 text-sm text-slate-700">
                     <button type="button" className="inline-flex min-w-0 items-center gap-2" onClick={() => openFocused(item)}>
                       <span className="shrink-0 text-xs text-slate-400">{item.pausedLabel}</span>
@@ -1152,9 +1380,9 @@ export default function WorkBoard({
                   const late = Boolean(!done && ((task.dueOn && task.dueOn < data.today) || (deadline && Date.parse(deadline) <= Date.parse(data.now))));
                   const when = scheduleLabel(task);
                   const unread = clearedComments[task.id] === task.commentCount ? 0 : (task.unreadComments ?? 0);
-                  const live = day.now.filter((item) => item.taskId === task.id);
+                  const live = nowList.filter((item) => item.taskId === task.id);
                   const mine = live.some((item) => item.userId === data.viewerId);
-                  const pausedMine = (day.paused ?? []).some((item) => item.taskId === task.id && item.userId === data.viewerId);
+                  const pausedMine = pausedList.some((item) => item.taskId === task.id && item.userId === data.viewerId);
                   return (
                     <article
                       key={task.id}
@@ -1307,6 +1535,9 @@ export default function WorkBoard({
           onClose={() => setEditor(null)}
           onAskRevision={(payload) => setRevision({ mode: "save", payload })}
           onToggleRevision={(taskId, item) => void toggleRevision(taskId, item)}
+          patchTask={patchTask}
+          report={setMessage}
+          viewerName={viewerName}
         />
       ) : null}
       {revision ? <RevisionDialog onClose={() => setRevision(null)} onSave={(items) => void confirmRevision(items)} /> : null}

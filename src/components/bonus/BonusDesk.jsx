@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Notice from "@/components/Notice";
 import {
   deleteAwardAction,
@@ -11,6 +11,7 @@ import {
   setCriterionActiveAction,
 
 } from "@/app/(panel)/prim/actions";
+import { useQuietAction, useQuietForm } from "@/client/refreshQuiet";
 
 
 
@@ -42,6 +43,21 @@ function lira(value) {
   return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${fraction} TL`;
 }
 
+function DirectForm({ action, confirm, children }) {
+  const submit = useQuietForm(action);
+  return (
+    <form onSubmit={(event) => {
+      if (confirm && !window.confirm(confirm)) {
+        event.preventDefault();
+        return;
+      }
+      submit(event);
+    }}>
+      {children}
+    </form>
+  );
+}
+
 function StateForm({
   action,
   children,
@@ -51,7 +67,7 @@ function StateForm({
 
 
 ) {
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [state, formAction, pending] = useQuietAction(action, undefined);
   return (
     <form action={formAction} className={className ?? "space-y-3"}>
       {state ? <Notice tone={state.ok ? "ok" : "err"}>{state.message}</Notice> : null}
@@ -125,15 +141,15 @@ export default function BonusDesk({
                 {canManage ? (
                   <div className="flex flex-wrap gap-2">
                     <Link className="btn-secondary" href={`/prim?ay=${data.month}&kayit=${award.id}`}>Düzenle</Link>
-                    <form action={setAwardPaidAction}>
+                    <DirectForm action={setAwardPaidAction}>
                       <input type="hidden" name="id" value={award.id} />
                       <input type="hidden" name="paid" value={award.paid ? "false" : "true"} />
                       <button className="btn-secondary" type="submit">{award.paid ? "Ödenmedi yap" : "Ödendi"}</button>
-                    </form>
-                    <form action={deleteAwardAction} onSubmit={(event) => { if (!window.confirm("Bu prim kaydı silinsin mi?")) event.preventDefault(); }}>
+                    </DirectForm>
+                    <DirectForm action={deleteAwardAction} confirm="Bu prim kaydı silinsin mi?">
                       <input type="hidden" name="id" value={award.id} />
                       <button className="btn-secondary" type="submit">Sil</button>
-                    </form>
+                    </DirectForm>
                   </div>
                 ) : null}
               </li>
@@ -224,11 +240,11 @@ export default function BonusDesk({
                 <p>{item.name} · {lira(item.defaultAmount)}{item.active ? "" : " · Kapalı"}</p>
               )}
               {canManage ? (
-                <form action={setCriterionActiveAction}>
+                <DirectForm action={setCriterionActiveAction}>
                   <input type="hidden" name="id" value={item.id} />
                   <input type="hidden" name="active" value={item.active ? "false" : "true"} />
                   <button className="btn-secondary" type="submit">{item.active ? "Kapat" : "Aç"}</button>
-                </form>
+                </DirectForm>
               ) : null}
             </li>
           ))}

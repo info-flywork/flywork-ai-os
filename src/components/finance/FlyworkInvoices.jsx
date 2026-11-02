@@ -1,14 +1,16 @@
 "use client";
 
-import { Fragment, useActionState, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Notice from "@/components/Notice";
 import {
   attachInvoiceFileAction,
   deleteInvoiceLineAction,
   importFlyworkInvoiceAction,
+  createManualFlyworkAction,
   scanGmailAction,
   updateInvoiceLineAction,
 } from "@/app/(panel)/harcama/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 import { FLYWORK_CARDS, withAllCurrencies } from "@/server/finance/cards";
 
 
@@ -173,6 +175,92 @@ function InvoiceLineEditor({ invoice, people, action, pending, onClose }) {
   );
 }
 
+function ManualChargeForm({ month, people }) {
+  const [state, action] = useQuietAction(createManualFlyworkAction, null);
+  const [payment, setPayment] = useState("CARD");
+  const [formKey, setFormKey] = useState(0);
+  const anil = people.find((person) => person.name === "Anıl Can Mayancur");
+  useEffect(() => {
+    if (!state?.ok) return;
+    setFormKey((value) => value + 1);
+    setPayment("CARD");
+  }, [state]);
+  return (
+    <section className="panel-card">
+      <h2 className="section-title">Manuel harcama ekle</h2>
+      <p className="mt-1 text-sm text-slate-500">Kart çekimini şimdi yaz. Fatura dosyası gelince satırdaki Fatura ekle ile bağlanır.</p>
+      {state ? <div className="mt-3"><Notice tone={state.ok ? "ok" : "err"}>{state.message}</Notice></div> : null}
+      <form key={formKey} action={action} className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <label className="text-sm">
+          Tarih
+          <input type="date" name="issuedOn" required defaultValue={`${month}-01`} className="field mt-1" />
+        </label>
+        <label className="text-sm">
+          Tedarikçi
+          <input name="vendor" required placeholder="Google Cloud" className="field mt-1" />
+        </label>
+        <label className="text-sm lg:col-span-2">
+          Öğe açıklaması
+          <input name="description" required defaultValue="Ödeme alındı" className="field mt-1" />
+        </label>
+        <label className="text-sm">
+          Referans
+          <input name="reference" placeholder="CLOUD zCzv4W" className="field mt-1" />
+        </label>
+        <label className="text-sm">
+          Adet
+          <input name="quantity" type="number" min="1" max="9999" required defaultValue="1" className="field mt-1" />
+        </label>
+        <label className="text-sm">
+          Tutar
+          <input name="amount" required inputMode="decimal" placeholder="61,24" className="field mt-1" />
+        </label>
+        <label className="text-sm">
+          Para birimi
+          <select name="currency" defaultValue="TRY" className="field mt-1">
+            <option value="TRY">TL</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          Ödeme türü
+          <select name="paymentMethod" value={payment} onChange={(event) => setPayment(event.target.value)} className="field mt-1">
+            {PAYMENTS.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </label>
+        {payment === "CARD" ? (
+          <label className="text-sm">
+            Ödeme yapılan kart
+            <select name="accountLabel" defaultValue="Anıl Bey kart" className="field mt-1">
+              {FLYWORK_CARDS.map((card) => (
+                <option key={card} value={card}>{card}</option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <input type="hidden" name="accountLabel" value="" />
+        )}
+        <label className="text-sm">
+          Harcamayı yapan
+          <select name="person" required defaultValue={anil?.id ?? ""} className="field mt-1">
+            {anil ? null : <option value="" disabled>Seç</option>}
+            {SPENDER_ORDER.flatMap((name) => {
+              const person = people.find((item) => item.name === name);
+              return person ? [<option key={person.id} value={person.id}>{person.name}</option>] : [];
+            })}
+          </select>
+        </label>
+        <div className="flex items-end">
+          <button type="submit" className="btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function moneyCell(invoice, currency) {
   if (invoice.currency !== currency) return "";
   const formatted = new Intl.NumberFormat("tr-TR", {
@@ -198,11 +286,11 @@ export default function FlyworkInvoices({
 
 
 ) {
-  const [state, action, pending] = useActionState(importFlyworkInvoiceAction, null);
-  const [scanState, scanAction, scanPending] = useActionState(scanGmailAction, null);
-  const [editState, editAction, editPending] = useActionState(updateInvoiceLineAction, null);
-  const [fileState, fileAction, filePending] = useActionState(attachInvoiceFileAction, null);
-  const [deleteState, deleteAction, deletePending] = useActionState(deleteInvoiceLineAction, null);
+  const [state, action, pending] = useQuietAction(importFlyworkInvoiceAction, null);
+  const [scanState, scanAction, scanPending] = useQuietAction(scanGmailAction, null);
+  const [editState, editAction, editPending] = useQuietAction(updateInvoiceLineAction, null);
+  const [fileState, fileAction, filePending] = useQuietAction(attachInvoiceFileAction, null);
+  const [deleteState, deleteAction, deletePending] = useQuietAction(deleteInvoiceLineAction, null);
   const fileInput = useRef(null);
   const [fileName, setFileName] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -266,6 +354,8 @@ export default function FlyworkInvoices({
           </div>
         ) : null}
       </section>
+
+      <ManualChargeForm month={month} people={people} />
 
       <form action={action} className="panel-card">
         <h2 className="section-title">Fatura ekle</h2>

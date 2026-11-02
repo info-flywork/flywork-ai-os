@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { JOB_DEFINITIONS } from "@/server/automation/catalog";
 import { JOB_HANDLERS } from "@/server/automation/handlers";
-import { nextOccurrence, retryDelayMs, weekdayOf, windowKeyFromInstant } from "@/server/automation/schedule";
+import { matchesSlot, nextOccurrence, retryDelayMs, windowKeyFromInstant } from "@/server/automation/schedule";
 import { numberList } from "@/server/jsonList";
 
 
@@ -23,13 +23,17 @@ function skipJob(key, reason) {
 }
 
 function scheduleOf(job) {
-  return { weekdays: numberList(job.weekdays), hour: job.hour, minute: job.minute };
+  const definition = JOB_DEFINITIONS.find((item) => item.key === job.key);
+  return {
+    weekdays: numberList(job.weekdays),
+    hour: job.hour,
+    minute: job.minute,
+    intervalHours: definition?.intervalHours ?? 0,
+  };
 }
 
 function slotMatches(instant, definition) {
-  const [date, clock] = windowKeyFromInstant(instant).split("T");
-  const expected = `${String(definition.hour).padStart(2, "0")}:${String(definition.minute).padStart(2, "0")}`;
-  return clock === expected && (definition.weekdays.length === 0 || definition.weekdays.includes(weekdayOf(date)));
+  return matchesSlot(definition, instant);
 }
 
 function sameSchedule(
@@ -70,8 +74,10 @@ async function retireSplitInvoiceJobs(db) {
 
 export async function ensureAutomationJobs(db, now = new Date()) {
   const carried = await retireSplitInvoiceJobs(db);
-  for (const definition of JOB_DEFINITIONS) {
-    const existing = await db.automationJob.findUnique({ where: { key: definition.key } });
+  const existingJobs = await db.automationJob.findMany();
+  const byKey = new Map(existingJobs.map((job) => [job.key, job]));
+  await Promise.all(JOB_DEFINITIONS.map(async (definition) => {
+    const existing = byKey.get(definition.key);
     if (!existing) {
       const slot = nextOccurrence(definition, now);
       await db.automationJob.create({
@@ -92,16 +98,30 @@ export async function ensureAutomationJobs(db, now = new Date()) {
             : {}),
         },
       });
-      continue;
+      return;
     }
     const locked = Boolean(existing.lockedUntil && existing.lockedUntil > now);
     const stored = definition.scheduleEditable
-      ? { weekdays: numberList(existing.weekdays), hour: existing.hour, minute: existing.minute }
+      ? {
+          weekdays: numberList(existing.weekdays),
+          hour: existing.hour,
+          minute: existing.minute,
+          intervalHours: definition.intervalHours ?? 0,
+        }
       : definition;
+    const upcoming = nextOccurrence(stored, now);
+    const onSlot = slotMatches(existing.nextRunAt, stored);
+    const future = existing.nextRunAt.getTime() > now.getTime();
     const moved = definition.scheduleEditable
-      ? !slotMatches(existing.nextRunAt, stored)
-      : !sameSchedule(existing, definition) || !slotMatches(existing.nextRunAt, definition);
-    const slot = !locked && moved ? nextOccurrence(stored, now) : null;
+      ? !onSlot || (future && existing.nextRunAt.getTime() !== upcoming.getTime())
+      : !sameSchedule(existing, definition) || !onSlot;
+    const slot = !locked && moved ? upcoming : null;
+    const unchanged = existing.name === definition.name
+      && existing.agent === definition.agent
+      && (definition.scheduleEditable || sameSchedule(existing, definition))
+      && (!definition.paused || existing.state === "PAUSED")
+      && !slot;
+    if (unchanged) return;
     await db.automationJob.update({
       where: { id: existing.id },
       data: {
@@ -118,7 +138,7 @@ export async function ensureAutomationJobs(db, now = new Date()) {
         ...(slot ? { nextRunAt: slot, scheduledFor: slot, retryCount: 0, lockToken: null, lockedUntil: null } : {}),
       },
     });
-  }
+  }));
 }
 
 export async function runDueJob(db, now = new Date(), options = {}) {

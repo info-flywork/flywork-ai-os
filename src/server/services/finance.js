@@ -977,6 +977,70 @@ function lineAccountLabel(scope, paymentMethod, accountLabel) {
   return picked;
 }
 
+export async function createManualFlyworkLine(actor, input) {
+  assertCan(actor, "invoice:write");
+  assertCan(actor, "expense:review");
+  const data = parseInput(invoiceLineSchema, input);
+  const accountLabel = lineAccountLabel("COMPANY", data.paymentMethod, data.accountLabel);
+  const reference = (input.reference ?? "").trim().slice(0, 80);
+  const number = reference || `MANUEL-${randomBytes(4).toString("hex")}`;
+
+  await withDatabase((db) =>
+    db.$transaction(async (tx) => {
+      let userId = actor.id;
+      let spenderName = "Otomatik";
+      if (data.person !== "otomatik") {
+        userId = await spenderId(tx, actor, data.person);
+        const chosen = await tx.user.findUnique({ where: { id: userId }, select: { name: true } });
+        if (!chosen || !isSpenderName(chosen.name)) {
+          throw new AppError("Harcamayı yapan kişi listede yok.", "VALIDATION", 400);
+        }
+        spenderName = chosen.name;
+      }
+      const invoice = await tx.invoice.create({
+        data: {
+          number,
+          vendor: data.vendor.trim(),
+          vendorKey: vendorKey(data.vendor),
+          scope: "COMPANY",
+          amount: data.amount,
+          currency: data.currency,
+          quantity: data.quantity,
+          issuedOn: dateOnly(data.issuedOn),
+          source: "MANUAL",
+          status: "PAID",
+          note: "Manuel harcama. Fatura dosyası ayrıca eklenebilir.",
+          paymentMethod: data.paymentMethod,
+          accountLabel,
+          spenderName,
+        },
+      });
+      const expense = await tx.expense.create({
+        data: {
+          userId,
+          scope: "COMPANY",
+          category: "OTHER",
+          title: data.description,
+          vendor: data.vendor.trim(),
+          amount: data.amount,
+          currency: data.currency,
+          paymentMethod: data.paymentMethod,
+          accountLabel,
+          spentOn: dateOnly(data.issuedOn),
+          status: "APPROVED",
+          reimbursement: "NOT_REQUIRED",
+          source: "MANUAL",
+          note: `Manuel harcama ${number}`.slice(0, 500),
+          invoiceId: invoice.id,
+          reviewerId: actor.id,
+          reviewedAt: new Date(),
+        },
+      });
+      await writeAudit(tx, actor.id, expense.id, "CREATE", diff({}, snapshot(expense)));
+    }),
+  );
+}
+
 export async function updateInvoiceLine(actor, input) {
   assertCan(actor, "invoice:write");
   assertCan(actor, "expense:review");

@@ -1,9 +1,10 @@
 "use client";
 
-import { startTransition, useActionState, useState } from "react";
+import { useState } from "react";
 import Notice from "@/components/Notice";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { decidePhotoReviewAction } from "@/app/(panel)/yemek-yonetimi/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 
 const FILTERS = [
@@ -33,8 +34,11 @@ function confidenceTone(status) {
 
 export default function PhotoReview({ view }) {
   const [filter, setFilter] = useState("hepsi");
-  const [state, action, pending] = useActionState(decidePhotoReviewAction, undefined);
-  const rows = view.rows.filter((row) => filter === "hepsi" || row.status === filter);
+  const [decisions, setDecisions] = useState({});
+  const [state, action, pending] = useQuietAction(decidePhotoReviewAction, undefined);
+  const rows = view.rows
+    .filter((row) => filter === "hepsi" || row.status === filter)
+    .map((row) => (decisions[row.dishKey] ? { ...row, decision: decisions[row.dishKey] } : row));
 
   function onSubmit(event) {
     event.preventDefault();
@@ -43,7 +47,10 @@ export default function PhotoReview({ view }) {
     if (submitter instanceof HTMLButtonElement && submitter.name) {
       data.set(submitter.name, submitter.value);
     }
-    startTransition(() => action(data));
+    const dishKey = String(data.get("dishKey") ?? "");
+    const decision = String(data.get("decision") ?? "");
+    if (dishKey && decision) setDecisions((current) => ({ ...current, [dishKey]: decision }));
+    action(data);
   }
 
   return (

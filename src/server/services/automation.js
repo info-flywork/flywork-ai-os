@@ -6,6 +6,7 @@ import { runControlledInvoicePreview } from "@/server/finance/invoicePreview";
 import { isOwnCompanyName } from "@/server/finance/ownCompany";
 import { ensureAutomationJobs, JOB_COOLDOWN_MS, JOB_LOCK_MS } from "@/server/automation/engine";
 import { runInvoiceScan } from "@/server/automation/handlers";
+import { JOB_DEFINITIONS } from "@/server/automation/catalog";
 import { formatDuration, formatIstanbul, nextOccurrence } from "@/server/automation/schedule";
 import { withDatabase } from "@/server/db";
 import { numberList, stringList } from "@/server/jsonList";
@@ -18,12 +19,12 @@ export async function getAutomationPage(actor) {
   assertCan(actor, "automation:read");
   return withDatabase(async (db) => {
     await ensureAutomationJobs(db, new Date());
-    const link = await readGoogleLink(db);
-    const telegramLink = await db.telegramLink.findUnique({
-      where: { userId: actor.id },
-      select: { revokedAt: true },
-    });
-    const [jobs, runs, notices, actions, statementCount, reviews] = await Promise.all([
+    const [link, telegramLink, jobs, runs, notices, actions, statementCount, reviews] = await Promise.all([
+      readGoogleLink(db),
+      db.telegramLink.findUnique({
+        where: { userId: actor.id },
+        select: { revokedAt: true },
+      }),
       db.automationJob.findMany({ orderBy: [{ agent: "asc" }, { hour: "asc" }, { minute: "asc" }] }),
       db.automationRun.findMany({
         orderBy: { startedAt: "desc" },
@@ -66,6 +67,7 @@ export async function getAutomationPage(actor) {
         weekdays: numberList(job.weekdays),
         hour: job.hour,
         minute: job.minute,
+        intervalHours: JOB_DEFINITIONS.find((item) => item.key === job.key)?.intervalHours ?? 0,
         timezone: job.timezone,
         nextRunAt: formatIstanbul(job.nextRunAt),
         lastFinishedAt: job.lastFinishedAt ? formatIstanbul(job.lastFinishedAt) : null,
@@ -236,7 +238,11 @@ export async function setInvoiceScanSchedule(actor, jobId, hour, minute) {
     if (job.lockToken && job.lockedUntil && job.lockedUntil > now) {
       return { ok: false, code: "kilit" };
     }
-    const slot = nextOccurrence({ weekdays: [], hour, minute }, now);
+    const definition = JOB_DEFINITIONS.find((item) => item.key === "invoice.daily");
+    const slot = nextOccurrence(
+      { weekdays: [], hour, minute, intervalHours: definition?.intervalHours ?? 0 },
+      now,
+    );
     await db.automationJob.update({
       where: { id: job.id },
       data: { hour, minute, nextRunAt: slot, scheduledFor: slot },

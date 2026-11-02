@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useActionState } from "react";
 import { Check, Utensils, X } from "lucide-react";
 import Notice from "@/components/Notice";
 import TelegramPairing from "@/components/automation/TelegramPairing";
 import { saveOrderAction } from "@/app/(panel)/yemek-yonetimi/actions";
 import { mealGroup, sharesGroup } from "@/server/meals/selection";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 const SLOT_LABELS = {
   MAIN: "Ana yemekler",
@@ -119,7 +119,7 @@ export default function EmployeeMeal({
 
 
 ) {
-  const [state, action, pending] = useActionState(saveOrderAction, undefined);
+  const [state, action, pending] = useQuietAction(saveOrderAction, undefined);
   const [holidayNote, setHolidayNote] = useState(null);
   const [activeDate, setActiveDate] = useState(orderableDate(days, today));
   const day = days.find((item) => item.date === activeDate) ?? days[0];
@@ -405,11 +405,14 @@ export default function EmployeeMeal({
                           {saladOrCacik ? (
                             <p className="text-sm text-slate-500">Çorba seçilir. Yanına salata ya da cacık seçilir.</p>
                           ) : null}
+                          {group.mode === "salad" && sides.length > 0 ? (
+                            <SlotGroup slot="SIDE" items={sides} selected={sideId} blocked={[mainId, soupId, sideId, dessertId]} onSelect={chooseSide} title="Salata" hint="(çorba yerine)" />
+                          ) : null}
                           {category !== "Tatlılar" && soups.length > 0 ? (
                             <SlotGroup slot="SOUP" items={soups} selected={soupId} blocked={[mainId, soupId, sideId, dessertId]} onSelect={chooseSoup} hint={group.mode === "salad" ? "(çorba ya da salata)" : group.mode === "or" ? "(pilav ya da çorba)" : undefined} />
                           ) : null}
-                          {sides.length > 0 ? (
-                            <SlotGroup slot="SIDE" items={sides} selected={sideId} blocked={[mainId, soupId, sideId, dessertId]} onSelect={chooseSide} title={saladOrCacik ? "Salata veya cacık" : group.mode === "salad" ? "Salata" : group.mode === "or" ? "Pilav" : undefined} hint={saladOrCacik ? "(birini seç)" : group.mode === "salad" ? "(çorba yerine)" : group.mode === "or" ? "(pirinç veya bulgur)" : undefined} />
+                          {group.mode !== "salad" && sides.length > 0 ? (
+                            <SlotGroup slot="SIDE" items={sides} selected={sideId} blocked={[mainId, soupId, sideId, dessertId]} onSelect={chooseSide} title={saladOrCacik ? "Salata veya cacık" : group.mode === "or" ? "Pilav" : undefined} hint={saladOrCacik ? "(birini seç)" : group.mode === "or" ? "(pirinç veya bulgur)" : undefined} />
                           ) : null}
                           {visibleDesserts.length > 0 ? (
                             <SlotGroup slot="DESSERT" items={visibleDesserts} selected={dessertId} blocked={[mainId, soupId, sideId, dessertId]} onSelect={setDessertId} onClear={dessertId ? () => setDessertId("") : undefined} />

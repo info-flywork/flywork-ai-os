@@ -84,6 +84,7 @@ const RULES = {
   "feedback:create": ["ADMIN", "EMPLOYEE"],
   "feedback:read": ["ADMIN"],
   "feedback:review": ["ADMIN"],
+  "chat:use": ["ADMIN", "EMPLOYEE"],
 };
 
  

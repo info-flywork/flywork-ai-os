@@ -1,0 +1,1 @@
+ALTER TABLE `WorkCommentImage` ADD COLUMN `fileName` VARCHAR(180) NULL;

@@ -28,10 +28,11 @@ export function proxy(request) {
   const taskPage = pathname === "/is-takibi" || pathname.startsWith("/is-takibi/");
   const feedbackPage = pathname === "/oneri" || pathname.startsWith("/oneri/");
   const productPage = pathname === "/urunler" || pathname.startsWith("/urunler/");
+  const chatPage = pathname === "/flywork-chat" || pathname.startsWith("/flywork-chat/");
   const panelEmbed = pathname === "/uygulama-paneli" || pathname.startsWith("/uygulama-paneli/");
   const homePage = pathname === "/";
   const alertPage = pathname === "/bildirimler" || pathname.startsWith("/bildirimler/");
-  if ((mealOnly && !mealPage) || (staff && !homePage && !alertPage && !mealPage && !leavePage && !taskPage && !feedbackPage && !productPage && !panelEmbed)) {
+  if ((mealOnly && !mealPage) || (staff && !homePage && !alertPage && !mealPage && !leavePage && !taskPage && !feedbackPage && !productPage && !panelEmbed && !chatPage)) {
     const url = request.nextUrl.clone();
     url.pathname = "/yemek-yonetimi";
     url.search = "";

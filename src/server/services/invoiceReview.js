@@ -2,7 +2,7 @@ import "server-only";
 
 import { assertCan } from "@/server/auth/permissions";
 import { formatIstanbul } from "@/server/automation/schedule";
-import { presetCardCharge } from "@/server/finance/cards";
+import { mailCardCharge } from "@/server/finance/cards";
 import { vendorKey } from "@/server/finance/catalog";
 import { isOwnCompanyName } from "@/server/finance/ownCompany";
 import { stringList } from "@/server/jsonList";
@@ -314,7 +314,7 @@ export async function decideInvoiceReview(
             source: "UPLOAD",
             status: "ISSUED",
             note: draft.documentType === "RECEIPT" ? "Fiş" : null,
-            ...presetCardCharge(draft.vendor),
+            ...mailCardCharge(),
           },
         });
         await tx.invoiceDocument.create({

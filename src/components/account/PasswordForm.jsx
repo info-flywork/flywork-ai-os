@@ -1,11 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
 import { changeOwnPasswordAction } from "@/app/(panel)/hesap/actions";
 import Notice from "@/components/Notice";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 export default function PasswordForm() {
-  const [state, action, pending] = useActionState(
+  const [state, action, pending] = useQuietAction(
     changeOwnPasswordAction,
     undefined,
   );

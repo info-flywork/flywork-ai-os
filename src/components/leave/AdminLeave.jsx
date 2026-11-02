@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useFormStatus } from "react";
+import { useFormStatus } from "react";
 import Notice from "@/components/Notice";
 import { LeaveRequestDesk } from "@/components/leave/EmployeeLeave";
 import {
@@ -10,6 +10,7 @@ import {
   settleLeaveAction,
 
 } from "@/app/(panel)/izin/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 const TYPE_LABELS = {
   ANNUAL: "Yıllık izin",
@@ -137,7 +138,7 @@ function StateForm({
 
 
 ) {
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [state, formAction, pending] = useQuietAction(action, undefined);
   return (
     <form
       id={id}

@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
 import { createTelegramPairingAction, revokeTelegramLinkAction } from "@/app/(panel)/otomasyon/actions";
+import { useQuietAction, useQuietForm } from "@/client/refreshQuiet";
 
 export default function TelegramPairing({ linked, lead, showCode = true }) {
-  const [state, action, pending] = useActionState(createTelegramPairingAction, null);
+  const [state, action, pending] = useQuietAction(createTelegramPairingAction, null);
+  const revoke = useQuietForm(revokeTelegramLinkAction);
 
   return (
     <div className="mt-3 space-y-2">
@@ -20,7 +21,7 @@ export default function TelegramPairing({ linked, lead, showCode = true }) {
       ) : null}
       {state?.error ? <p>{state.error}</p> : null}
       {linked ? (
-        <form action={revokeTelegramLinkAction}>
+        <form action={revoke}>
           <button className="btn-secondary">Telegram bağını kaldır</button>
         </form>
       ) : null}

@@ -1,11 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
 import Notice from "@/components/Notice";
 import { createAnnouncementAction } from "@/app/(panel)/ayarlar/actions";
+import { useQuietAction } from "@/client/refreshQuiet";
 
 export default function AnnouncementForm({ items }) {
-  const [state, action, pending] = useActionState(createAnnouncementAction, undefined);
+  const [state, action, pending] = useQuietAction(createAnnouncementAction, undefined);
   return (
     <section className="panel-card mt-4">
       <h2 className="text-base font-semibold">Duyuru</h2>

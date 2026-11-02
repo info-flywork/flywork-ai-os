@@ -7,6 +7,7 @@ import { toPublicError } from "@/server/errors";
 import {
   createExpense,
   createInvoice,
+  createManualFlyworkLine,
   attachInvoiceFile,
   deleteInvoiceLine,
   importFlyworkInvoiceFile,
@@ -211,6 +212,33 @@ export async function createInvoiceAction(
   } catch (error) {
     unstable_rethrow(error);
     return { ok: false, message: toPublicError(error).message };
+  }
+}
+
+export async function createManualFlyworkAction(_state, formData) {
+  try {
+    const actor = await requireUser();
+    await createManualFlyworkLine(actor, {
+      vendor: String(formData.get("vendor") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      quantity: String(formData.get("quantity") ?? "1"),
+      amount: postedAmount(String(formData.get("amount") ?? "")),
+      currency: String(formData.get("currency") ?? "TRY"),
+      paymentMethod: String(formData.get("paymentMethod") ?? "CARD"),
+      accountLabel: String(formData.get("accountLabel") ?? ""),
+      issuedOn: String(formData.get("issuedOn") ?? ""),
+      person: String(formData.get("person") ?? ""),
+      reference: String(formData.get("reference") ?? ""),
+    });
+    refreshFinance();
+    return { ok: true, message: "Harcama eklendi. Fatura dosyasını satırdan sonra ekleyebilirsin." };
+  } catch (error) {
+    unstable_rethrow(error);
+    const message = toPublicError(error).message;
+    if (message === "Bu kayıt zaten var.") {
+      return { ok: false, message: "Bu tedarikçi ve referans zaten kayıtlı." };
+    }
+    return { ok: false, message };
   }
 }
 

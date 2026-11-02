@@ -68,6 +68,7 @@ export async function getEmployeeHome(actor) {
     doingCount: pulse.doingCount,
     review: pulse.review,
     week: pulse.week,
+    notices: pulse.notices,
     meal,
     leave,
     announcements,

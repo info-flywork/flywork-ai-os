@@ -206,6 +206,25 @@ describe("yemek sipariş penceresi", () => {
     expect(resolveMealSelection(items, { mainItemId: "ispir", sideItemId: "eriste" }).ok).toBe(false);
   });
 
+  it("tavuk, makarna, pilav üstü ve sebzeli üründe tüm çorbalar seçilir", () => {
+    const menu = parseAdileRows([
+      { cells: ["EZOGELİN ÇORBASI"] },
+      { cells: ["TAVUKLU YEMEKLER", "325 TL"] },
+      { cells: ["BEĞENDİ YATAĞINDA MANGALDA TAVUK", "TÜM ÇORBALAR"] },
+      { cells: ["MAKARNALAR", "300 TL"] },
+      { cells: ["BOLONEZ SOSLU SPAGETTİ"] },
+      { cells: ["PİLAV ÜSTÜ", "320 TL"] },
+      { cells: ["PİLAV ÜSTÜ NOHUT"] },
+      { cells: ["SEBZELİ ÜRÜNLER", "280 TL"] },
+      { cells: ["ISPANAK KAVURMA"] },
+    ]);
+    for (const name of ["BEĞENDİ", "BOLONEZ", "NOHUT", "ISPANAK"]) {
+      const main = menu.dishes.find((dish) => dish.slot === "MAIN" && dish.name.includes(name));
+      const soups = menu.dishes.filter((dish) => dish.slot === "SOUP" && dish.choiceKey === main?.choiceKey);
+      expect(soups.map((dish) => dish.name)).toContain("EZOGELİN ÇORBASI");
+    }
+  });
+
   it("etli yemekte ve mantıda çorba ya da salata seçilir", () => {
     const menu = parseAdileRows([
       { cells: ["EZOGELİN ÇORBASI"] },
