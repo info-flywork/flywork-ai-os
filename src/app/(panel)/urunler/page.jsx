@@ -1,6 +1,8 @@
 import ProductLibrary from "@/components/products/ProductLibrary";
 import { redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
+import { listBugPages, readBugPage } from "@/server/products/bugs";
+import { listTeamNames } from "@/server/services/users";
 import { listApplicationNames, listFigmaLinks } from "@/server/products/figmaLinks";
 import { listProducts } from "@/server/products/library";
 
@@ -16,7 +18,20 @@ export default async function UrunlerPage({ searchParams }) {
   redirectMealOnlyUser(user);
   const query = await searchParams;
   const tab = one(query.sekme);
-  const kind = tab === "oyunlar" || tab === "aso" || tab === "analiz" || tab === "figma" ? tab : "uygulamalar";
+  const kind = tab === "oyunlar" || tab === "hata" || tab === "aso" || tab === "analiz" || tab === "figma" ? tab : "uygulamalar";
+  if (kind === "hata") {
+    const bugPages = listBugPages();
+    const selected = bugPages.find((page) => page.id === one(query.sayfa)) ?? bugPages[0];
+    return (
+      <ProductLibrary
+        products={[]}
+        kind={kind}
+        bugPages={bugPages}
+        bugSheet={readBugPage(selected?.id ?? "")}
+        bugAuthors={await listTeamNames()}
+      />
+    );
+  }
   if (kind === "analiz") {
     return <ProductLibrary products={[]} kind={kind} />;
   }

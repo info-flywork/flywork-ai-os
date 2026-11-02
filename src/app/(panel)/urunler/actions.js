@@ -6,6 +6,7 @@ import { unstable_rethrow } from "next/navigation";
 import { assertNotMealOnly } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
+import { attachBugFile, clearBugFile, createBugPage, createBugRow, deleteBugPage, deleteBugRow, renameBugPage, updateBugRow } from "@/server/products/bugs";
 import { removeFigmaLink, saveFigmaLink, updateFigmaLink } from "@/server/products/figmaLinks";
 import { addUserFiles, createUserFolder, deleteLibraryEntry, prepareFolderImport } from "@/server/products/userLibrary";
 
@@ -53,6 +54,113 @@ export async function deleteFigmaLinkAction(input) {
     const removed = await removeFigmaLink(record.id);
     revalidatePath("/urunler");
     return { ok: true, message: removed.message };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function createBugPageAction() {
+  try {
+    const actor = await requireUser();
+    assertNotMealOnly(actor);
+    const page = await createBugPage();
+    revalidatePath("/urunler");
+    return { ok: true, message: "Sayfa eklendi.", page };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function deleteBugPageAction(input) {
+  try {
+    const actor = await requireUser();
+    assertNotMealOnly(actor);
+    const record = input && typeof input === "object" ? input : {};
+    const page = await deleteBugPage(record.pageId);
+    revalidatePath("/urunler");
+    return { ok: true, message: "Sayfa silindi.", page };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function renameBugPageAction(input) {
+  try {
+    const actor = await requireUser();
+    assertNotMealOnly(actor);
+    const record = input && typeof input === "object" ? input : {};
+    const page = await renameBugPage(record.pageId, record.name);
+    revalidatePath("/urunler");
+    return { ok: true, message: "Sayfa adı güncellendi.", page };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function createBugRowAction(input) {
+  try {
+    const actor = await requireUser();
+    assertNotMealOnly(actor);
+    const record = input && typeof input === "object" ? input : {};
+    const row = await createBugRow(record.pageId, actor.name);
+    revalidatePath("/urunler");
+    return { ok: true, message: "Satır eklendi.", row };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function updateBugRowAction(input) {
+  try {
+    const actor = await requireUser();
+    assertNotMealOnly(actor);
+    const record = input && typeof input === "object" ? input : {};
+    const row = await updateBugRow(record.pageId, record.rowId, record);
+    revalidatePath("/urunler");
+    return { ok: true, message: "Satır güncellendi.", row };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function deleteBugRowAction(input) {
+  try {
+    const actor = await requireUser();
+    assertNotMealOnly(actor);
+    const record = input && typeof input === "object" ? input : {};
+    const removed = await deleteBugRow(record.pageId, record.rowId);
+    revalidatePath("/urunler");
+    return { ok: true, message: removed.message };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function attachBugFileAction(formData) {
+  try {
+    const actor = await requireUser();
+    assertNotMealOnly(actor);
+    const file = formData.get("file");
+    const saved = await attachBugFile(
+      String(formData.get("pageId") ?? ""),
+      String(formData.get("rowId") ?? ""),
+      file && typeof file.arrayBuffer === "function" ? { name: file.name, bytes: Buffer.from(await file.arrayBuffer()) } : null,
+    );
+    revalidatePath("/urunler");
+    return { ok: true, message: "Dosya eklendi.", row: saved };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function clearBugFileAction(input) {
+  try {
+    const actor = await requireUser();
+    assertNotMealOnly(actor);
+    const record = input && typeof input === "object" ? input : {};
+    const row = await clearBugFile(record.pageId, record.rowId);
+    revalidatePath("/urunler");
+    return { ok: true, message: "Dosya kaldırıldı.", row };
   } catch (error) {
     return finish(error);
   }

@@ -34,6 +34,17 @@ export async function listUsers(actor) {
   );
 }
 
+export async function listTeamNames() {
+  const people = await withDatabase((db) =>
+    db.user.findMany({
+      where: { active: true, mealOnly: false },
+      select: { name: true },
+      orderBy: { name: "asc" },
+    }),
+  );
+  return people.map((person) => person.name).filter(Boolean);
+}
+
 export async function deleteUser(actor, userId) {
   assertCan(actor, "user:update");
   if (actor.id === userId) {

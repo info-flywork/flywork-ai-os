@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ChevronRight, Folder, FolderPlus, FolderUp, Pencil, Trash2 } from "lucide-react";
 import EmptyState from "@/components/ui/EmptyState";
 import { createFolderAction, deleteEntryAction, deleteFigmaLinkAction, prepareFolderImportAction, saveFigmaLinkAction, updateFigmaLinkAction, uploadProductFilesAction } from "@/app/(panel)/urunler/actions";
+import BugBoard from "@/components/products/BugBoard";
 
 const ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif";
 const ALLOWED = new Set(ACCEPT.split(",").map((ext) => ext.slice(1)));
@@ -14,6 +15,7 @@ const ALLOWED = new Set(ACCEPT.split(",").map((ext) => ext.slice(1)));
 const TABS = [
   ["uygulamalar", "Uygulamalar", "/urunler"],
   ["oyunlar", "Oyunlar", "/urunler?sekme=oyunlar"],
+  ["hata", "Hata Bug", "/urunler?sekme=hata"],
   ["aso", "ASO Metinleri", "/urunler?sekme=aso"],
   ["analiz", "Ürün Analizleri", "/urunler?sekme=analiz"],
   ["figma", "Tasarımlar", "/urunler?sekme=figma"],
@@ -81,7 +83,7 @@ function folderHint(folder) {
   return bits.join(" · ") || "Boş";
 }
 
-export default function ProductLibrary({ products, kind, area = "flow", figmaLinks = [], figmaApps = [] }) {
+export default function ProductLibrary({ products, kind, area = "flow", figmaLinks = [], figmaApps = [], bugPages = [], bugSheet = null, bugAuthors = [] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [trail, setTrail] = useState([]);
@@ -347,7 +349,7 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
     <div className={kind === "analiz" ? "flex h-[calc(100dvh-2rem)] flex-col gap-4" : "space-y-5"}>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="page-title">Ürünler</h1>
-        {kind !== "analiz" && kind !== "figma" ? (
+        {kind !== "analiz" && kind !== "figma" && kind !== "hata" ? (
           <div className="flex flex-wrap items-center gap-2">
             {inKind.length > 0 ? (
               <input
@@ -383,7 +385,9 @@ export default function ProductLibrary({ products, kind, area = "flow", figmaLin
           </Link>
         ))}
       </div>
-      {kind === "analiz" ? (
+      {kind === "hata" ? (
+        <BugBoard pages={bugPages} sheet={bugSheet} authors={bugAuthors} />
+      ) : kind === "analiz" ? (
         <AppPanelFrame />
       ) : kind === "figma" ? (
         <FigmaBoard area={area} links={figmaLinks} apps={figmaApps} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import Notice from "@/components/Notice";
 import { createExpenseAction, setSettlementAction } from "@/app/(panel)/harcama/actions";
@@ -59,6 +60,27 @@ const PAYMENTS = [
 function monthLabel(month) {
   const [year, monthNumber] = month.split("-");
   return `${MONTHS[Number(monthNumber) - 1] ?? month} ${year}`;
+}
+
+function shiftMonth(month, delta) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber - 1 + delta, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthChoices(expenses, today, selected) {
+  const latest = today.slice(0, 7);
+  const dated = expenses
+    .map((expense) => String(expense.spentOn ?? "").slice(0, 7))
+    .filter((value) => /^\d{4}-\d{2}$/.test(value) && value <= latest);
+  const start = [latest, selected, ...dated].sort()[0];
+  const choices = [];
+  let cursor = latest;
+  while (cursor >= start) {
+    choices.push(cursor);
+    cursor = shiftMonth(cursor, -1);
+  }
+  return choices;
 }
 
 function formatDate(iso) {
@@ -142,6 +164,7 @@ export default function SpendDesk({
 
 
 ) {
+  const router = useRouter();
   const [state, action] = useQuietAction(createExpenseAction, null);
   const [settlementState, settlementAction] = useQuietAction(setSettlementAction, null);
   const [showSettlement, setShowSettlement] = useState(false);
@@ -159,6 +182,8 @@ export default function SpendDesk({
     const person = spenders.find((item) => item.name === name);
     return person ? [person] : [];
   });
+  const currentMonth = today.slice(0, 7);
+  const choices = monthChoices(expenses, today, month);
   const monthExpenses = expenses
     .filter((expense) => expense.spentOn.startsWith(month))
     .sort((left, right) => left.spentOn.localeCompare(right.spentOn) || left.recordedAt.localeCompare(right.recordedAt));
@@ -170,10 +195,28 @@ export default function SpendDesk({
       </header>
 
       <section>
-        <h2 className="section-title">Bu ay kart bazında</h2>
-        <p className="mb-3 text-sm text-slate-500">
-          {monthLabel(month)} · Ofis harcamaları
-        </p>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="section-title">Kart bazında</h2>
+            <p className="text-sm text-slate-500">{monthLabel(month)} · Ofis harcamaları</p>
+          </div>
+          <label className="text-sm text-slate-600">
+            Ay
+            <select
+              value={month}
+              aria-label="Ay"
+              className="field mt-1"
+              onChange={(event) => {
+                const value = event.target.value;
+                router.push(value === currentMonth ? "/harcama?sekme=ofis" : `/harcama?sekme=ofis&ay=${value}`);
+              }}
+            >
+              {choices.map((value) => (
+                <option key={value} value={value}>{monthLabel(value)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="grid grid-cols-3 gap-3">
           {cards.map((card) => (
             <CurrencyCard key={card.label} label={card.label} rows={card.byCurrency} />
@@ -311,11 +354,11 @@ export default function SpendDesk({
 
       <section className="panel-card">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="section-title mb-0">Bu ayki giderler</h2>
+          <h2 className="section-title mb-0">{month === currentMonth ? "Bu ayki giderler" : `${monthLabel(month)} giderleri`}</h2>
         </div>
         {showSettlement && settlementState ? <Notice tone={settlementState.ok ? "ok" : "err"}>{settlementState.message}</Notice> : null}
         {monthExpenses.length === 0 ? (
-          <p className="text-sm text-slate-500">Bu ay kayıtlı gider yok.</p>
+          <p className="text-sm text-slate-500">{monthLabel(month)} için kayıtlı gider yok.</p>
         ) : (
           <ul>
             {monthExpenses.map((expense) => {
