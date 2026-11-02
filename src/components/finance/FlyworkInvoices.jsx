@@ -343,12 +343,16 @@ export default function FlyworkInvoices({
             Faturaları indir
           </a>
           <form action={scanAction}>
-            <button type="submit" className="btn-primary" disabled={scanPending}>
+            <button type="submit" className="btn-primary disabled:opacity-70" disabled={scanPending} aria-busy={scanPending}>
               {scanPending ? "Taranıyor…" : "Anlık tarama başlat"}
             </button>
           </form>
         </div>
-        {scanState ? (
+        {scanPending ? (
+          <p role="status" className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            Tarama başladı. Gmail kontrol ediliyor. Bitince sonuç burada görünecek.
+          </p>
+        ) : scanState ? (
           <div className="mt-3">
             <Notice tone={scanState.ok ? "ok" : "err"}>{scanState.message}</Notice>
           </div>
