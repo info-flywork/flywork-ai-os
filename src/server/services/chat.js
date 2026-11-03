@@ -82,14 +82,21 @@ function groupPhoto(thread) {
 
 async function staff(db) {
   return db.user.findMany({
-    where: { active: true, mealOnly: false },
-    select: { id: true, name: true, role: true, bio: true, photoKey: true, updatedAt: true },
+    where: { active: true, mealOnly: false, hidden: false },
+    select: { id: true, name: true, role: true, bio: true, photoKey: true, updatedAt: true, hidden: true },
     orderBy: { name: "asc" },
   });
 }
 
+function visibleChatMembers(members) {
+  return members.filter((member) => !member.user?.hidden);
+}
+
 async function ensureGeneral(db, actor, knownPeople) {
-  const people = knownPeople ?? await staff(db);
+  const people = [...(knownPeople ?? await staff(db))];
+  if (actor?.id && !people.some((person) => person.id === actor.id)) {
+    people.push(actor);
+  }
   let thread = await db.chatThread.findUnique({ where: { systemKey: "genel" } });
   if (!thread) {
     try {
@@ -207,7 +214,7 @@ async function loadOpen(db, actor, threadId, now, markRead = true) {
     include: {
       members: {
         where: { leftAt: null },
-        include: { user: { select: { id: true, name: true, role: true, bio: true, photoKey: true, updatedAt: true } } },
+        include: { user: { select: { id: true, name: true, role: true, bio: true, photoKey: true, updatedAt: true, hidden: true } } },
       },
       pins: {
         orderBy: { createdAt: "desc" },
@@ -223,11 +230,12 @@ async function loadOpen(db, actor, threadId, now, markRead = true) {
     include: messageInclude,
   });
   messages.reverse();
-  const others = thread.members.filter((member) => member.userId !== actor.id);
+  const members = visibleChatMembers(thread.members);
+  const others = members.filter((member) => member.userId !== actor.id);
   const title = thread.kind === "DIRECT"
     ? (others[0]?.user.name ?? "Sohbet")
     : thread.title;
-  const online = thread.members.filter((member) => now.getTime() - member.lastReadAt.getTime() <= ONLINE_MS).length;
+  const online = members.filter((member) => now.getTime() - member.lastReadAt.getTime() <= ONLINE_MS).length;
   const media = [];
   for (const message of [...messages].reverse()) {
     if (message.deletedAt) continue;
@@ -248,7 +256,7 @@ async function loadOpen(db, actor, threadId, now, markRead = true) {
     admin: mine.admin || actor.role === "ADMIN",
     muted: mine.muted,
     pinned: mine.pinned,
-    memberCount: thread.members.length,
+    memberCount: members.length,
     online,
     messages: messages.map((message) => mapMessage(message, actor.id, others.map((member) => member.lastReadAt))),
     pins: thread.pins
@@ -260,7 +268,7 @@ async function loadOpen(db, actor, threadId, now, markRead = true) {
         time: clock(pin.message.createdAt),
       })),
     media,
-    members: thread.members
+    members: members
       .map((member) => ({
         userId: member.userId,
         name: member.user.name,
@@ -319,7 +327,7 @@ export async function getChatBoard(actor, threadId) {
                 where: { leftAt: null },
                 select: {
                   userId: true,
-                  user: { select: { id: true, name: true, photoKey: true, updatedAt: true } },
+                  user: { select: { id: true, name: true, photoKey: true, updatedAt: true, hidden: true } },
                 },
               },
             },
@@ -374,7 +382,8 @@ export async function getChatBoard(actor, threadId) {
       const thread = membership.thread;
       const latest = latestByThread.get(thread.id) ?? null;
       const unread = unreadByThread.get(thread.id) ?? 0;
-      const others = thread.members.filter((member) => member.userId !== actor.id);
+      const members = visibleChatMembers(thread.members);
+      const others = members.filter((member) => member.userId !== actor.id);
       threads.push({
         id: thread.id,
         kind: thread.kind,
@@ -390,8 +399,8 @@ export async function getChatBoard(actor, threadId) {
         canRename: thread.kind === "GROUP" && (membership.admin || actor.role === "ADMIN"),
         canDelete: thread.kind === "DIRECT" || membership.admin || actor.role === "ADMIN",
         system: thread.systemKey === "genel",
-        memberCount: thread.members.length,
-        names: thread.members.map((member) => member.user.name),
+        memberCount: members.length,
+        names: members.map((member) => member.user.name),
         snippets: thread.id === chosen ? recentMessages.map((message) => message.body).join("\n") : (latest?.body ?? ""),
         recent: thread.id === chosen ? [...recentMessages].reverse().map((message) => ({
             id: message.id,
@@ -483,7 +492,7 @@ export async function openDirectChat(actor, userId) {
   guard(actor);
   if (!userId || userId === actor.id) throw new AppError("Bir ekip arkadaşı seç.", "VALIDATION", 400);
   return withDatabase(async (db) => {
-    const other = await db.user.findFirst({ where: { id: userId, active: true, mealOnly: false }, select: { id: true } });
+    const other = await db.user.findFirst({ where: { id: userId, active: true, mealOnly: false, hidden: false }, select: { id: true } });
     if (!other) throw new AppError("Bu kişiyle sohbet açılamaz.", "NOT_FOUND", 404);
     const key = directKey(actor.id, other.id);
     const existing = await db.chatThread.findUnique({ where: { directKey: key } });
@@ -513,7 +522,7 @@ export async function createGroupChat(actor, input) {
   if (memberIds.length === 0) throw new AppError("Gruba en az bir kişi ekle.", "VALIDATION", 400);
   return withDatabase(async (db) => {
     const people = await db.user.findMany({
-      where: { id: { in: memberIds }, active: true, mealOnly: false },
+      where: { id: { in: memberIds }, active: true, mealOnly: false, hidden: false },
       select: { id: true },
     });
     if (people.length !== memberIds.length) throw new AppError("Gruba eklenecek kişiler ekipte olmalı.", "VALIDATION", 400);
@@ -560,7 +569,7 @@ export async function addChatMembers(actor, input) {
     if (!thread || thread.kind !== "GROUP") throw new AppError("Kişi eklemek grup sohbetlerinde olur.", "VALIDATION", 400);
     if (!mine.admin && actor.role !== "ADMIN") throw new AppError("Üye eklemeyi grup yöneticisi yapar.", "FORBIDDEN", 403);
     const people = await db.user.findMany({
-      where: { id: { in: memberIds }, active: true, mealOnly: false },
+      where: { id: { in: memberIds }, active: true, mealOnly: false, hidden: false },
       select: { id: true },
     });
     if (people.length !== memberIds.length) throw new AppError("Eklenecek kişiler ekipte olmalı.", "VALIDATION", 400);
@@ -627,7 +636,7 @@ export async function sendChatMessage(actor, input) {
       await membership(db, actor.id, input.threadId);
       const members = await db.chatMember.findMany({
         where: { threadId: input.threadId, leftAt: null },
-        include: { user: { select: { id: true, name: true } } },
+        include: { user: { select: { id: true, name: true, hidden: true } } },
       });
       let replyToId = null;
       if (input.replyToId) {
@@ -641,7 +650,7 @@ export async function sendChatMessage(actor, input) {
           authorId: actor.id,
           body,
           replyToId,
-          mentions: { create: mentionIds(body, members.map((member) => ({ userId: member.user.id, name: member.user.name })), actor.id).map((userId) => ({ userId })) },
+          mentions: { create: mentionIds(body, visibleChatMembers(members).map((member) => ({ userId: member.user.id, name: member.user.name })), actor.id).map((userId) => ({ userId })) },
         },
       });
       for (const file of files) {
@@ -682,7 +691,7 @@ export async function editChatMessage(actor, input) {
     if (message.authorId !== actor.id) throw new AppError("Yalnızca kendi mesajını düzenleyebilirsin.", "FORBIDDEN", 403);
     const members = await db.chatMember.findMany({
       where: { threadId: message.threadId, leftAt: null },
-      include: { user: { select: { id: true, name: true } } },
+      include: { user: { select: { id: true, name: true, hidden: true } } },
     });
     await db.chatMention.deleteMany({ where: { messageId: message.id } });
     await db.chatMessage.update({
@@ -690,7 +699,7 @@ export async function editChatMessage(actor, input) {
       data: {
         body,
         editedAt: new Date(),
-        mentions: { create: mentionIds(body, members.map((member) => ({ userId: member.user.id, name: member.user.name })), actor.id).map((userId) => ({ userId })) },
+        mentions: { create: mentionIds(body, visibleChatMembers(members).map((member) => ({ userId: member.user.id, name: member.user.name })), actor.id).map((userId) => ({ userId })) },
       },
     });
   });
@@ -838,7 +847,7 @@ export async function openChatProfilePhoto(actor, kind, id) {
       return { bytes, contentType: inspectWorkImage(bytes).contentType };
     }
     const person = await db.user.findFirst({
-      where: { id, active: true, mealOnly: false },
+      where: { id, active: true, mealOnly: false, hidden: false },
       select: { photoKey: true },
     });
     if (!person?.photoKey) throw new AppError("Fotoğraf bulunamadı.", "NOT_FOUND", 404);

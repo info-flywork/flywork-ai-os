@@ -85,7 +85,7 @@ export async function readCurrentUser() {
       where: { tokenHash: cacheKey },
       include: {
         user: {
-          select: { id: true, email: true, name: true, role: true, active: true, mealOnly: true, approver: true },
+          select: { id: true, email: true, name: true, role: true, active: true, mealOnly: true, approver: true, hidden: true },
         },
       },
     }),
@@ -107,6 +107,7 @@ export async function readCurrentUser() {
     role: session.user.role,
     mealOnly: session.user.mealOnly,
     approver: session.user.approver,
+    hidden: session.user.hidden,
   };
   userCache.set(cacheKey, { user, until: Date.now() + USER_CACHE_MS });
   return user;
