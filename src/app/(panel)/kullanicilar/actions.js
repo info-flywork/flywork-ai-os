@@ -76,7 +76,11 @@ export async function deleteAccountAction(
     const actor = await requireUser();
     await deleteUser(actor, String(formData.get("userId") ?? ""));
     revalidatePath("/kullanicilar");
-    return { ok: true, message: "Hesap silindi." };
+    revalidatePath("/yemek");
+    return {
+      ok: true,
+      message: "Hesap listeden kaldırıldı. Sipariş ve diğer kayıtlar duruyor.",
+    };
   } catch (error) {
     unstable_rethrow(error);
     return { ok: false, message: toPublicError(error).message };

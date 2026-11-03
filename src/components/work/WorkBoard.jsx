@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Clock, MessageCircle, Pause, Pencil, Play, Plus, Search } from "lucide-react";
+import { Bell, Check, Clock, MessageCircle, MoreVertical, Pause, Play, Plus, Search } from "lucide-react";
 import { refreshQuiet } from "@/client/refreshQuiet";
 import { COMMENT_EMOJIS } from "@/lib/commentReactions";
 import { reminderKind, taskDeadline } from "@/lib/workDeadline";
@@ -19,7 +19,6 @@ import {
   removeLinkAction,
   createSpaceAction,
   saveTaskAction,
-  finishWorkAction,
   setRevisionAction,
   setTaskCompletedAction,
   setWorkFocusAction,
@@ -64,10 +63,10 @@ const COLUMNS = [
 ];
 
 const PRIORITY = {
-  URGENT: { label: "P0 — Acil", className: "bg-red-100 text-red-700" },
-  HIGH: { label: "P1 — Öncelikli", className: "bg-amber-200 text-amber-950" },
-  NORMAL: { label: "P2 — Normal", className: "bg-emerald-100 text-emerald-800" },
-  LOW: { label: "P3 — Düşük", className: "bg-slate-200 text-slate-600" },
+  URGENT: { label: "P0 — Acil", short: "P0", className: "bg-red-100 text-red-700" },
+  HIGH: { label: "P1 — Öncelikli", short: "P1", className: "bg-amber-100 text-amber-800" },
+  NORMAL: { label: "P2 — Normal", short: "P2", className: "bg-emerald-100 text-emerald-800" },
+  LOW: { label: "P3 — Düşük", short: "P3", className: "bg-sky-100 text-sky-800" },
 };
 
 function initials(name) {
@@ -855,17 +854,6 @@ function TaskDialog({
   );
 }
 
-function shiftIsoDay(iso, days) {
-  const date = new Date(`${iso}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function dayHeading(iso, today) {
-  if (iso === today) return "Bugün";
-  return new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
-}
-
 export default function WorkBoard({
   data,
   filtre = "",
@@ -883,7 +871,6 @@ export default function WorkBoard({
   const [over, setOver] = useState(null);
   const [focusing, setFocusing] = useState(false);
   const [revision, setRevision] = useState(null);
-  const [historyDay, setHistoryDay] = useState(data.today);
   const [clearedComments, setClearedComments] = useState({});
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -951,9 +938,6 @@ export default function WorkBoard({
   const nowList = sessionNow ?? day.now;
   const pausedList = sessionPaused ?? (day.paused ?? []);
   const viewerName = data.people.find((person) => person.id === data.viewerId)?.name ?? day.now.find((item) => item.userId === data.viewerId)?.userName ?? "";
-  const lookingAt = day.team ? historyDay : data.today;
-  const archive = day.team ? (day.log ?? []).filter((item) => item.day === lookingAt) : day.earlier;
-  const oldestDay = shiftIsoDay(data.today, -60);
 
   function patchTask(taskId, recipe) {
     setTasks((current) => {
@@ -968,13 +952,31 @@ export default function WorkBoard({
 
   function chooseFocus(taskId) {
     const task = tasks.find((item) => item.id === taskId);
-    const previous = (sessionPaused ?? day.paused ?? []).find((item) => item.taskId === taskId && item.userId === data.viewerId)
-      ?? (sessionNow ?? day.now).find((item) => item.userId === data.viewerId);
-    setSessionNow([
-      ...(sessionNow ?? day.now).filter((item) => item.userId !== data.viewerId),
-      { id: `local-${taskId}`, userId: data.viewerId, userName: previous?.userName || viewerName, title: task?.title ?? previous?.title ?? "", taskId, startedLabel: "şimdi" },
-    ]);
-    setSessionPaused((sessionPaused ?? day.paused ?? []).filter((item) => !(item.userId === data.viewerId && item.taskId === taskId)));
+    const currentNow = sessionNow ?? day.now;
+    const currentPaused = sessionPaused ?? day.paused ?? [];
+    const runningMine = currentNow.find((item) => item.taskId === taskId && item.userId === data.viewerId);
+    if (runningMine) {
+      setSessionNow(currentNow.filter((item) => !(item.taskId === taskId && item.userId === data.viewerId)));
+      setSessionPaused([
+        ...currentPaused.filter((item) => !(item.taskId === taskId && item.userId === data.viewerId)),
+        { ...runningMine, pausedLabel: "şimdi" },
+      ]);
+    } else {
+      const previous = currentPaused.find((item) => item.taskId === taskId && item.userId === data.viewerId);
+      setSessionPaused(currentPaused.filter((item) => !(item.taskId === taskId && item.userId === data.viewerId)));
+      setSessionNow([
+        ...currentNow.filter((item) => !(item.taskId === taskId && item.userId === data.viewerId)),
+        {
+          id: previous?.id ?? `local-${taskId}`,
+          userId: data.viewerId,
+          userName: previous?.userName || viewerName,
+          title: task?.title ?? previous?.title ?? "",
+          taskId,
+          spaceId: task?.spaceId ?? previous?.spaceId ?? null,
+          startedLabel: "şimdi",
+        },
+      ]);
+    }
     void setWorkFocusAction(taskId).then((result) => {
       if (!result.ok) {
         setMessage(result.message);
@@ -984,30 +986,6 @@ export default function WorkBoard({
       }
       refreshQuiet(router);
     });
-  }
-
-  function finishFocus(taskId) {
-    const current = (sessionNow ?? day.now).find((item) => item.taskId === taskId && item.userId === data.viewerId);
-    setSessionNow((sessionNow ?? day.now).filter((item) => !(item.taskId === taskId && item.userId === data.viewerId)));
-    if (current) {
-      setSessionPaused([...(sessionPaused ?? day.paused ?? []), { ...current, pausedLabel: "şimdi" }]);
-    }
-    void finishWorkAction(taskId).then((result) => {
-      if (!result.ok) {
-        setMessage(result.message);
-        setSessionNow(null);
-        setSessionPaused(null);
-        return;
-      }
-      refreshQuiet(router);
-    });
-  }
-
-  function openFocused(item) {
-    if (!item.taskId) return;
-    const task = tasks.find((row) => row.id === item.taskId);
-    if (item.spaceId) setSpaceId(item.spaceId);
-    if (task) setEditor({ id: task.id, column: task.column });
   }
 
   const names = new Map(data.people.map((person) => [person.id, person.name]));
@@ -1194,7 +1172,6 @@ export default function WorkBoard({
       <header className="px-4 pb-3 sm:px-6 lg:px-8">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <h1 className="page-title">İş Takibi</h1>
           {filtre && WORK_FILTERS[filtre] ? (
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
               {WORK_FILTERS[filtre]}
@@ -1271,91 +1248,14 @@ export default function WorkBoard({
           </div>
         </div>
         {message ? <div className="mt-3"><Notice tone="err">{message}</Notice></div> : null}
-        <section className="mt-3 grid gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 sm:grid-cols-[auto_1fr]">
-          <p className="pt-1 text-xs font-bold uppercase tracking-wide text-[#03624c]">Şu an</p>
-          <div className="flex min-w-0 flex-wrap gap-2">
-            {nowList.filter((item) => item.userId === data.viewerId).map((item) => (
-              <span key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-full bg-emerald-50 py-1 pl-1 pr-2 text-sm">
-                <button type="button" className="inline-flex min-w-0 items-center gap-2" onClick={() => openFocused(item)}>
-                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white" style={{ background: colors.get(item.userId) ?? "#03624c" }}>{initials(item.userName)}</span>
-                  <span className="shrink-0 font-semibold text-slate-800">{item.userName}</span>
-                  <span className="truncate text-slate-600">{item.title}</span>
-                  <span className="shrink-0 text-xs text-slate-400">{item.startedLabel}</span>
-                </button>
-                <button type="button" className="shrink-0 text-xs font-semibold text-[#03624c]" disabled={focusing} onClick={() => void chooseFocus(item.taskId)}>Durdur</button>
-                <button type="button" className="shrink-0 text-xs font-semibold text-emerald-700" disabled={focusing} onClick={() => void finishFocus(item.taskId)}>Bitir</button>
-              </span>
-            ))}
-            {day.team ? day.roster.map((person) => {
-              const held = person.current ? null : person.paused;
-              return (
-                <span key={person.userId} className={`inline-flex max-w-full items-center gap-2 rounded-full py-1 pl-1 pr-3 text-sm ${person.current ? "bg-emerald-50" : held ? "bg-amber-50" : "bg-slate-50"}`}>
-                  <button type="button" className="inline-flex min-w-0 items-center gap-2" disabled={!person.current && !held} onClick={() => openFocused(person.current || held)}>
-                    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white" style={{ background: colors.get(person.userId) ?? "#03624c" }}>{initials(person.userName)}</span>
-                    <span className="shrink-0 font-semibold text-slate-800">{person.userName}</span>
-                    <span className={`truncate ${person.current || held ? "text-slate-600" : "text-slate-400"}`}>{person.current ? person.current.title : held ? held.title : "iş seçmedi"}</span>
-                    {person.current ? <span className="shrink-0 text-xs text-slate-400">{person.current.startedLabel}</span> : null}
-                    {held ? <span className="shrink-0 text-xs font-semibold text-amber-700">durdu</span> : null}
-                  </button>
-                </span>
-              );
-            }) : null}
-            {!day.team && nowList.every((item) => item.userId !== data.viewerId) ? (
-              <p className="py-1 text-sm text-slate-500">Karttaki oynat düğmesiyle şu anki işini seç.</p>
-            ) : null}
-          </div>
-          {pausedList.length > 0 ? (
-            <>
-              <p className="pt-1 text-xs font-bold uppercase tracking-wide text-amber-700">Durdu</p>
-              <div className="flex min-w-0 flex-wrap gap-2">
-                {pausedList.map((item) => (
-                  <span key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-full bg-amber-50 py-1 pl-3 pr-2 text-sm text-slate-700">
-                    <button type="button" className="inline-flex min-w-0 items-center gap-2" onClick={() => openFocused(item)}>
-                      <span className="shrink-0 text-xs text-slate-400">{item.pausedLabel}</span>
-                      <span className="shrink-0 font-semibold">{item.userName}</span>
-                      <span className="truncate">{item.title}</span>
-                    </button>
-                    {item.userId === data.viewerId ? (
-                      <>
-                        <button type="button" className="shrink-0 text-xs font-semibold text-[#03624c]" disabled={focusing} onClick={() => void chooseFocus(item.taskId)}>Devam</button>
-                        <button type="button" className="shrink-0 text-xs font-semibold text-emerald-700" disabled={focusing} onClick={() => void finishFocus(item.taskId)}>Bitir</button>
-                      </>
-                    ) : null}
-                  </span>
-                ))}
-              </div>
-            </>
-          ) : null}
-          <div className="flex items-center gap-1 pt-1">
-            {day.team ? (
-              <button type="button" className="rounded-md px-1 text-sm font-bold text-slate-500 disabled:text-slate-300" aria-label="Önceki gün" disabled={lookingAt <= oldestDay} onClick={() => setHistoryDay(shiftIsoDay(lookingAt, -1))}>‹</button>
-            ) : null}
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{dayHeading(lookingAt, data.today)}</p>
-            {day.team ? (
-              <button type="button" className="rounded-md px-1 text-sm font-bold text-slate-500 disabled:text-slate-300" aria-label="Sonraki gün" disabled={lookingAt >= data.today} onClick={() => setHistoryDay(shiftIsoDay(lookingAt, 1))}>›</button>
-            ) : null}
-          </div>
-          <div className="flex min-w-0 flex-wrap gap-2">
-            {archive.length === 0 ? (
-              <p className="py-1 text-sm text-slate-500">{lookingAt === data.today ? "Bugün kapanan iş yok." : "Bu günde kapanan iş yok."}</p>
-            ) : archive.map((item) => (
-              <button key={item.id} type="button" className="inline-flex max-w-full items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-sm text-slate-700" onClick={() => openFocused(item)}>
-                <span className="shrink-0 text-xs text-slate-400">{item.startedLabel}–{item.endedLabel}</span>
-                <span className="shrink-0 font-semibold">{item.userName}</span>
-                <span className="truncate">{item.title}</span>
-                {item.done ? <span className="shrink-0 text-xs font-semibold text-emerald-700">bitti</span> : null}
-              </button>
-            ))}
-          </div>
-        </section>
       </header>
-      <div className="flex h-[calc(100dvh-8rem)] shrink-0 gap-3 overflow-x-auto px-4 pb-4 sm:px-6 lg:px-8">
+      <div className="flex h-[calc(100dvh-7rem)] shrink-0 gap-2.5 overflow-x-auto px-4 pb-4 sm:px-6 lg:px-8">
         {COLUMNS.map((column) => {
           const cards = columnTasks(column.code);
           return (
             <section
               key={column.code}
-              className={`flex h-full w-80 shrink-0 flex-col overflow-hidden rounded-3xl border-2 border-slate-300 bg-slate-100 shadow-md ${over === column.code ? "ring-2 ring-[#03624c]" : ""}`}
+              className={`flex h-full w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 ${over === column.code ? "ring-2 ring-[#03624c]" : ""}`}
               onDragOver={(event) => {
                 event.preventDefault();
                 setOver(column.code);
@@ -1365,14 +1265,14 @@ export default function WorkBoard({
                 dropOnColumn(column.code);
               }}
             >
-              <header className="border-b-2 border-slate-200 bg-white px-4 py-4">
-                <div className={`mb-3 h-2 rounded-full ${column.bar}`} />
+              <header className="border-b border-slate-200 bg-white px-3 py-2.5">
+                <div className={`mb-2 h-1 rounded-full ${column.bar}`} />
                 <div className="flex items-center gap-2">
-                  <h2 className="flex-1 text-base font-bold leading-tight tracking-tight">{column.name}</h2>
-                  <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-sm font-semibold text-white">{cards.length}</span>
+                  <h2 className="flex-1 text-sm font-bold leading-tight tracking-tight text-slate-800">{column.name}</h2>
+                  <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">{cards.length}</span>
                 </div>
               </header>
-              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
                 {cards.map((task) => {
                   const done = isDone(task);
                   const deadline = taskDeadline(task);
@@ -1383,6 +1283,10 @@ export default function WorkBoard({
                   const live = nowList.filter((item) => item.taskId === task.id);
                   const mine = live.some((item) => item.userId === data.viewerId);
                   const pausedMine = pausedList.some((item) => item.taskId === task.id && item.userId === data.viewerId);
+                  const openRevisions = (task.revisions ?? []).filter((item) => !item.done);
+                  const shownRevisions = openRevisions.slice(0, 2);
+                  const detail = String(task.detail ?? "").trim();
+                  const priority = PRIORITY[task.priority] ?? PRIORITY.NORMAL;
                   return (
                     <article
                       key={task.id}
@@ -1416,90 +1320,96 @@ export default function WorkBoard({
                         if (moved.current) return;
                         setEditor({ id: task.id, column: task.column });
                       }}
-                      className={`cursor-grab rounded-xl border bg-white p-3 shadow-sm active:cursor-grabbing ${live.length > 0 ? "border-[#03624c] ring-2 ring-[#03624c]/30" : pausedMine ? "border-amber-400 ring-2 ring-amber-200" : "border-slate-200"}`}
+                      className={`cursor-grab rounded-xl border bg-white p-2.5 shadow-sm active:cursor-grabbing ${live.length > 0 ? "border-[#03624c] ring-2 ring-[#03624c]/25" : pausedMine ? "border-amber-400 ring-2 ring-amber-200" : "border-slate-200"}`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="flex min-w-0 flex-wrap items-center gap-1">
-                          <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-bold ${PRIORITY[task.priority].className}`}>{PRIORITY[task.priority].label}</span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-bold leading-none ${priority.className}`}>{priority.short}</span>
                           {task.revisionCount > 0 ? (
-                            <span className="inline-flex rounded-md bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-800">Revize {task.revisionCount}</span>
+                            <span className="inline-flex rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-orange-800">Revize {task.revisionCount}</span>
                           ) : null}
                         </span>
-                        <span className="flex shrink-0 gap-1">
+                        <span className="flex shrink-0 items-center gap-0.5">
                           {done ? null : (
-                            <button type="button" data-no-drag disabled={focusing} aria-label={mine ? "Bu işi durdur" : pausedMine ? "Bu işe devam et" : "Şu an bu kartta çalışıyorum"} className={`rounded-full p-1.5 ${mine ? "bg-[#03624c] text-white" : pausedMine ? "border border-amber-400 bg-amber-50 text-amber-700" : "border border-slate-200 text-slate-500"}`} onClick={(event) => {
+                            <button type="button" data-no-drag disabled={focusing} aria-label={mine ? "Bu işi durdur" : pausedMine ? "Bu işe devam et" : "Şu an bu kartta çalışıyorum"} className={`rounded-md p-1 ${mine ? "bg-[#03624c] text-white" : pausedMine ? "border border-amber-400 bg-amber-50 text-amber-700" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`} onClick={(event) => {
                                 event.stopPropagation();
                                 void chooseFocus(task.id);
                               }}>
-                              {mine ? <Pause size={14} /> : <Play size={14} />}
+                              {mine ? <Pause size={13} /> : <Play size={13} />}
                             </button>
                           )}
-                          <button type="button" data-no-drag aria-label="Kartı düzenle" className="rounded-full border border-slate-200 p-1.5 text-slate-500" onClick={() => setEditor({ id: task.id, column: task.column })}>
-                            <Pencil size={14} />
+                          <button type="button" data-no-drag aria-label="Kartı düzenle" className="rounded-md p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600" onClick={() => setEditor({ id: task.id, column: task.column })}>
+                            <MoreVertical size={13} />
                           </button>
                         </span>
                       </div>
-                      <div className="mt-2 flex items-start gap-2">
+                      <div className="mt-1.5 flex items-start gap-1.5">
                         {data.viewerRole === "ADMIN" ? (
                           <button
                             type="button"
                             data-no-drag
                             aria-label={done ? "Tamamlandı işaretini kaldır" : "Tamamlandı işaretle"}
-                            className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${done ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white"}`}
+                            className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${done ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white"}`}
                             onClick={() => void toggleComplete(task)}
                           >
-                            {done ? <Check size={12} strokeWidth={3} /> : null}
+                            {done ? <Check size={10} strokeWidth={3} /> : null}
                           </button>
                         ) : done ? (
-                          <span aria-hidden className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-emerald-600 bg-emerald-600 text-white">
-                            <Check size={12} strokeWidth={3} />
+                          <span aria-hidden className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 text-white">
+                            <Check size={10} strokeWidth={3} />
                           </span>
                         ) : null}
-                        <p className={`font-medium leading-snug ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>{task.title}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-sm font-semibold leading-snug line-clamp-2 ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>{task.title}</p>
+                          {detail ? <p className="mt-0.5 text-[11px] leading-snug text-slate-500 line-clamp-2">{detail}</p> : null}
+                        </div>
                       </div>
-                      {(task.revisions ?? []).length > 0 ? (
-                        <ul className="mt-2 space-y-1 pl-7">
-                          {task.revisions.map((item) => (
+                      {shownRevisions.length > 0 ? (
+                        <ul className="mt-1.5 space-y-0.5">
+                          {shownRevisions.map((item) => (
                             <li key={item.id}>
-                              <label data-no-drag className="flex items-start gap-2 text-xs" onClick={(event) => event.stopPropagation()}>
+                              <label data-no-drag className="flex items-start gap-1.5 text-[11px] leading-snug" onClick={(event) => event.stopPropagation()}>
                                 <input type="checkbox" className="mt-0.5" checked={item.done} onChange={() => void toggleRevision(task.id, item)} />
-                                <span className={item.done ? "text-slate-400 line-through" : "text-slate-700"}>{item.body}</span>
+                                <span className={`line-clamp-1 ${item.done ? "text-slate-400 line-through" : "text-slate-600"}`}>{item.body}</span>
                               </label>
                             </li>
                           ))}
+                          {openRevisions.length > shownRevisions.length ? (
+                            <li className="pl-5 text-[10px] font-semibold text-slate-400">+{openRevisions.length - shownRevisions.length} madde</li>
+                          ) : null}
                         </ul>
                       ) : null}
                       {task.images.length > 0 ? (
-                        <div className="mt-2 flex gap-1 pl-7">
+                        <div className="mt-1.5 flex gap-1">
                           {task.images.slice(0, 3).map((image) => (
-                            <img key={image.id} src={`/api/is-gorsel/${image.id}`} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                            <img key={image.id} src={`/api/is-gorsel/${image.id}`} alt="" className="h-8 w-8 rounded-md object-cover" />
                           ))}
                         </div>
                       ) : null}
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {unread > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-[#dc2626] px-1.5 py-1 text-xs font-bold text-white" aria-label={`${unread} yeni yorum`}>
-                            <Bell size={14} />
+                          <span className="inline-flex items-center gap-0.5 rounded-md bg-[#dc2626] px-1 py-0.5 text-[10px] font-bold text-white" aria-label={`${unread} yeni yorum`}>
+                            <Bell size={11} />
                             {unread}
                           </span>
                         ) : null}
                         {when ? (
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${done ? "bg-emerald-50 text-emerald-600" : late || kind ? "bg-red-50 text-red-500" : "text-slate-500"}`}>
-                            <Clock size={13} />
+                          <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${done ? "text-emerald-600" : late || kind ? "text-red-500" : "text-slate-400"}`}>
+                            <Clock size={11} />
                             {when}
                           </span>
                         ) : null}
                         {task.commentCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
-                            <MessageCircle size={14} />
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-400">
+                            <MessageCircle size={11} />
                             {task.commentCount}
                           </span>
                         ) : null}
-                        <div className="ml-auto flex -space-x-1.5">
+                        <div className="ml-auto flex -space-x-1">
                           {task.assigneeIds.map((id) => {
                             const name = names.get(id) ?? "";
                             return (
-                              <span key={id} title={name} className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-semibold text-white" style={{ background: colors.get(id) ?? "#03624c" }}>
+                              <span key={id} title={name} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[9px] font-semibold text-white" style={{ background: colors.get(id) ?? "#03624c" }}>
                                 {initials(name)}
                               </span>
                             );
@@ -1513,7 +1423,7 @@ export default function WorkBoard({
               {column.code === "DONE" && data.viewerRole !== "ADMIN" ? null : (
                 <button
                   type="button"
-                  className="mx-3 mb-3 shrink-0 rounded-2xl bg-[#03624c] px-3 py-3 text-sm font-semibold text-white shadow-sm"
+                  className="mx-2 mb-2 shrink-0 rounded-xl border border-[#03624c]/25 bg-[#03624c]/5 px-3 py-2 text-sm font-semibold text-[#03624c]"
                   onClick={() => setEditor({ id: null, column: column.code })}
                 >
                   + Kart ekle

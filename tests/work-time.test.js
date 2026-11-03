@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayReport, formatWorkDuration, pauseGapMillis } from "@/lib/workTime";
+import { dayReport, formatWorkDuration, pauseGapMillis, taskDayReport, taskHistoryReport } from "@/lib/workTime";
 
 const people = [
   { userId: "emrah", name: "Emrah" },
@@ -50,5 +50,28 @@ describe("günlük çalışma süresi", () => {
     const now = new Date("2026-10-30T07:20:00Z");
     expect(pauseGapMillis(pausedAt, now)).toBe(20 * 60 * 1000);
     expect(pauseGapMillis(null, now)).toBe(0);
+  });
+
+  it("aynı gündeki kayıtları iş bazında toplar", () => {
+    const report = taskDayReport(people, [
+      { userId: "emrah", taskId: "a", title: "Aulix", start: at("2026-10-30T06:00:00"), stop: at("2026-10-30T07:00:00"), pausedMs: 0 },
+      { userId: "sena", taskId: "a", title: "Aulix", start: at("2026-10-30T07:00:00"), stop: at("2026-10-30T08:00:00"), pausedMs: 0 },
+      { userId: "emrah", taskId: "b", title: "Veylo", start: at("2026-10-30T08:00:00"), stop: at("2026-10-30T08:30:00"), pausedMs: 0 },
+    ], "2026-10-30", new Date("2026-10-30T12:00:00Z"));
+    expect(report.map((item) => [item.taskId, item.minutes])).toEqual([["a", 120], ["b", 30]]);
+    expect(report[0].stints.map((item) => item.name)).toEqual(["Emrah", "Sena"]);
+  });
+
+  it("iş geçmişinde toplam süre ve çalışılan günleri gösterir", () => {
+    const report = taskHistoryReport(people, [
+      { userId: "emrah", taskId: "a", title: "Aulix", start: at("2026-10-29T08:00:00"), stop: at("2026-10-29T09:00:00"), pausedMs: 0 },
+      { userId: "sena", taskId: "a", title: "Aulix", start: at("2026-10-30T06:00:00"), stop: at("2026-10-30T07:30:00"), pausedMs: 0 },
+      { userId: "emrah", taskId: "b", title: "Veylo", start: at("2026-10-30T08:00:00"), stop: at("2026-10-30T08:20:00"), pausedMs: 0 },
+    ], new Date("2026-10-30T12:00:00Z"));
+    expect(report.map((item) => [item.taskId, item.minutes, item.days.map((day) => day.day)])).toEqual([
+      ["a", 150, ["2026-10-30", "2026-10-29"]],
+      ["b", 20, ["2026-10-30"]],
+    ]);
+    expect(report[0].days[0].stints[0].name).toBe("Sena");
   });
 });

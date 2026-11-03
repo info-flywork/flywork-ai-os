@@ -732,8 +732,13 @@ export async function toggleChatReaction(actor, input) {
     const existing = await db.chatReaction.findUnique({
       where: { messageId_userId_emoji: { messageId: message.id, userId: actor.id, emoji: input.emoji } },
     });
-    if (existing) await db.chatReaction.delete({ where: { id: existing.id } });
-    else await db.chatReaction.create({ data: { messageId: message.id, userId: actor.id, emoji: input.emoji } });
+    if (existing) {
+      await db.chatReaction.delete({ where: { id: existing.id } });
+      return;
+    }
+    // Kişi başına tek tepki: yeni seçim eski tepkiyi değiştirir.
+    await db.chatReaction.deleteMany({ where: { messageId: message.id, userId: actor.id } });
+    await db.chatReaction.create({ data: { messageId: message.id, userId: actor.id, emoji: input.emoji } });
   });
 }
 

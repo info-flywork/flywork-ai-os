@@ -53,7 +53,9 @@ describe("günün iş şeridi", () => {
     expect(admin.team).toBe(true);
     expect(admin.roster.map((person) => person.userName)).toEqual(["Emrah Doğan", "Furkan Kazım Çam", "Sena Özyiğit"]);
     expect(admin.roster.find((person) => person.userId === "sena").current.title).toBe("İvme");
+    expect(admin.roster.find((person) => person.userId === "sena").currents.map((item) => item.id)).toEqual(["sena-now"]);
     expect(admin.roster.find((person) => person.userId === "furkan").current).toBeNull();
+    expect(admin.roster.find((person) => person.userId === "furkan").currents).toEqual([]);
     expect(admin.roster.find((person) => person.userId === "furkan").paused.title).toBe("Skincare");
     expect(admin.paused.map((item) => item.id)).toEqual(["furkan-held"]);
     expect(admin.earlier.map((item) => item.id)).toEqual(["emrah-done"]);
@@ -61,5 +63,24 @@ describe("günün iş şeridi", () => {
     expect(employee.roster).toEqual([]);
     expect(employee.earlier.map((item) => item.id)).toEqual(["emrah-done"]);
     expect(employee.now.map((item) => item.id)).toEqual(["sena-now"]);
+  });
+
+  it("aynı çalışanın birden fazla açık işini rosterda tutar", () => {
+    const people = [
+      { id: "emrah", name: "Emrah Doğan", role: "EMPLOYEE" },
+      { id: "sena", name: "Sena Özyiğit", role: "EMPLOYEE" },
+    ];
+    const day = {
+      now: [
+        { id: "emrah-a", userId: "emrah", userName: "Emrah Doğan", title: "Flywork kart" },
+        { id: "emrah-b", userId: "emrah", userName: "Emrah Doğan", title: "ARCON kart" },
+      ],
+      paused: [],
+      earlier: [],
+    };
+    const admin = visibleWorkDay({ id: "tunahan", role: "ADMIN" }, people, day);
+    const emrah = admin.roster.find((person) => person.userId === "emrah");
+    expect(emrah.currents.map((item) => item.id)).toEqual(["emrah-a", "emrah-b"]);
+    expect(emrah.current.id).toBe("emrah-a");
   });
 });

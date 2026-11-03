@@ -3,7 +3,7 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { refreshQuiet } from "@/client/refreshQuiet";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck, FileText, Image as ImageIcon, MessageCircle, Paperclip, Pencil, Pin, Plus, Search, Send, Smile, Trash2, Users, X } from "lucide-react";
+import { Bell, CheckCheck, ChevronDown, FileText, Image as ImageIcon, MessageCircle, Paperclip, Pencil, Pin, Plus, Search, Send, Smile, Trash2, Users, X } from "lucide-react";
 import { COMMENT_EMOJIS } from "@/lib/commentReactions";
 import {
   addMembersAction,
@@ -105,13 +105,21 @@ function toggleGrouped(reactions, emoji, viewerName) {
     found.names = found.names.filter((name) => name !== viewerName);
     return next.filter((item) => item.count > 0);
   }
-  if (found) {
-    found.count += 1;
-    found.mine = true;
-    found.names.push(viewerName);
-    return next;
+  for (const item of next) {
+    if (!item.mine) continue;
+    item.count -= 1;
+    item.mine = false;
+    item.names = item.names.filter((name) => name !== viewerName);
   }
-  return [...next, { emoji, count: 1, mine: true, names: [viewerName] }];
+  const cleaned = next.filter((item) => item.count > 0);
+  const target = cleaned.find((item) => item.emoji === emoji);
+  if (target) {
+    target.count += 1;
+    target.mine = true;
+    target.names.push(viewerName);
+    return cleaned;
+  }
+  return [...cleaned, { emoji, count: 1, mine: true, names: [viewerName] }];
 }
 
 function highlight(body, names) {
@@ -142,6 +150,7 @@ export default function FlyworkChat({ data }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [menuFor, setMenuFor] = useState(null);
+  const [reactFor, setReactFor] = useState(null);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState("");
   const [modal, setModal] = useState(null);
@@ -267,17 +276,18 @@ export default function FlyworkChat({ data }) {
   }, [router]);
 
   useEffect(() => {
-    if (!emojiOpen && !attachOpen && !menuFor) return undefined;
+    if (!emojiOpen && !attachOpen && !menuFor && !reactFor) return undefined;
     function close(event) {
       const target = event.target;
       if (target instanceof Element && target.closest("[data-chat-pop]")) return;
       setEmojiOpen(false);
       setAttachOpen(false);
       setMenuFor(null);
+      setReactFor(null);
     }
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
-  }, [emojiOpen, attachOpen, menuFor]);
+  }, [emojiOpen, attachOpen, menuFor, reactFor]);
 
   useEffect(() => {
     setMentionIndex(0);
@@ -316,6 +326,7 @@ export default function FlyworkChat({ data }) {
     setInfo(false);
     setReply(null);
     setMenuFor(null);
+    setReactFor(null);
     setEmojiOpen(false);
     setAttachOpen(false);
     setEditing(null);
@@ -694,8 +705,85 @@ export default function FlyworkChat({ data }) {
                     <div key={message.id}>
                       {showDay ? <p className="mb-3 text-center text-xs font-semibold text-slate-400">{dayHeading(message.dayKey, data.today)}</p> : null}
                       <article className={`group flex ${message.mine ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[78%] rounded-2xl px-3 py-2 shadow-sm ${message.mine ? "rounded-br-md bg-[#e7f6ef]" : "rounded-bl-md border border-slate-200 bg-white"}`}>
-                          {open.kind === "GROUP" && !message.mine && !message.deleted ? <p className="text-xs font-semibold text-[#03624c]">{message.authorName}</p> : null}
+                        <div
+                          className={`relative max-w-[78%] rounded-2xl px-3 py-2 shadow-sm ${message.mine ? "rounded-br-md bg-[#e7f6ef]" : "rounded-bl-md border border-slate-200 bg-white"}`}
+                          onDoubleClick={() => {
+                            if (message.deleted || editing === message.id) return;
+                            setMenuFor(null);
+                            setReactFor((current) => (current === message.id ? null : message.id));
+                          }}
+                        >
+                          {!message.deleted ? (
+                            <div
+                              data-chat-pop=""
+                              className={`absolute top-1.5 right-1.5 z-10 ${menuFor === message.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                            >
+                              <button
+                                type="button"
+                                aria-label="Mesaj işlemleri"
+                                aria-expanded={menuFor === message.id}
+                                className="grid h-6 w-6 place-items-center rounded-full bg-white/95 text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-slate-700"
+                                onClick={() => {
+                                  setReactFor(null);
+                                  setMenuFor(menuFor === message.id ? null : message.id);
+                                }}
+                              >
+                                <ChevronDown size={14} className={menuFor === message.id ? "rotate-180 transition-transform" : "transition-transform"} />
+                              </button>
+                              {menuFor === message.id ? (
+                                <div className="absolute right-0 top-full mt-1 w-36 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                    onClick={() => {
+                                      setReply({ id: message.id, authorName: message.authorName, body: message.body.slice(0, 80) });
+                                      setMenuFor(null);
+                                    }}
+                                  >
+                                    Yanıtla
+                                  </button>
+                                  {(open.kind === "DIRECT" || open.admin) ? (
+                                    <button
+                                      type="button"
+                                      className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                      onClick={() => {
+                                        togglePin(message);
+                                        setMenuFor(null);
+                                      }}
+                                    >
+                                      Sabitle
+                                    </button>
+                                  ) : null}
+                                  {message.mine ? (
+                                    <button
+                                      type="button"
+                                      className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                      onClick={() => {
+                                        setEditing(message.id);
+                                        setDraft(message.body);
+                                        setMenuFor(null);
+                                      }}
+                                    >
+                                      Düzenle
+                                    </button>
+                                  ) : null}
+                                  {(message.mine || open.admin) ? (
+                                    <button
+                                      type="button"
+                                      className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50"
+                                      onClick={() => {
+                                        removeMessage(message.id);
+                                        setMenuFor(null);
+                                      }}
+                                    >
+                                      Sil
+                                    </button>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {open.kind === "GROUP" && !message.mine && !message.deleted ? <p className="pr-7 text-xs font-semibold text-[#03624c]">{message.authorName}</p> : null}
                           {message.reply ? (
                             <p className="mb-1 rounded-lg bg-white/70 px-2 py-1 text-xs text-slate-500">
                               <span className="font-semibold text-slate-700">{message.reply.authorName}</span> {message.reply.body}
@@ -715,7 +803,7 @@ export default function FlyworkChat({ data }) {
                           ) : message.deleted ? (
                             <p className="text-sm italic text-slate-400">Bu mesaj silindi</p>
                           ) : (
-                            <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{highlight(message.body, mentionNames)}</p>
+                            <p className={`whitespace-pre-wrap break-words text-sm text-slate-800 ${open.kind === "GROUP" && !message.mine ? "" : "pr-7"}`}>{highlight(message.body, mentionNames)}</p>
                           )}
                           {message.attachments.map((file) => (
                             file.contentType.startsWith("image/") ? (
@@ -736,11 +824,6 @@ export default function FlyworkChat({ data }) {
                             {message.edited && !message.deleted ? <span>düzenlendi</span> : null}
                             <span>{message.time}</span>
                             {message.mine ? <CheckCheck size={14} className={message.read ? "text-[#03624c]" : "text-slate-300"} /> : null}
-                            {!message.deleted && (message.mine || open.admin) ? (
-                              <button type="button" aria-label="Mesajı sil" className="text-slate-400 hover:text-red-600" onClick={() => removeMessage(message.id)}>
-                                <Trash2 size={13} />
-                              </button>
-                            ) : null}
                           </div>
                           {message.reactions.length > 0 ? (
                             <div className="mt-1 flex flex-wrap gap-1">
@@ -751,18 +834,20 @@ export default function FlyworkChat({ data }) {
                               ))}
                             </div>
                           ) : null}
-                          {!message.deleted ? (
-                            <div className="mt-1 hidden gap-2 group-hover:flex">
-                              <button type="button" className="text-[11px] font-semibold text-slate-500" onClick={() => setReply({ id: message.id, authorName: message.authorName, body: message.body.slice(0, 80) })}>Yanıtla</button>
-                              <button type="button" data-chat-pop="" className="text-[11px] font-semibold text-slate-500" onClick={() => setMenuFor(menuFor === message.id ? null : message.id)}>Emoji</button>
-                              {(open.kind === "DIRECT" || open.admin) ? <button type="button" className="text-[11px] font-semibold text-slate-500" onClick={() => togglePin(message)}>Sabitle</button> : null}
-                              {message.mine ? <button type="button" className="text-[11px] font-semibold text-slate-500" onClick={() => { setEditing(message.id); setDraft(message.body); }}>Düzenle</button> : null}
-                            </div>
-                          ) : null}
-                          {menuFor === message.id ? (
-                            <div data-chat-pop="" className="mt-1 flex flex-wrap gap-1">
+                          {reactFor === message.id ? (
+                            <div data-chat-pop="" className="mt-2 flex flex-wrap gap-0.5 border-t border-slate-200/70 pt-2">
                               {COMMENT_EMOJIS.map((emoji) => (
-                                <button key={emoji} type="button" className="rounded-lg bg-white px-1.5 py-0.5 text-base" onClick={() => toggleReaction(message.id, emoji)}>{emoji}</button>
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  className="grid h-8 w-8 place-items-center rounded-lg text-base hover:bg-white/80"
+                                  onClick={() => {
+                                    toggleReaction(message.id, emoji);
+                                    setReactFor(null);
+                                  }}
+                                >
+                                  {emoji}
+                                </button>
                               ))}
                             </div>
                           ) : null}

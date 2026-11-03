@@ -1,5 +1,4 @@
 import "server-only";
-import { Prisma } from "@/generated/prisma/client";
 import { assertCan } from "@/server/auth/permissions";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
 import { dateOnly } from "@/server/dates";
@@ -51,9 +50,10 @@ export async function deleteUser(actor, userId) {
     throw new AppError("Kendi hesabınızı silemezsiniz.", "FORBIDDEN", 403);
   }
 
+  // Soft delete: listeden ve girişten düşer; sipariş/izin/harcama kayıtları kalır.
   return withDatabase(async (db) => {
-    const user = await db.user.findUnique({
-      where: { id: userId },
+    const user = await db.user.findFirst({
+      where: { id: userId, hidden: false },
       select: { id: true, role: true, active: true, approver: true },
     });
     if (!user) {
@@ -67,14 +67,14 @@ export async function deleteUser(actor, userId) {
         throw new AppError("Son yönetici silinemez.", "CONFLICT", 409);
       }
     }
-    try {
-      await db.user.delete({ where: { id: userId } });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
-        throw new AppError("Bu hesabın izin, harcama veya sipariş kaydı var. Silinemez.", "CONFLICT", 409);
-      }
-      throw error;
-    }
+    await db.user.update({
+      where: { id: userId },
+      data: { active: false, hidden: true },
+    });
+    await db.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   });
 }
 

@@ -1,4 +1,6 @@
+import WorkActivity from "@/components/work/WorkActivity";
 import WorkBoard from "@/components/work/WorkBoard";
+import WorkDesk from "@/components/work/WorkDesk";
 import { WORK_FILTERS } from "@/lib/workPulse";
 import { redirectMealOnlyUser } from "@/server/auth/mealAccess";
 import { requireUser } from "@/server/auth/session";
@@ -15,17 +17,30 @@ export default async function IsTakibiPage({ searchParams }) {
   const user = await requireUser();
   redirectMealOnlyUser(user);
   const query = await searchParams;
+  const sekme = one(query.sekme) === "calisma" ? "calisma" : "kartlar";
   const filtre = WORK_FILTERS[one(query.filtre)] ? one(query.filtre) : "";
   const kart = one(query.kart);
   let data = null;
   let message = "İş takibi okunamadı.";
   try {
-    const board = await getWorkBoard(user);
-    data = { ...board };
-    delete data.timeLog;
+    data = await getWorkBoard(user);
   } catch (error) {
     message = toPublicError(error).message;
   }
   if (!data) return <p>{message}</p>;
-  return <WorkBoard data={data} filtre={filtre} kart={kart} />;
+  if (sekme === "calisma") {
+    const previewEmployee = user.role === "ADMIN" && one(query.gorunum) === "calisan";
+    return (
+      <WorkDesk active="calisma">
+        <WorkActivity data={previewEmployee ? { ...data, viewerRole: "EMPLOYEE" } : data} />
+      </WorkDesk>
+    );
+  }
+  const board = { ...data };
+  delete board.timeLog;
+  return (
+    <WorkDesk active="kartlar">
+      <WorkBoard data={board} filtre={filtre} kart={kart} />
+    </WorkDesk>
+  );
 }

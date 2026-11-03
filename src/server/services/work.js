@@ -680,12 +680,14 @@ export async function setWorkFocus(actor, taskId) {
       where: { userId: actor.id, endedAt: null },
       select: { id: true, taskId: true, pausedAt: true, pausedMs: true },
     });
-    const running = open.find((item) => !item.pausedAt);
+    const running = open.filter((item) => !item.pausedAt);
     if (!taskId) {
-      if (running) {
-        await db.workSession.update({ where: { id: running.id }, data: { pausedAt: new Date() } });
-      }
-      return running ? "paused" : "idle";
+      if (running.length === 0) return "idle";
+      await db.workSession.updateMany({
+        where: { id: { in: running.map((item) => item.id) } },
+        data: { pausedAt: new Date() },
+      });
+      return "paused";
     }
     const same = open.find((item) => item.taskId === taskId);
     if (same && !same.pausedAt) {
@@ -699,9 +701,6 @@ export async function setWorkFocus(actor, taskId) {
     if (!task) throw new AppError("Kart bulunamadı.", "NOT_FOUND", 404);
     if (task.completed || task.column === "DONE") {
       throw new AppError("Tamamlanan kart şu anki iş olarak seçilemez.", "VALIDATION", 400);
-    }
-    if (running && running.id !== same?.id) {
-      await db.workSession.update({ where: { id: running.id }, data: { pausedAt: new Date() } });
     }
     if (same) {
       await db.workSession.update({

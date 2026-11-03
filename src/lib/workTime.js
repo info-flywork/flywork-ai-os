@@ -41,7 +41,7 @@ function workedEnd(entry, now) {
   return Math.max(entry.start, cap - (entry.pausedMs || 0));
 }
 
-export function dayReport(people, entries, day, now = new Date()) {
+function splitStints(entries, now = new Date()) {
   const stints = [];
   for (const entry of entries) {
     const end = workedEnd(entry, now);
@@ -51,11 +51,12 @@ export function dayReport(people, entries, day, now = new Date()) {
       const current = dayOf(cursor);
       const boundary = nextIstanbulMidnight(current);
       const pieceEnd = Math.min(end, boundary);
-      if (current === day && pieceEnd > cursor) {
+      if (pieceEnd > cursor) {
         stints.push({
           userId: entry.userId,
           taskId: entry.taskId,
           title: entry.title,
+          day: current,
           start: cursor,
           end: pieceEnd,
           minutes: (pieceEnd - cursor) / 60_000,
@@ -65,6 +66,19 @@ export function dayReport(people, entries, day, now = new Date()) {
       cursor = pieceEnd;
     }
   }
+  return stints;
+}
+
+function dayStints(entries, day, now = new Date()) {
+  return splitStints(entries, now).filter((item) => item.day === day);
+}
+
+export function shortDayLabel(iso) {
+  return new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
+}
+
+export function dayReport(people, entries, day, now = new Date()) {
+  const stints = dayStints(entries, day, now);
   return people.map((person) => {
     const mine = stints
       .filter((item) => item.userId === person.userId)
@@ -84,4 +98,81 @@ export function dayReport(people, entries, day, now = new Date()) {
       })),
     };
   });
+}
+
+export function taskDayReport(people, entries, day, now = new Date()) {
+  const names = new Map(people.map((person) => [person.userId, person.name]));
+  const groups = new Map();
+  for (const stint of dayStints(entries, day, now)) {
+    const key = stint.taskId || `title:${stint.title}`;
+    const current = groups.get(key) ?? {
+      taskId: stint.taskId ?? null,
+      title: stint.title,
+      minutes: 0,
+      running: false,
+      stints: [],
+    };
+    current.minutes += stint.minutes;
+    current.running = current.running || stint.running;
+    current.stints.push({
+      userId: stint.userId,
+      name: names.get(stint.userId) ?? "",
+      from: clock(stint.start),
+      to: clock(stint.end),
+      minutes: stint.minutes,
+      running: stint.running,
+    });
+    groups.set(key, current);
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      stints: group.stints.sort((left, right) => left.from.localeCompare(right.from) || left.name.localeCompare(right.name, "tr")),
+    }))
+    .sort((left, right) => right.minutes - left.minutes || left.title.localeCompare(right.title, "tr"));
+}
+
+export function taskHistoryReport(people, entries, now = new Date()) {
+  const names = new Map(people.map((person) => [person.userId, person.name]));
+  const allowed = new Set(people.map((person) => person.userId));
+  const groups = new Map();
+  for (const stint of splitStints(entries, now)) {
+    if (allowed.size > 0 && !allowed.has(stint.userId)) continue;
+    const key = stint.taskId || `title:${stint.title}`;
+    const current = groups.get(key) ?? {
+      taskId: stint.taskId ?? null,
+      title: stint.title,
+      minutes: 0,
+      running: false,
+      days: new Map(),
+    };
+    current.minutes += stint.minutes;
+    current.running = current.running || stint.running;
+    const dayRow = current.days.get(stint.day) ?? { day: stint.day, minutes: 0, stints: [] };
+    dayRow.minutes += stint.minutes;
+    dayRow.stints.push({
+      userId: stint.userId,
+      name: names.get(stint.userId) ?? "",
+      from: clock(stint.start),
+      to: clock(stint.end),
+      minutes: stint.minutes,
+      running: stint.running,
+    });
+    current.days.set(stint.day, dayRow);
+    groups.set(key, current);
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      taskId: group.taskId,
+      title: group.title,
+      minutes: group.minutes,
+      running: group.running,
+      days: [...group.days.values()]
+        .map((row) => ({
+          ...row,
+          stints: row.stints.sort((left, right) => left.from.localeCompare(right.from) || left.name.localeCompare(right.name, "tr")),
+        }))
+        .sort((left, right) => right.day.localeCompare(left.day)),
+    }))
+    .sort((left, right) => right.minutes - left.minutes || left.title.localeCompare(right.title, "tr"));
 }

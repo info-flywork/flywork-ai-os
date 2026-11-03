@@ -96,7 +96,13 @@ function EditForm({ user, current }) {
           action={removeAction}
           className="mt-3"
           onSubmit={(event) => {
-            if (!window.confirm(`${user.name} hesabı silinsin mi?`)) event.preventDefault();
+            if (
+              !window.confirm(
+                `${user.name} listeden kaldırılsın mı? Sipariş ve diğer kayıtlar silinmez.`,
+              )
+            ) {
+              event.preventDefault();
+            }
           }}
         >
           <input type="hidden" name="userId" value={user.id} />

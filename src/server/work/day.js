@@ -58,12 +58,16 @@ export function visibleWorkDay(actor, people, day) {
     earlier: day.earlier.filter((item) => (team ? staffIds.has(item.userId) : item.userId === actor.id)),
     log: team ? (day.log ?? []).filter((item) => staffIds.has(item.userId)) : [],
     roster: team
-      ? staff.map((person) => ({
-          userId: person.id,
-          userName: person.name,
-          current: day.now.find((item) => item.userId === person.id) ?? null,
-          paused: held.find((item) => item.userId === person.id) ?? null,
-        }))
+      ? staff.map((person) => {
+          const currents = day.now.filter((item) => item.userId === person.id);
+          return {
+            userId: person.id,
+            userName: person.name,
+            currents,
+            current: currents[0] ?? null,
+            paused: held.find((item) => item.userId === person.id) ?? null,
+          };
+        })
       : [],
   };
 }
