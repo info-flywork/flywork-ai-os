@@ -17,6 +17,7 @@ async function loadPulseBoard(actor) {
     const since = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
     const [tasks, people, spaces, sessions] = await Promise.all([
       db.workTask.findMany({
+        where: { archived: false },
         select: {
           id: true,
           spaceId: true,

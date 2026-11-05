@@ -6,8 +6,13 @@ import { withDatabase } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { istanbulToday } from "@/server/dates";
 import { COMMENT_EMOJIS, groupCommentReactions } from "@/lib/commentReactions";
+import { CHAT_REACT_EMOJIS } from "@/lib/chatReactions";
 import { inspectWorkFile, inspectWorkImage, safeFileName } from "@/server/work/images";
 import { readChatFile, removeChatFile, writeChatFile } from "@/server/chat/store";
+import { clearTyping, listTyping, markTyping } from "@/server/chat/typing";
+
+const ALLOWED_REACT = new Set([...COMMENT_EMOJIS, ...CHAT_REACT_EMOJIS]);
+const CHAT_BLOB_MAX = 20 * 1024 * 1024;
 
 const GENERAL_TOPIC = "Flywork ekibinin genel iletişim kanalı. Duyurular, güncellemeler ve günlük koordinasyon.";
 const ONLINE_MS = 2 * 60 * 1000;
@@ -63,6 +68,8 @@ function previewOf(message) {
   const file = message.attachments?.[0];
   if (!file) return "Mesaj";
   if (String(file.contentType).startsWith("image/")) return "Görsel";
+  if (String(file.contentType).startsWith("audio/")) return "Sesli mesaj";
+  if (String(file.contentType).startsWith("video/")) return "Video";
   return file.fileName || "Dosya";
 }
 
@@ -268,6 +275,7 @@ async function loadOpen(db, actor, threadId, now, markRead = true) {
         time: clock(pin.message.createdAt),
       })),
     media,
+    typing: listTyping(threadId, actor.id),
     members: members
       .map((member) => ({
         userId: member.userId,
@@ -327,6 +335,7 @@ export async function getChatBoard(actor, threadId) {
                 where: { leftAt: null },
                 select: {
                   userId: true,
+                  lastReadAt: true,
                   user: { select: { id: true, name: true, photoKey: true, updatedAt: true, hidden: true } },
                 },
               },
@@ -384,6 +393,9 @@ export async function getChatBoard(actor, threadId) {
       const unread = unreadByThread.get(thread.id) ?? 0;
       const members = visibleChatMembers(thread.members);
       const others = members.filter((member) => member.userId !== actor.id);
+      const peerOnline = thread.kind === "DIRECT"
+        ? others.some((member) => now.getTime() - member.lastReadAt.getTime() <= ONLINE_MS)
+        : false;
       threads.push({
         id: thread.id,
         kind: thread.kind,
@@ -396,6 +408,7 @@ export async function getChatBoard(actor, threadId) {
         muted: membership.muted,
         topic: thread.topic ?? "",
         image: thread.kind === "DIRECT" ? userPhoto(others[0]?.user) : groupPhoto(thread),
+        online: peerOnline,
         canRename: thread.kind === "GROUP" && (membership.admin || actor.role === "ADMIN"),
         canDelete: thread.kind === "DIRECT" || membership.admin || actor.role === "ADMIN",
         system: thread.systemKey === "genel",
@@ -449,6 +462,7 @@ export async function getChatBoard(actor, threadId) {
       pins: [],
       media: [],
       members: [],
+      typing: [],
       partial: true,
     } : null;
     return {
@@ -604,16 +618,46 @@ export async function setChatFlags(actor, input) {
     const data = {};
     if (typeof input.pinned === "boolean") data.pinned = input.pinned;
     if (typeof input.muted === "boolean") data.muted = input.muted;
+    if (input.markUnread === true) {
+      data.lastReadAt = new Date(0);
+    }
     if (Object.keys(data).length === 0) return;
     await db.chatMember.update({ where: { id: mine.id }, data });
   });
+}
+
+export async function setChatTyping(actor, threadId, active) {
+  guard(actor);
+  await withDatabase(async (db) => {
+    await membership(db, actor.id, threadId);
+  });
+  if (active) markTyping(threadId, actor.id, actor.name ?? "Birisi");
+  else clearTyping(threadId, actor.id);
+  return listTyping(threadId, actor.id);
+}
+
+function inspectChatBlob(bytes, fileName, kind) {
+  if (bytes.length === 0) throw new AppError("Dosya boş.", "VALIDATION", 400);
+  if (bytes.length > CHAT_BLOB_MAX) throw new AppError("Dosya 20 MB sınırını aşıyor.", "VALIDATION", 400);
+  const name = safeFileName(fileName || (kind === "audio" ? "ses.webm" : "video.mp4"));
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (kind === "audio") {
+    const mime = ext === "ogg" ? "audio/ogg" : ext === "mp3" || ext === "mpeg" ? "audio/mpeg" : "audio/webm";
+    return { bytes, contentType: mime, fileName: /\.(webm|ogg|mp3|mpeg)$/i.test(name) ? name : `${name}.webm` };
+  }
+  const mime = ext === "webm" ? "video/webm" : "video/mp4";
+  return { bytes, contentType: mime, fileName: /\.(mp4|webm|mov)$/i.test(name) ? name : `${name}.mp4` };
 }
 
 function preparedFiles(files) {
   const prepared = [];
   for (const file of files ?? []) {
     const bytes = Buffer.from(file.bytes);
-    const inspected = file.kind === "file" ? inspectWorkFile(bytes, file.fileName) : inspectWorkImage(bytes);
+    const inspected = file.kind === "file"
+      ? inspectWorkFile(bytes, file.fileName)
+      : file.kind === "audio" || file.kind === "video"
+        ? inspectChatBlob(bytes, file.fileName, file.kind)
+        : inspectWorkImage(bytes);
     prepared.push({
       bytes: inspected.bytes,
       contentType: inspected.contentType,
@@ -672,6 +716,7 @@ export async function sendChatMessage(actor, input) {
         data: { lastReadAt: new Date() },
       });
       await touch(db, input.threadId);
+      clearTyping(input.threadId, actor.id);
       return { id: message.id };
     });
   } catch (error) {
@@ -724,7 +769,7 @@ export async function deleteChatMessage(actor, messageId) {
 
 export async function toggleChatReaction(actor, input) {
   guard(actor);
-  if (!COMMENT_EMOJIS.includes(input?.emoji)) throw new AppError("Bu emoji kullanılamaz.", "VALIDATION", 400);
+  if (!ALLOWED_REACT.has(input?.emoji)) throw new AppError("Bu emoji kullanılamaz.", "VALIDATION", 400);
   return withDatabase(async (db) => {
     const message = await db.chatMessage.findUnique({ where: { id: input.messageId }, select: { id: true, threadId: true, deletedAt: true } });
     if (!message || message.deletedAt) throw new AppError("Mesaj bulunamadı.", "NOT_FOUND", 404);

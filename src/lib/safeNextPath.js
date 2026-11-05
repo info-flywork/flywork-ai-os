@@ -21,6 +21,9 @@ export function landingPath(
     path === "/is-takibi" ||
     path.startsWith("/is-takibi/") ||
     path.startsWith("/is-takibi?") ||
+    path === "/flywork-chat" ||
+    path.startsWith("/flywork-chat/") ||
+    path.startsWith("/flywork-chat?") ||
     feedback
   ) {
     return path;

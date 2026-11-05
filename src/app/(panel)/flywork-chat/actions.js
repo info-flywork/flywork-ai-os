@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
-import { requireUser } from "@/server/auth/session";
+import { readCurrentUser, requireUser } from "@/server/auth/session";
 import { mirrorChatToTelegram } from "@/server/telegram/chatBridge";
 import { toPublicError } from "@/server/errors";
 import {
@@ -16,6 +16,7 @@ import {
   openDirectChat,
   sendChatMessage,
   setChatFlags,
+  setChatTyping,
   setGroupPhoto,
   setOwnProfile,
   toggleChatReaction,
@@ -43,6 +44,16 @@ async function filesFrom(form) {
   for (const file of form.getAll("file")) {
     if (file instanceof File && file.size > 0) {
       files.push({ bytes: Buffer.from(await file.arrayBuffer()), fileName: file.name, kind: "file" });
+    }
+  }
+  for (const file of form.getAll("audio")) {
+    if (file instanceof File && file.size > 0) {
+      files.push({ bytes: Buffer.from(await file.arrayBuffer()), fileName: file.name || "ses.webm", kind: "audio" });
+    }
+  }
+  for (const file of form.getAll("video")) {
+    if (file instanceof File && file.size > 0) {
+      files.push({ bytes: Buffer.from(await file.arrayBuffer()), fileName: file.name || "video.mp4", kind: "video" });
     }
   }
   return files;
@@ -86,7 +97,8 @@ export async function saveGroupPhotoAction(form) {
 
 export async function loadThreadAction(threadId, markRead = true) {
   try {
-    const actor = await requireUser();
+    const actor = await readCurrentUser();
+    if (!actor) return { ok: false, auth: true, message: "Oturum sona erdi." };
     const open = await loadChatThread(actor, threadId, markRead);
     return { ok: true, open };
   } catch (error) {
@@ -174,6 +186,17 @@ export async function setChatFlagsAction(input) {
     const actor = await requireUser();
     await setChatFlags(actor, input);
     return { ok: true };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function setTypingAction(threadId, active = true) {
+  try {
+    const actor = await readCurrentUser();
+    if (!actor) return { ok: false, auth: true, message: "Oturum sona erdi." };
+    const typing = await setChatTyping(actor, String(threadId ?? ""), Boolean(active));
+    return { ok: true, typing };
   } catch (error) {
     return finish(error);
   }

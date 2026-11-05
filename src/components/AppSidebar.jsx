@@ -177,7 +177,7 @@ export default function AppSidebar({
         ) : null}
         <button
           type="button"
-          className={`flex w-full min-h-11 items-center gap-2 rounded-2xl px-1.5 py-1.5 hover:bg-slate-50 ${collapsed ? "lg:justify-center lg:px-0" : ""}`}
+          className={`flex w-full min-h-11 items-center gap-2 overflow-hidden rounded-2xl px-1.5 py-1.5 hover:bg-slate-50 ${collapsed ? "lg:justify-center lg:px-0" : ""}`}
           aria-label="Hesap"
           aria-expanded={accountOpen}
           onClick={() => {
@@ -186,9 +186,9 @@ export default function AppSidebar({
           }}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#03624c] text-sm font-semibold text-white">{initial}</span>
-          <span className={`min-w-0 flex-1 text-left ${rail}`}>
+          <span className={`min-w-0 flex-1 overflow-hidden text-left ${rail}`}>
             <span className="block truncate text-sm font-semibold text-slate-900">{user.name}</span>
-            <span className="block text-xs text-slate-500">{role}</span>
+            <span className="block truncate text-xs text-slate-500">{role}</span>
           </span>
           <ChevronDown size={16} className={`shrink-0 text-slate-400 ${rail}`} aria-hidden="true" />
         </button>

@@ -220,7 +220,7 @@ async function importPaymentNotice(db, gmail, report, actorId, messageId) {
   if (message.hasPdf) {
     return;
   }
-  const payment = parsePaymentMail(message.text);
+  const payment = parsePaymentMail(message.text, { fallbackDate: message.date });
   if (!payment) return;
   report.found += 1;
   const identity = await knownIdentity(db, payment.vendor, payment.reference);
@@ -241,6 +241,7 @@ async function importPaymentNotice(db, gmail, report, actorId, messageId) {
     return;
   }
   const charge = mailCardCharge();
+  const cardNote = payment.cardLast4 ? ` Kart •••• ${payment.cardLast4}.` : "";
   try {
     const invoice = await db.invoice.create({
       data: {
@@ -253,7 +254,7 @@ async function importPaymentNotice(db, gmail, report, actorId, messageId) {
         issuedOn: dateOnly(payment.issuedOn),
         source: "MANUAL",
         status: "PAID",
-        note: `Ödeme alındı. Referans ${payment.reference}. Fatura dosyası ayrıca eklenecek.`,
+        note: `Ödeme alındı.${cardNote} Referans ${payment.reference}. Fatura dosyası ayrıca eklenecek.`,
         ...charge,
         spenderName: "Anıl Can Mayancur",
       },
@@ -263,7 +264,7 @@ async function importPaymentNotice(db, gmail, report, actorId, messageId) {
         userId,
         scope: "COMPANY",
         category: "OTHER",
-        title: `Ödeme alındı · ${payment.reference}`.slice(0, 160),
+        title: `Ödeme alındı · ${payment.vendor}`.slice(0, 160),
         vendor: payment.vendor,
         amount: payment.amount,
         currency: payment.currency,
@@ -272,7 +273,7 @@ async function importPaymentNotice(db, gmail, report, actorId, messageId) {
         status: "APPROVED",
         reimbursement: "NOT_REQUIRED",
         source: "MANUAL",
-        note: `Ödeme alındı. Referans ${payment.reference}.`,
+        note: `Ödeme alındı.${cardNote} Referans ${payment.reference}.`,
         invoiceId: invoice.id,
         reviewerId: userId,
         reviewedAt: new Date(),

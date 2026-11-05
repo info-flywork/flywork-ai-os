@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
 import { toPublicError } from "@/server/errors";
-import { addWorkComment, addWorkImage, addWorkLink, createWorkSpace, deleteWorkImage, deleteWorkLink, deleteWorkTask, finishWorkSession, moveWorkTask, saveWorkTask, seeWorkCard, sendTaskToReview, setRevisionItem, setWorkFocus, setWorkTaskCompleted, toggleWorkCommentReaction, updateWorkComment } from "@/server/services/work";
+import { addWorkComment, addWorkImage, addWorkLink, addWorkRevisionItems, archiveDoneWorkTasks, createWorkSpace, deleteWorkImage, deleteWorkLink, deleteWorkTask, finishWorkSession, moveWorkTask, saveWorkTask, seeWorkCard, sendTaskToReview, setRevisionItem, setWorkFocus, setWorkTaskCompleted, toggleWorkCommentReaction, updateWorkComment } from "@/server/services/work";
 
  
 
@@ -89,6 +89,17 @@ export async function setRevisionAction(input) {
     await setRevisionItem(actor, input);
     revalidatePath("/is-takibi");
     return { ok: true, message: "Revize maddesi güncellendi." };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function addRevisionItemsAction(input) {
+  try {
+    const actor = await requireUser();
+    await addWorkRevisionItems(actor, input);
+    revalidatePath("/is-takibi");
+    return { ok: true, message: "Kontrol listesi güncellendi." };
   } catch (error) {
     return finish(error);
   }
@@ -220,6 +231,17 @@ export async function deleteTaskAction(id) {
     await deleteWorkTask(actor, id);
     revalidatePath("/is-takibi");
     return { ok: true, message: "Kart silindi." };
+  } catch (error) {
+    return finish(error);
+  }
+}
+
+export async function archiveDoneTasksAction(input) {
+  try {
+    const actor = await requireUser();
+    const result = await archiveDoneWorkTasks(actor, input);
+    revalidatePath("/is-takibi");
+    return { ok: true, message: result.count ? `${result.count} kart arşivlendi.` : "Arşivlenecek tamamlanan kart yok.", count: result.count };
   } catch (error) {
     return finish(error);
   }

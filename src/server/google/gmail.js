@@ -16,7 +16,8 @@ export function invoiceMailboxQuery(since) {
 }
 
 export function paymentMailboxQuery(since) {
-  const base = '("Ödeme alındı" OR "tutarındaki ödemeniz") newer_than:14d';
+  const base =
+    '("Ödeme alındı" OR "tutarındaki ödemeniz" OR "ücret tahsil ettik" OR "hesabınıza para yatırıldı" OR "account has been funded" OR "credit card ending in" OR from:tm.openai.com) newer_than:14d';
   if (!(since instanceof Date) || Number.isNaN(since.getTime())) {
     return base;
   }
@@ -274,14 +275,29 @@ export function createGmailApi(token, fetchImpl = fetch) {
         typeof payload.payload === "object"
           ? payload.payload
           : undefined;
+      const headers =
+        root && typeof root === "object" && "headers" in root ? root.headers : [];
       const threadId =
         payload && typeof payload === "object" && "threadId" in payload && typeof payload.threadId === "string"
           ? payload.threadId
           : "";
+      const internalDate =
+        payload && typeof payload === "object" && "internalDate" in payload && typeof payload.internalDate === "string"
+          ? payload.internalDate
+          : "";
+      const headerDate = headerValue(headers, "Date");
+      const date =
+        headerDate ||
+        (internalDate && !Number.isNaN(Number(internalDate))
+          ? new Date(Number(internalDate)).toISOString()
+          : "");
       return {
         threadId,
         text: textFromGmailPayload(root),
         hasPdf: payloadHasPdf(root),
+        subject: headerValue(headers, "Subject"),
+        from: headerValue(headers, "From"),
+        date,
       };
     },
     async listPdfAttachments(id) {

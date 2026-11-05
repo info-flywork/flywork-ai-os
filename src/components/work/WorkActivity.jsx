@@ -254,6 +254,22 @@ export default function WorkActivity({ data }) {
 
   return (
     <div className="space-y-5">
+      <div className="flex justify-end">
+        <div className="inline-flex h-8 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <Link
+            href="/is-takibi"
+            className="inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium text-slate-500 no-underline hover:text-slate-700"
+          >
+            Kartlar
+          </Link>
+          <Link
+            href="/is-takibi?sekme=calisma"
+            className="inline-flex h-7 items-center rounded-md bg-white px-2.5 text-xs font-medium text-slate-800 no-underline shadow-sm"
+          >
+            Çalışma
+          </Link>
+        </div>
+      </div>
       {message ? <Notice tone="err">{message}</Notice> : null}
 
       <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-[auto_1fr]">

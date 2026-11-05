@@ -33,6 +33,12 @@ function clientKnowsWorkPause(client) {
   return names.has("pausedAt") && names.has("pausedMs");
 }
 
+function clientKnowsWorkTaskArchived(client) {
+  const model = client._runtimeDataModel?.models?.WorkTask;
+  const names = new Set(model?.fields?.map((field) => field.name) ?? []);
+  return names.has("archived");
+}
+
 function clientMatchesLoadedSchema(client) {
   return (
     typeof client?.user?.findMany === "function" &&
@@ -57,6 +63,7 @@ function clientMatchesLoadedSchema(client) {
     "workTaskComment" in client &&
     "workSession" in client &&
     clientKnowsWorkPause(client) &&
+    clientKnowsWorkTaskArchived(client) &&
     "feedbackNote" in client &&
     "telegramLinkRequest" in client &&
     "telegramWorkReply" in client &&
@@ -77,7 +84,7 @@ function clientKnowsChatProfile(client) {
   return userFields.has("bio") && userFields.has("photoKey") && threadFields.has("photoKey");
 }
 
-const POOL_VERSION = 15;
+const POOL_VERSION = 16;
 
 function hideTester(args) {
   return { ...args, where: { AND: [args.where ?? {}, { hidden: false }] } };

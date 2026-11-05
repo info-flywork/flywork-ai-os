@@ -3,16 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Clock, MessageCircle, MoreVertical, Pause, Play, Plus, Search } from "lucide-react";
+import { Archive, Bell, Check, ChevronDown, Clock, ExternalLink, LayoutGrid, List, ListTodo, MessageCircle, MoreVertical, Paperclip, Pause, Play, Plus, Search, Smile, SmilePlus, Trash2, UserRound, X } from "lucide-react";
 import { refreshQuiet } from "@/client/refreshQuiet";
 import { COMMENT_EMOJIS } from "@/lib/commentReactions";
-import { reminderKind, taskDeadline } from "@/lib/workDeadline";
+import { taskDeadline } from "@/lib/workDeadline";
 import { WORK_FILTERS, matchesWorkFilter } from "@/lib/workPulse";
 import Notice from "@/components/Notice";
 import {
   addCommentAction,
   addImageAction,
   addLinkAction,
+  archiveDoneTasksAction,
   deleteTaskAction,
   moveTaskAction,
   removeImageAction,
@@ -20,53 +21,57 @@ import {
   createSpaceAction,
   saveTaskAction,
   setRevisionAction,
+  addRevisionItemsAction,
   setTaskCompletedAction,
   setWorkFocusAction,
   seeCardAction,
   toggleCommentReactionAction,
   updateCommentAction,
-
 } from "@/app/(panel)/is-takibi/actions";
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 const COLUMNS = [
-  { code: "POOL", name: "İş Havuzu", bar: "bg-slate-500" },
+  { code: "POOL", name: "İş Havuzu", bar: "bg-slate-400" },
   { code: "DOING", name: "Yapılıyor", bar: "bg-[#03624c]" },
   { code: "REVIEW", name: "Kontrol Ediliyor", bar: "bg-amber-500" },
-  { code: "REVISION", name: "Revize Ediliyor", bar: "bg-orange-500" },
-  { code: "DONE", name: "Tamamlandı", bar: "bg-emerald-600" },
+  { code: "REVISION", name: "Revize Ediliyor", bar: "bg-violet-500" },
+  { code: "DONE", name: "Tamamlandı", bar: "bg-emerald-500" },
 ];
 
+const BADGE = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium leading-none";
+
 const PRIORITY = {
-  URGENT: { label: "P0 — Acil", short: "P0", className: "bg-red-100 text-red-700" },
-  HIGH: { label: "P1 — Öncelikli", short: "P1", className: "bg-amber-100 text-amber-800" },
-  NORMAL: { label: "P2 — Normal", short: "P2", className: "bg-emerald-100 text-emerald-800" },
-  LOW: { label: "P3 — Düşük", short: "P3", className: "bg-sky-100 text-sky-800" },
+  URGENT: {
+    label: "P0 — Acil",
+    short: "P0",
+    className: `${BADGE} border border-red-200 bg-red-50 text-red-600`,
+  },
+  HIGH: {
+    label: "P1 — Öncelikli",
+    short: "P1",
+    className: `${BADGE} border border-orange-200 bg-orange-50 text-orange-600`,
+  },
+  NORMAL: {
+    label: "P2 — Normal",
+    short: "P2",
+    className: `${BADGE} border border-sky-200 bg-sky-50 text-sky-700`,
+  },
+  LOW: {
+    label: "P3 — Düşük",
+    short: "P3",
+    className: `${BADGE} border border-slate-200 bg-slate-50 text-slate-600`,
+  },
+};
+
+const QUICK_FILTERS = [
+  { key: "bana", label: "Bana Atananlar" },
+  { key: "acil", label: "Acil (P1)" },
+  { key: "geciken", label: "Gecikenler" },
+];
+
+const TAG_STYLES = {
+  revize: `${BADGE} border border-violet-200 bg-violet-50 text-violet-700`,
+  done: `${BADGE} border border-emerald-200 bg-emerald-50 text-emerald-700`,
+  space: `${BADGE} border border-slate-200 bg-slate-50 text-slate-600`,
 };
 
 function initials(name) {
@@ -146,6 +151,39 @@ function scheduleLabel(task) {
 function isDone(task) {
   return task.completed || task.column === "DONE";
 }
+
+function dueTone(task, today, nowIso) {
+  if (isDone(task)) {
+    return { kind: "done", label: scheduleLabel(task), className: `${BADGE} border border-emerald-200 bg-emerald-50 text-emerald-700` };
+  }
+  const deadline = taskDeadline(task);
+  const late = Boolean((task.dueOn && task.dueOn < today) || (deadline && Date.parse(deadline) <= Date.parse(nowIso)));
+  if (late) {
+    return { kind: "late", label: "Gecikti", detail: scheduleLabel(task), className: `${BADGE} border border-red-200 bg-red-50 text-red-600` };
+  }
+  if (task.dueOn === today) {
+    return { kind: "today", label: "Bugün", detail: scheduleLabel(task), className: `${BADGE} border border-amber-200 bg-amber-50 text-amber-700` };
+  }
+  const when = scheduleLabel(task);
+  if (!when) return null;
+  return { kind: "soon", label: when, className: `${BADGE} border border-slate-200 bg-slate-50 text-slate-500` };
+}
+
+function revisionProgress(task) {
+  const items = Array.isArray(task.revisions) ? task.revisions : [];
+  if (items.length === 0) return null;
+  const doneCount = items.filter((item) => item.done).length;
+  return {
+    doneCount,
+    total: items.length,
+    percent: Math.min(100, Math.round((doneCount / items.length) * 100)),
+  };
+}
+
+function attachmentCount(task) {
+  return (task.images?.length ?? 0) + (task.links?.length ?? 0);
+}
+
 
 function columnName(code) {
   return COLUMNS.find((item) => item.code === code)?.name ?? code;
@@ -239,6 +277,68 @@ function MentionChoices({ suggestions, activeMention, people, onHover, onPick })
   );
 }
 
+function InlineComposer({ column, onSubmit, onCancel }) {
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function onKey(event) {
+      if (event.key === "Escape") onCancel();
+    }
+    function onPointer(event) {
+      if (!rootRef.current?.contains(event.target)) onCancel();
+    }
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [onCancel]);
+
+  async function submit() {
+    const body = title.trim();
+    if (!body || busy) return;
+    setBusy(true);
+    const ok = await onSubmit(body, column);
+    if (!ok) setBusy(false);
+  }
+
+  return (
+    <div ref={rootRef} className="mx-2.5 mb-2.5 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+      <input
+        ref={inputRef}
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void submit();
+          }
+        }}
+        placeholder="Kart başlığı yazın..."
+        aria-label="Yeni kart başlığı"
+        disabled={busy}
+        className="w-full rounded-lg border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+      />
+      <div className="mt-1.5 flex items-center gap-2 px-1">
+        <button type="button" className="btn-primary h-7 px-2.5 text-xs" disabled={busy || !title.trim()} onClick={() => void submit()}>
+          {busy ? "Ekleniyor…" : "Ekle"}
+        </button>
+        <button type="button" className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700" onClick={onCancel}>
+          Vazgeç
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TaskDialog({
   task,
   column,
@@ -249,16 +349,11 @@ function TaskDialog({
   onClose,
   onAskRevision,
   onToggleRevision,
+  onMoveColumn,
   patchTask,
   report,
   viewerName,
-}
-
-
-
-
-
-) {
+}) {
   const router = useRouter();
   const [title, setTitle] = useState(task?.title ?? "");
   const [detail, setDetail] = useState(task?.detail ?? "");
@@ -281,18 +376,83 @@ function TaskDialog({
   const pending = false;
   const [mentionIndex, setMentionIndex] = useState(0);
   const [emojiFor, setEmojiFor] = useState(null);
+  const [checklistDraft, setChecklistDraft] = useState("");
+  const [shown, setShown] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
+  const [commentBusy, setCommentBusy] = useState(false);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
   const commentRef = useRef(null);
+  const saveTimer = useRef(null);
   const editRef = useRef(null);
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const assigneeMenuRef = useRef(null);
+  const colors = personColors(people);
+  const selectedPeople = people.filter((person) => selected.includes(person.id));
   const mentionSource = editingId ? draft : comment;
   const mentionQuery = mentionSource.match(/(^|\s)@([^\n@]*)$/)?.[2] ?? null;
   const suggestions = mentionQuery === null ? [] : people.filter((person) => person.name.toLocaleLowerCase("tr").includes(mentionQuery.toLocaleLowerCase("tr"))).slice(0, 6);
   const activeMention = suggestions.length === 0 ? 0 : Math.min(mentionIndex, suggestions.length - 1);
+  const checklist = task?.revisions ?? [];
+  const checklistDone = checklist.filter((item) => item.done).length;
+  const checklistPercent = checklist.length === 0 ? 0 : Math.round((checklistDone / checklist.length) * 100);
 
   useEffect(() => {
     setMentionIndex(0);
   }, [mentionQuery]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    function onKey(event) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (task?.column) setTarget(task.column);
+  }, [task?.column]);
+
+  useEffect(() => () => window.clearTimeout(saveTimer.current), []);
+
+  useEffect(() => {
+    if (!assigneeOpen) return undefined;
+    function onPointer(event) {
+      if (!assigneeMenuRef.current?.contains(event.target)) setAssigneeOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [assigneeOpen]);
+
+  function addChecklistItem() {
+    const body = checklistDraft.trim();
+    if (!task || !body) return;
+    const local = { id: `local-rev-${Date.now()}`, body, done: false };
+    patchTask(task.id, (current) => ({
+      ...current,
+      revisions: [...(current.revisions ?? []), local],
+      revisionCount: (current.revisionCount ?? 0) + 1,
+    }));
+    setChecklistDraft("");
+    void addRevisionItemsAction({ taskId: task.id, items: [body] }).then((result) => {
+      if (!result.ok) {
+        report(result.message);
+        patchTask(task.id, (current) => ({
+          ...current,
+          revisions: (current.revisions ?? []).filter((item) => item.id !== local.id),
+          revisionCount: Math.max(0, (current.revisionCount ?? 1) - 1),
+        }));
+        return;
+      }
+      refreshQuiet(router);
+    });
+  }
 
   function insertEmoji(emoji) {
     const field = editingId ? editRef.current : commentRef.current;
@@ -459,12 +619,145 @@ function TaskDialog({
   }
 
   async function remove() {
-    if (!task || !window.confirm("Bu kart silinsin mi?")) return;
+    if (!task || !window.confirm("Bu görev silinsin mi?")) return;
     const id = task.id;
     patchTask(id, () => null);
     onClose();
     const result = await deleteTaskAction(id);
-    if (!result.ok) report(result.message);
+    if (!result.ok) {
+      report(result.message);
+      refreshQuiet(router);
+      return;
+    }
+    refreshQuiet(router);
+  }
+
+  async function changeStatus(nextColumn) {
+    if (!task || !onMoveColumn) return;
+    if (nextColumn === task.column) return;
+    if (!viewerAdmin && nextColumn === "DONE" && task.column !== "DONE") {
+      setTarget(task.column);
+      setState({ ok: false, message: DONE_GATE });
+      return;
+    }
+    if (nextColumn === "DOING" && task.column !== "DOING" && (!dueOn || selected.length === 0)) {
+      setTarget(task.column);
+      setState({ ok: false, message: DOING_GATE });
+      return;
+    }
+    if (nextColumn === "REVIEW" && (task.revisions ?? []).some((item) => !item.done)) {
+      setTarget(task.column);
+      setState({ ok: false, message: REVIEW_GATE });
+      return;
+    }
+    if (nextColumn === "REVISION" && task.column !== "REVISION") {
+      if (!viewerAdmin) {
+        setTarget(task.column);
+        setState({ ok: false, message: "Revize maddelerini yönetici girer." });
+        return;
+      }
+      onAskRevision({
+        id: task.id,
+        title,
+        detail,
+        column: nextColumn,
+        priority,
+        startsOn: startsOn || null,
+        startsAt: startsAt || null,
+        endsAt: endsAt || null,
+        dueOn: dueOn || null,
+        assigneeIds: selected,
+      });
+      return;
+    }
+    setStatusBusy(true);
+    const result = await onMoveColumn(task.id, nextColumn);
+    setStatusBusy(false);
+    if (result && !result.ok) {
+      setTarget(task.column);
+      setState({ ok: false, message: result.message || "Durum değiştirilemedi." });
+      return;
+    }
+    setState(null);
+  }
+
+  function buildPayload(overrides = {}) {
+    return {
+      ...(task ? { id: task.id } : { spaceId }),
+      title,
+      detail,
+      column: target,
+      priority,
+      startsOn: startsOn || null,
+      startsAt: startsAt || null,
+      endsAt: endsAt || null,
+      dueOn: dueOn || null,
+      assigneeIds: selected,
+      ...overrides,
+    };
+  }
+
+  function persistFields(overrides = {}) {
+    if (!task) return;
+    const payload = buildPayload(overrides);
+    if (required && (payload.assigneeIds.length === 0 || !payload.dueOn)) return;
+    patchTask(task.id, (current) => ({
+      ...current,
+      ...payload,
+      completed: payload.column === "DONE" ? true : current.column === "DONE" && payload.column !== "DONE" ? false : current.completed,
+    }));
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      void saveTaskAction(payload).then((result) => {
+        if (!result.ok) {
+          report(result.message);
+          refreshQuiet(router);
+          return;
+        }
+        refreshQuiet(router);
+      });
+    }, 450);
+  }
+
+  async function sendComposerComment() {
+    if (!task || commentBusy) return;
+    if (!comment.trim() && commentFiles.length === 0) return;
+    const note = comment.trim();
+    const attachments = commentFiles;
+    const optimistic = {
+      id: `local-comment-${Date.now()}`,
+      authorId: viewerId,
+      authorName: viewerName || "Sen",
+      body: note,
+      createdAt: new Date().toISOString(),
+      images: attachments.map((item) => ({
+        id: item.id,
+        contentType: item.kind === "image" ? "image/jpeg" : "application/octet-stream",
+        fileName: item.name,
+        localUrl: item.url,
+      })),
+      reactions: [],
+    };
+    patchTask(task.id, (current) => ({
+      ...current,
+      comments: [...current.comments, optimistic],
+      commentCount: current.commentCount + 1,
+    }));
+    setComment("");
+    setCommentFiles([]);
+    setComposerEmojiOpen(false);
+    setCommentBusy(true);
+    const form = new FormData();
+    form.set("taskId", task.id);
+    form.set("body", note);
+    for (const item of attachments) form.append(item.kind === "file" ? "file" : "image", item.file);
+    const result = await addCommentAction(form);
+    setCommentBusy(false);
+    if (!result.ok) {
+      report(result.message);
+      refreshQuiet(router);
+      return;
+    }
     refreshQuiet(router);
   }
 
@@ -528,15 +821,16 @@ function TaskDialog({
 
   function sendLink() {
     if (!task) return;
-    const url = linkUrl;
-    const label = linkLabel;
+    const url = linkUrl.trim();
+    if (!url) return;
+    const label = linkLabel.trim();
     patchTask(task.id, (current) => ({
       ...current,
-      links: [...(current.links ?? []), { id: `local-link-${Date.now()}`, url, label: label || url }],
+      links: [...(current.links ?? []), { id: `local-link-${Date.now()}`, url, label: label || "" }],
     }));
     setLinkUrl("");
     setLinkLabel("");
-    void addLinkAction({ taskId: task.id, url, label }).then((result) => {
+    void addLinkAction({ taskId: task.id, url, label: label || undefined }).then((result) => {
       if (!result.ok) report(result.message);
       refreshQuiet(router);
     });
@@ -567,11 +861,76 @@ function TaskDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center" onMouseDown={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby="kart-baslik" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
-        <h2 id="kart-baslik" className="text-lg font-semibold">{task ? "Kart" : "Kart ekle"}</h2>
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button
+        type="button"
+        aria-label="Paneli kapat"
+        className={`absolute inset-0 bg-slate-900/40 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="kart-baslik"
+        className={`relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out ${shown ? "translate-x-0" : "translate-x-full"}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="relative shrink-0 border-b border-slate-200 px-5 py-4">
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-0.5">
+            <button
+              type="button"
+              aria-label="Kapat"
+              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              onClick={onClose}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <textarea
+            id="kart-baslik"
+            value={title}
+            rows={Math.min(4, Math.max(1, title.split("\n").length + Math.floor(title.length / 42)))}
+            onChange={(event) => setTitle(event.target.value)}
+            onBlur={() => persistFields()}
+            className={`w-full resize-none break-words border-0 bg-transparent p-0 pr-12 text-lg font-semibold leading-snug outline-none placeholder:text-slate-400 focus:ring-0 ${task && (task.completed || target === "DONE") ? "text-slate-400 line-through" : "text-slate-800"}`}
+            placeholder="Kart başlığı"
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <select
+              value={target}
+              disabled={!task || statusBusy}
+              onChange={(event) => {
+                const next = event.target.value;
+                setTarget(next);
+                void changeStatus(next);
+              }}
+              className="h-7 appearance-none rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 shadow-sm outline-none hover:bg-slate-100 disabled:opacity-60"
+              aria-label="Sütun durumu"
+            >
+              {COLUMNS.filter((item) => viewerAdmin || item.code !== "DONE" || task?.column === "DONE").map((item) => (
+                <option key={item.code} value={item.code}>{item.name}</option>
+              ))}
+            </select>
+            <select
+              value={priority}
+              onChange={(event) => {
+                const next = event.target.value;
+                setPriority(next);
+                persistFields({ priority: next });
+              }}
+              className="h-7 appearance-none rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 shadow-sm outline-none hover:bg-slate-100"
+              aria-label="Öncelik"
+            >
+              {Object.entries(PRIORITY).map(([value, item]) => (
+                <option key={value} value={value}>{item.short} — {item.label.split("—")[1]?.trim() || item.label}</option>
+              ))}
+            </select>
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {task?.createdByName ? (
-          <div className="mt-3 flex items-start gap-3">
+          <div className="mb-4 flex items-start gap-3">
             <span
               className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white"
               style={{ background: personColors(people).get(task.createdById) ?? "#03624c" }}
@@ -587,50 +946,145 @@ function TaskDialog({
             </div>
           </div>
         ) : null}
-        {state && !state.ok ? <div className="mt-3"><Notice tone="err">{state.message}</Notice></div> : null}
-        <div className="mt-4 space-y-3">
-          <label className="block text-sm">Başlık
-            <input value={title} onChange={(event) => setTitle(event.target.value)} className="field mt-1" />
+        {state && !state.ok ? <div className="mb-3"><Notice tone="err">{state.message}</Notice></div> : null}
+        <div className="space-y-4">
+          <label className="block text-sm font-medium text-slate-700">Açıklama
+            <textarea
+              value={detail}
+              onChange={(event) => setDetail(event.target.value)}
+              onBlur={() => persistFields()}
+              rows={4}
+              placeholder="Açıklama ekleyin..."
+              className="field mt-1.5"
+            />
           </label>
-          <label className="block text-sm">Açıklama
-            <textarea value={detail} onChange={(event) => setDetail(event.target.value)} rows={3} className="field mt-1" />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">Kolon
-              <select value={target} onChange={(event) => setTarget(event.target.value )} className="field mt-1">
-                {COLUMNS.filter((item) => viewerAdmin || item.code !== "DONE" || task?.column === "DONE").map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
-              </select>
-            </label>
-            <label className="text-sm">Öncelik
-              <select value={priority} onChange={(event) => setPriority(event.target.value )} className="field mt-1">
-                {Object.entries(PRIORITY).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}
-              </select>
-            </label>
-            <label className="text-sm">Başlangıç tarihi
-              <input type="date" value={startsOn} onChange={(event) => setStartsOn(event.target.value)} className="field mt-1" />
-            </label>
-            <label className="text-sm">Teslim tarihi{required ? " (zorunlu)" : ""}
-              <input type="date" value={dueOn} onChange={(event) => setDueOn(event.target.value)} className="field mt-1" />
-            </label>
-            <label className="text-sm">Başlangıç saati
-              <input type="time" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} className="field mt-1" />
-            </label>
-            <label className="text-sm">Bitiş saati
-              <input type="time" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} className="field mt-1" />
-            </label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-600">
+                Başlangıç
+                <input
+                  type="date"
+                  value={startsOn}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setStartsOn(next);
+                    persistFields({ startsOn: next || null });
+                  }}
+                  className="field mt-1"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                Saat
+                <input
+                  type="time"
+                  value={startsAt}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setStartsAt(next);
+                    persistFields({ startsAt: next || null });
+                  }}
+                  className="field mt-1"
+                />
+              </label>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-600">
+                Teslim{required ? " *" : ""}
+                <input
+                  type="date"
+                  value={dueOn}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setDueOn(next);
+                    persistFields({ dueOn: next || null });
+                  }}
+                  className="field mt-1"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                Saat
+                <input
+                  type="time"
+                  value={endsAt}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setEndsAt(next);
+                    persistFields({ endsAt: next || null });
+                  }}
+                  className="field mt-1"
+                />
+              </label>
+            </div>
           </div>
           <div>
-            <p className="text-sm font-semibold">Sorumlu kişi{required ? " (zorunlu)" : ""}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {people.map((person) => {
-                const on = selected.includes(person.id);
-                return (
-                  <label key={person.id} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${on ? "border-[#03624c] bg-[#03624c]/10" : "border-slate-200"}`}>
-                    <input type="checkbox" checked={on} onChange={() => setSelected((current) => on ? current.filter((id) => id !== person.id) : [...current, person.id])} />
-                    {person.name}
-                  </label>
-                );
-              })}
+            <p className="text-sm font-semibold text-slate-800">Sorumlu kişi{required ? " *" : ""}</p>
+            <div className="relative mt-2" ref={assigneeMenuRef}>
+              <button
+                type="button"
+                aria-expanded={assigneeOpen}
+                aria-haspopup="listbox"
+                onClick={() => setAssigneeOpen((open) => !open)}
+                className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm hover:border-slate-300 hover:bg-slate-50"
+              >
+                {selectedPeople.length === 0 ? (
+                  <>
+                    <span className="grid h-7 w-7 place-items-center rounded-full bg-slate-100 text-slate-400">
+                      <UserRound size={14} />
+                    </span>
+                    <span className="flex-1 text-sm text-slate-500">Sorumlu seçin</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex -space-x-1.5">
+                      {selectedPeople.slice(0, 4).map((person) => (
+                        <span
+                          key={person.id}
+                          title={person.name}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[10px] font-bold text-white"
+                          style={{ background: colors.get(person.id) ?? "#03624c" }}
+                        >
+                          {initials(person.name)}
+                        </span>
+                      ))}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
+                      {selectedPeople.map((person) => person.name.split(" ")[0]).join(", ")}
+                      {selectedPeople.length > 4 ? ` +${selectedPeople.length - 4}` : ""}
+                    </span>
+                  </>
+                )}
+                <ChevronDown size={16} className="shrink-0 text-slate-400" />
+              </button>
+              {assigneeOpen ? (
+                <div className="absolute left-0 right-0 top-full z-20 mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg" role="listbox">
+                  {people.map((person) => {
+                    const on = selected.includes(person.id);
+                    return (
+                      <button
+                        key={person.id}
+                        type="button"
+                        role="option"
+                        aria-selected={on}
+                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-slate-50 ${on ? "bg-slate-50" : ""}`}
+                        onClick={() => {
+                          const next = on ? selected.filter((id) => id !== person.id) : [...selected, person.id];
+                          setSelected(next);
+                          persistFields({ assigneeIds: next });
+                        }}
+                      >
+                        <span
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                          style={{ background: colors.get(person.id) ?? "#03624c" }}
+                        >
+                          {initials(person.name)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{person.name}</span>
+                        {on ? <Check size={14} className="shrink-0 text-[#03624c]" /> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -640,35 +1094,64 @@ function TaskDialog({
           </div>
         ) : null}
         {task ? (
-          <div className="mt-6 space-y-4 border-t border-slate-200 pt-4">
-            {(task.revisions ?? []).length > 0 ? (
-              <section>
-                <h3 className="text-sm font-semibold">Revize maddeleri</h3>
-                <ul className="mt-2 space-y-1">
-                  {task.revisions.map((item) => (
-                    <li key={item.id}>
-                      <label className="flex items-start gap-2 text-sm">
-                        <input type="checkbox" className="mt-1" checked={item.done} onChange={() => onToggleRevision(task.id, item)} />
-                        <span className={item.done ? "text-slate-400 line-through" : "text-slate-800"}>{item.body}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+          <div className="mt-6 space-y-5 border-t border-slate-200 pt-4">
             <section>
-              <h3 className="text-sm font-semibold">Hareketler</h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">Kontrol listesi</h3>
+                {checklist.length > 0 ? (
+                  <span className="text-xs font-medium tabular-nums text-slate-500">{checklistDone}/{checklist.length} · %{checklistPercent}</span>
+                ) : null}
+              </div>
+              {checklist.length > 0 ? (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className={`h-full rounded-full transition-all ${checklistPercent === 100 ? "bg-emerald-500" : "bg-sky-500"}`}
+                    style={{ width: `${checklistPercent}%` }}
+                  />
+                </div>
+              ) : null}
+              <ul className="mt-3 space-y-1.5">
+                {checklist.map((item) => (
+                  <li key={item.id}>
+                    <label className="flex items-start gap-2.5 rounded-lg px-1 py-1 text-sm hover:bg-slate-50">
+                      <input type="checkbox" className="mt-0.5" checked={item.done} onChange={() => onToggleRevision(task.id, item)} />
+                      <span className={item.done ? "text-slate-400 line-through" : "text-slate-800"}>{item.body}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={checklistDraft}
+                  onChange={(event) => setChecklistDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addChecklistItem();
+                    }
+                  }}
+                  placeholder="Yeni madde ekle..."
+                  className="field flex-1"
+                />
+                <button type="button" className="btn-secondary shrink-0" onClick={addChecklistItem}>Ekle</button>
+              </div>
+            </section>
+            <section>
+              <h3 className="text-sm font-semibold text-slate-800">Aktivite</h3>
               {(task.moves ?? []).length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">Henüz sütun hareketi yok.</p>
+                <p className="mt-2 text-xs text-slate-500">Henüz sütun hareketi yok.</p>
               ) : (
-                <ol className="mt-2 space-y-1">
+                <ol className="mt-3 space-y-2 border-l-2 border-slate-200 pl-3 text-xs text-slate-500">
                   {task.moves.map((move) => (
-                    <li key={move.id} className="text-sm text-slate-700">
-                      <span className="font-semibold">{columnName(move.column)}</span>
-                      {" · "}
-                      {createdStamp(move.createdAt)}
-                      {" · "}
-                      {move.actorName}
+                    <li key={move.id} className="relative">
+                      <span className="absolute -left-[1.1875rem] top-1.5 h-2 w-2 rounded-full border-2 border-white bg-slate-300 ring-1 ring-slate-200" aria-hidden="true" />
+                      <p className="leading-relaxed">
+                        <span className="font-semibold text-slate-700">{columnName(move.column)}</span>
+                        {" · "}
+                        {createdStamp(move.createdAt)}
+                        {" · "}
+                        {move.actorName}
+                      </p>
                     </li>
                   ))}
                 </ol>
@@ -676,13 +1159,43 @@ function TaskDialog({
             </section>
             <section>
               <h3 className="text-sm font-semibold">Linkler</h3>
-              <ul className="mt-2 space-y-1">
-                {task.links.map((link) => (
-                  <li key={link.id} className="flex items-center gap-2 text-sm">
-                    <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-semibold text-[#03624c] underline">{link.label}</a>
-                    <button type="button" className="text-slate-500" onClick={() => { patchTask(task.id, (current) => ({ ...current, links: (current.links ?? []).filter((item) => item.id !== link.id) })); void removeLinkAction(link.id).then((result) => { if (!result.ok) report(result.message); else refreshQuiet(router); }); }}>Kaldır</button>
-                  </li>
-                ))}
+              <ul className="mt-2 space-y-2">
+                {task.links.map((link) => {
+                  const rawLabel = String(link.label ?? "").trim();
+                  const customTitle = rawLabel && rawLabel !== link.url ? rawLabel : "";
+                  return (
+                    <li key={link.id} className="group flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+                      <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 no-underline" title={link.url}>
+                        <span className="flex items-center gap-2">
+                          <ExternalLink size={14} className="shrink-0 text-slate-400" />
+                          <span className="min-w-0">
+                            {customTitle ? (
+                              <>
+                                <span className="block truncate text-sm font-semibold text-slate-800">{customTitle}</span>
+                                <span className="mt-0.5 block max-w-[280px] truncate text-xs text-slate-500">{link.url}</span>
+                              </>
+                            ) : (
+                              <span className="block max-w-[280px] truncate text-sm font-semibold text-[#03624c]">{link.url}</span>
+                            )}
+                          </span>
+                        </span>
+                      </a>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs font-semibold text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-slate-700"
+                        onClick={() => {
+                          patchTask(task.id, (current) => ({ ...current, links: (current.links ?? []).filter((item) => item.id !== link.id) }));
+                          void removeLinkAction(link.id).then((result) => {
+                            if (!result.ok) report(result.message);
+                            else refreshQuiet(router);
+                          });
+                        }}
+                      >
+                        Kaldır
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
               <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
                 <input value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://" className="field" />
@@ -693,7 +1206,7 @@ function TaskDialog({
             <section>
               <h3 className="text-sm font-semibold">Görseller</h3>
               <div className="mt-2 flex flex-col gap-3">
-                {task.images.map((image) => (
+                {(task.images ?? []).map((image) => (
                   <figure key={image.id} className="relative">
                     {brokenImages[image.id] ? (
                       <div className="flex min-h-24 items-center rounded-xl bg-slate-100 px-3 py-4 text-sm text-slate-500">Görsel dosyası bulunamadı. Yeniden ekleyin.</div>
@@ -707,7 +1220,7 @@ function TaskDialog({
                         />
                       </a>
                     )}
-                    {viewerAdmin ? <button type="button" className="absolute right-2 top-2 rounded-full bg-white px-2 py-0.5 text-xs font-semibold shadow" onClick={() => { patchTask(task.id, (current) => ({ ...current, images: current.images.filter((item) => item.id !== image.id) })); void removeImageAction(image.id).then((result) => { if (!result.ok) report(result.message); else refreshQuiet(router); }); }}>Sil</button> : null}
+                    {viewerAdmin ? <button type="button" className="absolute right-2 top-2 rounded-full bg-white px-2 py-0.5 text-xs font-semibold shadow" onClick={() => { patchTask(task.id, (current) => ({ ...current, images: (current.images ?? []).filter((item) => item.id !== image.id) })); void removeImageAction(image.id).then((result) => { if (!result.ok) report(result.message); else refreshQuiet(router); }); }}>Sil</button> : null}
                   </figure>
                 ))}
               </div>
@@ -724,7 +1237,7 @@ function TaskDialog({
               <h3 className="text-sm font-semibold">Yorumlar</h3>
               <ul className="mt-2 space-y-3">
                 {task.comments.map((item) => (
-                  <li key={item.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                  <li key={item.id} className="group rounded-xl bg-slate-50 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-slate-500">{item.authorName} · {createdStamp(item.createdAt)}</p>
                       {item.authorId === viewerId && editingId !== item.id ? (
@@ -769,7 +1282,7 @@ function TaskDialog({
                         ) : null}
                       </>
                     )}
-                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
                       {(item.reactions ?? []).map((reaction) => (
                         <button
                           key={reaction.emoji}
@@ -782,37 +1295,111 @@ function TaskDialog({
                           {reaction.emoji} {reaction.count}
                         </button>
                       ))}
-                      <button type="button" disabled={pending} onClick={() => setEmojiFor(emojiFor === item.id ? null : item.id)} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500">
-                        Emoji
-                      </button>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          aria-label="Reaksiyon ekle"
+                          title="Reaksiyon ekle"
+                          disabled={pending}
+                          onClick={() => setEmojiFor(emojiFor === item.id ? null : item.id)}
+                          className={`inline-flex h-7 items-center gap-1 rounded-full border border-transparent px-1.5 text-slate-400 transition-all hover:border-slate-200 hover:bg-white hover:text-slate-600 ${(item.reactions ?? []).length === 0 ? "opacity-0 group-hover:opacity-100 focus:opacity-100" : "opacity-70 hover:opacity-100"} ${emojiFor === item.id ? "opacity-100 border-slate-200 bg-white text-slate-600" : ""}`}
+                        >
+                          <SmilePlus size={14} />
+                        </button>
+                        {emojiFor === item.id ? (
+                          <div className="absolute bottom-8 left-0 z-10 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                            {COMMENT_EMOJIS.map((emoji) => (
+                              <button key={emoji} type="button" disabled={pending} onClick={() => void leaveReaction(item.id, emoji)} className="rounded-lg px-1.5 py-1 text-base hover:bg-slate-50">
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                    {emojiFor === item.id ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
+                  </li>
+                ))}
+              </ul>
+              <div className="relative mt-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+                {!editingId && suggestions.length > 0 ? (
+                  <MentionChoices suggestions={suggestions} activeMention={activeMention} people={people} onHover={setMentionIndex} onPick={insertMention} />
+                ) : null}
+                <textarea
+                  ref={commentRef}
+                  value={comment}
+                  onChange={(event) => setComment(event.target.value)}
+                  onKeyDown={(event) => {
+                    onCommentKeyDown(event);
+                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault();
+                      void sendComposerComment();
+                    }
+                  }}
+                  rows={3}
+                  placeholder="Yorum yazın. Etiket için @ yazın."
+                  className="field min-h-[5.5rem] resize-none rounded-xl border-0 bg-transparent pb-12 shadow-none focus:ring-0"
+                />
+                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2">
+                  <div className="relative flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label="Dosya veya görsel ekle"
+                      aria-expanded={attachOpen}
+                      disabled={pending || commentBusy}
+                      onClick={() => {
+                        setComposerEmojiOpen(false);
+                        setAttachOpen((current) => !current);
+                      }}
+                      className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <Plus size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Emoji ekle"
+                      aria-expanded={composerEmojiOpen}
+                      disabled={pending || commentBusy}
+                      onClick={() => {
+                        setAttachOpen(false);
+                        setComposerEmojiOpen((open) => !open);
+                      }}
+                      className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <Smile size={16} />
+                    </button>
+                    {attachOpen ? (
+                      <div className="absolute bottom-10 left-0 z-10 w-40 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                        <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => imageInputRef.current?.click()}>Görsel ekle</button>
+                        <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => fileInputRef.current?.click()}>Dosya ekle</button>
+                      </div>
+                    ) : null}
+                    {composerEmojiOpen ? (
+                      <div className="absolute bottom-10 left-0 z-10 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                         {COMMENT_EMOJIS.map((emoji) => (
-                          <button key={emoji} type="button" disabled={pending} onClick={() => void leaveReaction(item.id, emoji)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-base">
+                          <button
+                            key={emoji}
+                            type="button"
+                            disabled={pending || commentBusy}
+                            onClick={() => {
+                              insertEmoji(emoji);
+                              setComposerEmojiOpen(false);
+                            }}
+                            className="rounded-lg px-1.5 py-1 text-base hover:bg-slate-50"
+                          >
                             {emoji}
                           </button>
                         ))}
                       </div>
                     ) : null}
-                  </li>
-                ))}
-              </ul>
-              <div className="relative mt-2">
-                {!editingId && suggestions.length > 0 ? (
-                  <MentionChoices suggestions={suggestions} activeMention={activeMention} people={people} onHover={setMentionIndex} onPick={insertMention} />
-                ) : null}
-                <textarea ref={commentRef} value={comment} onChange={(event) => setComment(event.target.value)} onKeyDown={onCommentKeyDown} rows={3} placeholder="Yorum yazın. Etiket için @ yazın." className="field pb-12" />
-                <div className="absolute bottom-2 left-2">
-                  <button type="button" aria-label="Dosya veya görsel ekle" aria-expanded={attachOpen} disabled={pending} onClick={() => setAttachOpen((current) => !current)} className="grid h-8 w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm">
-                    <Plus size={16} />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={pending || commentBusy || (!comment.trim() && commentFiles.length === 0)}
+                    onClick={() => void sendComposerComment()}
+                    className="inline-flex h-8 items-center rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    {commentBusy ? "Gönderiliyor…" : "Gönder"}
                   </button>
-                  {attachOpen ? (
-                    <div className="absolute bottom-10 left-0 z-10 w-40 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
-                      <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => imageInputRef.current?.click()}>Görsel ekle</button>
-                      <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => fileInputRef.current?.click()}>Dosya ekle</button>
-                    </div>
-                  ) : null}
                 </div>
                 <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(event) => {
                   const files = [...(event.target.files ?? [])];
@@ -825,13 +1412,6 @@ function TaskDialog({
                   event.target.value = "";
                 }} />
               </div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {COMMENT_EMOJIS.map((emoji) => (
-                  <button key={emoji} type="button" disabled={pending} onClick={() => insertEmoji(emoji)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-base">
-                    {emoji}
-                  </button>
-                ))}
-              </div>
               {commentFiles.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {commentFiles.map((item) => (
@@ -842,15 +1422,203 @@ function TaskDialog({
                   ))}
                 </div>
               ) : null}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button type="button" className="btn-primary" disabled={pending} onClick={() => void save()}>{pending ? "Kaydediliyor…" : "Kaydet"}</button>
-                {viewerAdmin ? <button type="button" className="btn-secondary text-red-600" disabled={pending} onClick={() => void remove()}>Sil</button> : null}
-              </div>
             </section>
           </div>
         ) : null}
+        </div>
+
+        <footer className="sticky bottom-0 flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white p-4">
+          <div>
+            {task && viewerAdmin ? (
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                disabled={pending}
+                onClick={() => void remove()}
+              >
+                <Trash2 size={15} />
+                Görevi Sil
+              </button>
+            ) : (
+              <span />
+            )}
+          </div>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Kapat
+          </button>
+        </footer>
       </div>
     </div>
+  );
+}
+
+function TaskCard({
+  task,
+  column,
+  today,
+  nowIso,
+  colors,
+  names,
+  focusing,
+  live,
+  mine,
+  pausedMine,
+  unread,
+  spaceLabel,
+  onOpen,
+  onFocus,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+}) {
+  const done = isDone(task);
+  const when = dueTone(task, today, nowIso);
+  const progress = revisionProgress(task);
+  const files = attachmentCount(task);
+  const detail = String(task.detail ?? "").trim();
+  const title = String(task.title ?? "").trim() || "Adsız kart";
+  const priority = PRIORITY[task.priority] ?? PRIORITY.NORMAL;
+  const images = Array.isArray(task.images) ? task.images : [];
+  const assigneeIds = Array.isArray(task.assigneeIds) ? task.assigneeIds : [];
+  const commentCount = Number(task.commentCount) || 0;
+  const accentBar = live.length > 0
+    ? "bg-emerald-500"
+    : pausedMine
+      ? "bg-amber-400"
+      : null;
+  return (
+    <article
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onClick={(event) => {
+        if (event.target.closest("[data-no-drag]")) return;
+        onOpen();
+      }}
+      className={`group relative cursor-grab rounded-lg border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing ${live.length > 0 ? "ring-2 ring-emerald-500/20" : pausedMine ? "ring-2 ring-amber-400/15" : ""}`}
+    >
+      {accentBar ? <span aria-hidden className={`pointer-events-none absolute inset-y-0 left-0 z-0 w-1 rounded-l-lg ${accentBar}`} /> : null}
+      <div className="relative z-10 w-full p-3.5">
+        <div className="flex w-full items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <span className={priority.className}>{priority.short}</span>
+            {(Number(task.revisionCount) > 0 || task.column === "REVISION") ? (
+              <span className={TAG_STYLES.revize}>
+                Revize{Number(task.revisionCount) > 0 ? ` ${task.revisionCount}` : ""}
+              </span>
+            ) : null}
+            {done ? <span className={TAG_STYLES.done}>Tamam</span> : null}
+            {spaceLabel ? (
+              <span className={`${TAG_STYLES.space} max-w-[7rem] truncate`}>{spaceLabel}</span>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {!done && (mine || pausedMine) ? (
+              <button
+                type="button"
+                data-no-drag
+                disabled={focusing}
+                aria-label={mine ? "Bu işi durdur" : "Bu işe devam et"}
+                className={`rounded-md p-1 ${mine ? "bg-[#03624c] text-white" : "border border-amber-300 bg-amber-50 text-amber-700"}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onFocus();
+                }}
+              >
+                {mine ? <Pause size={13} /> : <Play size={13} />}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              data-no-drag
+              aria-label="Kart işlemleri"
+              className="rounded-md p-1 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-slate-600"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpen();
+              }}
+            >
+              <MoreVertical size={14} />
+            </button>
+          </div>
+        </div>
+
+        <p className={`mt-2 w-full break-words text-[13px] font-medium leading-snug line-clamp-2 ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>
+          {title}
+        </p>
+        {detail ? (
+          <p className="mt-1 w-full break-words text-xs leading-snug text-slate-500 line-clamp-2">{detail}</p>
+        ) : null}
+
+        {images.length > 0 ? (
+          <div className="mt-2.5 flex gap-1.5">
+            {images.slice(0, 3).map((image) => (
+              <img key={image.id} src={`/api/is-gorsel/${image.id}`} alt="" className="h-9 w-9 rounded-lg object-cover ring-1 ring-slate-200" />
+            ))}
+          </div>
+        ) : null}
+
+        <div className="mt-2.5 flex w-full items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+            {unread > 0 ? (
+              <span className={`${BADGE} border border-red-200 bg-red-50 text-red-600`} aria-label={`${unread} yeni yorum`}>
+                <Bell size={11} />
+                {unread}
+              </span>
+            ) : null}
+            {when ? (
+              <span className={`${when.className} max-w-[9.5rem]`} title={when.detail || when.label}>
+                <Clock size={11} className="shrink-0" />
+                <span className="truncate">{when.label}</span>
+              </span>
+            ) : null}
+            {progress ? (
+              <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-500" title={`Alt görev ${progress.doneCount}/${progress.total}`}>
+                <ListTodo size={12} aria-hidden="true" />
+                <span className="tabular-nums">{progress.doneCount}/{progress.total}</span>
+              </span>
+            ) : null}
+            {commentCount > 0 ? (
+              <span className={`${BADGE} shrink-0 text-slate-500`}>
+                <MessageCircle size={11} />
+                {commentCount}
+              </span>
+            ) : null}
+            {files > 0 ? (
+              <span className={`${BADGE} shrink-0 text-slate-500`}>
+                <Paperclip size={11} />
+                {files}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 -space-x-1.5">
+            {assigneeIds.length === 0 ? (
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-slate-300 bg-slate-50 text-slate-400" title="Atanmadı">
+                <UserRound size={11} />
+              </span>
+            ) : (
+              assigneeIds.slice(0, 3).map((id) => {
+                const name = names.get(id) ?? "";
+                return (
+                  <span
+                    key={id}
+                    title={name}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[9px] font-semibold text-white shadow-sm"
+                    style={{ background: colors.get(id) ?? "#03624c" }}
+                  >
+                    {initials(name)}
+                  </span>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+      {column ? <span className="sr-only">{column}</span> : null}
+    </article>
   );
 }
 
@@ -858,9 +1626,7 @@ export default function WorkBoard({
   data,
   filtre = "",
   kart = "",
-}
-
-) {
+}) {
   const router = useRouter();
   const [tasks, setTasks] = useState(data.tasks);
   const [spaceId, setSpaceId] = useState(data.spaces[0]?.id ?? "");
@@ -872,9 +1638,15 @@ export default function WorkBoard({
   const [focusing, setFocusing] = useState(false);
   const [revision, setRevision] = useState(null);
   const [clearedComments, setClearedComments] = useState({});
-  const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [view, setView] = useState("board");
+  const [composing, setComposing] = useState(null);
+  const [archiving, setArchiving] = useState(false);
   const dragging = useRef(null);
+  const moveLock = useRef(0);
+  const assigneeMenuRef = useRef(null);
   const editorRef = useRef(null);
   editorRef.current = editor;
   const searchRef = useRef(null);
@@ -884,6 +1656,7 @@ export default function WorkBoard({
   const incoming = JSON.stringify(data.tasks);
 
   useEffect(() => {
+    if (moveLock.current > 0) return;
     setTasks(data.tasks);
   }, [incoming, data.tasks]);
 
@@ -904,8 +1677,8 @@ export default function WorkBoard({
 
   useEffect(() => {
     if (!filtre) return;
-    if (tasks.some((task) => task.spaceId === spaceId && matchesWorkFilter(task, filtre, data.today) && (!filtre || data.viewerRole === "ADMIN" || task.assigneeIds.includes(data.viewerId)))) return;
-    const next = data.spaces.find((space) => tasks.some((task) => task.spaceId === space.id && matchesWorkFilter(task, filtre, data.today) && (!filtre || data.viewerRole === "ADMIN" || task.assigneeIds.includes(data.viewerId))));
+    if (tasks.some((task) => task.spaceId === spaceId && matchesWorkFilter(task, filtre, data.today, data.viewerId) && (filtre === "bana" || data.viewerRole === "ADMIN" || task.assigneeIds.includes(data.viewerId)))) return;
+    const next = data.spaces.find((space) => tasks.some((task) => task.spaceId === space.id && matchesWorkFilter(task, filtre, data.today, data.viewerId) && (filtre === "bana" || data.viewerRole === "ADMIN" || task.assigneeIds.includes(data.viewerId))));
     if (next && next.id !== spaceId) setSpaceId(next.id);
   }, [filtre, tasks, spaceId, data.spaces, data.today, data.viewerRole, data.viewerId]);
 
@@ -922,7 +1695,7 @@ export default function WorkBoard({
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (dragging.current || document.hidden || editorRef.current) return;
+      if (dragging.current || moveLock.current > 0 || document.hidden || editorRef.current) return;
       refreshQuiet(router);
     }, 5000);
     return () => clearInterval(timer);
@@ -992,8 +1765,13 @@ export default function WorkBoard({
   const needle = query.trim().toLocaleLowerCase("tr");
 
   useEffect(() => {
-    if (searchOpen) searchRef.current?.focus();
-  }, [searchOpen]);
+    if (!assigneeOpen) return undefined;
+    function onPointer(event) {
+      if (!assigneeMenuRef.current?.contains(event.target)) setAssigneeOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [assigneeOpen]);
 
   useEffect(() => {
     if (!needle) {
@@ -1004,13 +1782,14 @@ export default function WorkBoard({
     queryJump.current = needle;
     const people = new Map(data.people.map((person) => [person.id, person.name]));
     const own = (task) => !filtre || data.viewerRole === "ADMIN" || task.assigneeIds.includes(data.viewerId);
-    if (tasks.some((task) => task.spaceId === spaceId && matchesWorkFilter(task, filtre, data.today) && own(task) && matchesSearch(task, needle, people))) return;
-    const next = data.spaces.find((space) => tasks.some((task) => task.spaceId === space.id && matchesWorkFilter(task, filtre, data.today) && own(task) && matchesSearch(task, needle, people)));
+    if (tasks.some((task) => task.spaceId === spaceId && matchesWorkFilter(task, filtre, data.today, data.viewerId) && own(task) && matchesSearch(task, needle, people))) return;
+    const next = data.spaces.find((space) => tasks.some((task) => task.spaceId === space.id && matchesWorkFilter(task, filtre, data.today, data.viewerId) && own(task) && matchesSearch(task, needle, people)));
     if (next && next.id !== spaceId) setSpaceId(next.id);
-  }, [needle, tasks, spaceId, filtre, data.today, data.spaces, data.people]);
+  }, [needle, tasks, spaceId, filtre, data.today, data.spaces, data.people, data.viewerId, data.viewerRole]);
   const colors = personColors(data.people);
   const openTask = editor?.id ? tasks.find((task) => task.id === editor.id) ?? null : null;
   const openCommentCount = openTask?.commentCount ?? null;
+  const assigneePerson = assigneeFilter ? data.people.find((person) => person.id === assigneeFilter) : null;
 
   useEffect(() => {
     if (!editor?.id || openCommentCount == null) return undefined;
@@ -1025,8 +1804,9 @@ export default function WorkBoard({
   }, [editor?.id, openCommentCount, router]);
 
   function matchesBoard(task) {
-    if (!matchesWorkFilter(task, filtre, data.today)) return false;
-    if (!filtre || data.viewerRole === "ADMIN") return true;
+    if (!matchesWorkFilter(task, filtre, data.today, data.viewerId)) return false;
+    if (assigneeFilter && !task.assigneeIds.includes(assigneeFilter)) return false;
+    if (!filtre || filtre === "bana" || data.viewerRole === "ADMIN") return true;
     return task.assigneeIds.includes(data.viewerId);
   }
 
@@ -1034,6 +1814,16 @@ export default function WorkBoard({
     return tasks
       .filter((task) => task.spaceId === spaceId && task.column === column && matchesBoard(task) && matchesSearch(task, needle, names))
       .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "tr"));
+  }
+
+  function visibleTasks() {
+    return tasks
+      .filter((task) => task.spaceId === spaceId && matchesBoard(task) && matchesSearch(task, needle, names))
+      .sort((a, b) => {
+        const left = COLUMNS.findIndex((column) => column.code === a.column);
+        const right = COLUMNS.findIndex((column) => column.code === b.column);
+        return left - right || a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "tr");
+      });
   }
 
   async function addSpace() {
@@ -1049,49 +1839,83 @@ export default function WorkBoard({
   }
 
   async function place(taskId, column, index, items) {
+    if (moveLock.current > 0) return { ok: false, message: "Kart taşıması sürüyor." };
     const current = tasks.find((task) => task.id === taskId);
-    if (!current) return;
-    const missingOwner = !current.dueOn || current.assigneeIds.length === 0;
+    if (!current) return { ok: false, message: "Kart bulunamadı." };
+    if (current.column === column) {
+      const already = columnTasks(column);
+      const from = already.findIndex((task) => task.id === taskId);
+      const without = already.filter((task) => task.id !== taskId);
+      const at = Math.max(0, Math.min(index, without.length));
+      if (from === at) return { ok: true };
+    }
+    const missingOwner = !current.dueOn || (current.assigneeIds ?? []).length === 0;
     if (column !== current.column && column === "DOING" && missingOwner) {
       setMessage(DOING_GATE);
-      return;
+      return { ok: false, message: DOING_GATE };
     }
     if (column !== current.column && column === "REVIEW" && (current.revisions ?? []).some((item) => !item.done)) {
       setMessage(REVIEW_GATE);
-      return;
+      return { ok: false, message: REVIEW_GATE };
     }
     if (data.viewerRole !== "ADMIN" && column === "DONE" && current.column !== "DONE") {
       setMessage(DONE_GATE);
-      return;
+      return { ok: false, message: DONE_GATE };
     }
     if (column !== current.column && column === "REVISION" && !items) {
       if (data.viewerRole !== "ADMIN") {
         setMessage("Revize maddelerini yönetici girer.");
-        return;
+        return { ok: false, message: "Revize maddelerini yönetici girer." };
       }
       setRevision({ mode: "move", taskId, index });
-      return;
+      return { ok: true, pendingRevision: true };
     }
     const destination = columnTasks(column).filter((task) => task.id !== taskId);
-    const nextColumn = [...destination.slice(0, index), { ...current, column, completed: column === "DONE" ? true : current.column === "DONE" ? false : current.completed }, ...destination.slice(index)];
+    const at = Math.max(0, Math.min(index, destination.length));
+    const nextColumn = [
+      ...destination.slice(0, at),
+      {
+        ...current,
+        column,
+        completed: column === "DONE" ? true : current.column === "DONE" ? false : current.completed,
+      },
+      ...destination.slice(at),
+    ];
     const previous = tasks;
+    const columnChanged = column !== current.column;
+    moveLock.current += 1;
     setTasks([
       ...tasks.filter((task) => task.spaceId !== spaceId || (task.column !== column && task.id !== taskId)),
       ...nextColumn.map((task, order) => ({ ...task, sortOrder: order })),
     ]);
-    const result = await moveTaskAction({
-      taskId,
-      column,
-      orderedIds: nextColumn.map((task) => task.id),
-      ...(items ? { items } : {}),
-    });
-    if (!result.ok) {
-      setTasks(previous);
-      setMessage(result.message);
+    try {
+      const result = await moveTaskAction({
+        taskId,
+        column,
+        orderedIds: nextColumn.map((task) => task.id),
+        ...(items ? { items } : {}),
+      });
+      if (!result?.ok) {
+        setTasks(previous);
+        setMessage(result?.message || "Kart taşınamadı.");
+        moveLock.current = Math.max(0, moveLock.current - 1);
+        return result;
+      }
+      if (columnChanged) {
+        refreshQuiet(router);
+        window.setTimeout(() => {
+          moveLock.current = Math.max(0, moveLock.current - 1);
+        }, 1200);
+      } else {
+        moveLock.current = Math.max(0, moveLock.current - 1);
+      }
       return result;
+    } catch (error) {
+      setTasks(previous);
+      setMessage("Kart taşınamadı. Yeniden deneyin.");
+      moveLock.current = Math.max(0, moveLock.current - 1);
+      return { ok: false, message: "Kart taşınamadı. Yeniden deneyin." };
     }
-    if (column !== current.column) refreshQuiet(router);
-    return result;
   }
 
   async function toggleRevision(taskId, item) {
@@ -1144,6 +1968,96 @@ export default function WorkBoard({
     void place(taskId, column, found < 0 ? list.length : found);
   }
 
+  async function createQuickCard(title, column) {
+    if (column === "DONE" && data.viewerRole !== "ADMIN") {
+      setMessage(DONE_GATE);
+      return false;
+    }
+    if (column === "DOING") {
+      setMessage(DOING_GATE);
+      return false;
+    }
+    if (column === "REVISION") {
+      setMessage("Revize sütununa kart eklemek için önce kontrol listesi gerekir. Kartı İş Havuzu'na ekleyip taşıyın.");
+      return false;
+    }
+    const localId = `local-${Date.now()}`;
+    const optimistic = {
+      id: localId,
+      spaceId,
+      title,
+      detail: "",
+      column,
+      priority: "NORMAL",
+      startsOn: null,
+      startsAt: null,
+      endsAt: null,
+      dueOn: null,
+      assigneeIds: [],
+      completed: column === "DONE",
+      archived: false,
+      sortOrder: Date.now(),
+      createdByName: viewerName || "",
+      createdById: data.viewerId,
+      createdAt: new Date().toISOString(),
+      commentCount: 0,
+      comments: [],
+      links: [],
+      images: [],
+      revisions: [],
+      revisionCount: 0,
+      unreadComments: 0,
+      enforced: false,
+      moves: [],
+    };
+    setTasks((current) => [...current, optimistic]);
+    setComposing(null);
+    const result = await saveTaskAction({
+      spaceId,
+      title,
+      detail: "",
+      column,
+      priority: "NORMAL",
+      startsOn: null,
+      startsAt: null,
+      endsAt: null,
+      dueOn: null,
+      assigneeIds: [],
+    });
+    if (!result.ok) {
+      setTasks((current) => current.filter((task) => task.id !== localId));
+      setMessage(result.message);
+      return false;
+    }
+    refreshQuiet(router);
+    return true;
+  }
+
+  async function archiveDoneCards() {
+    if (data.viewerRole !== "ADMIN") {
+      setMessage("Tamamlananları yalnızca yönetici arşivleyebilir.");
+      return;
+    }
+    const doneCards = columnTasks("DONE");
+    if (doneCards.length === 0) {
+      setMessage("Arşivlenecek tamamlanan kart yok.");
+      return;
+    }
+    if (!window.confirm(`${doneCards.length} tamamlanan kart arşivlensin mi?`)) return;
+    setArchiving(true);
+    const ids = new Set(doneCards.map((task) => task.id));
+    setTasks((current) => current.filter((task) => !ids.has(task.id)));
+    const result = await archiveDoneTasksAction({ spaceId });
+    setArchiving(false);
+    if (!result.ok) {
+      setMessage(result.message);
+      refreshQuiet(router);
+      return;
+    }
+    setMessage(result.message);
+    refreshQuiet(router);
+  }
+
   async function toggleComplete(task) {
     if (data.viewerRole !== "ADMIN") {
       setMessage(DONE_GATE);
@@ -1169,23 +2083,16 @@ export default function WorkBoard({
 
   return (
     <div className="-mx-4 flex flex-col sm:-mx-6 lg:-mx-8">
-      <header className="px-4 pb-3 sm:px-6 lg:px-8">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-          {filtre && WORK_FILTERS[filtre] ? (
-            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
-              {WORK_FILTERS[filtre]}
-              <Link href="/is-takibi" className="text-[#03624c]">Kaldır</Link>
-            </span>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2">
+      <header className="space-y-3 px-4 pb-3 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             {data.spaces.map((space) => (
               <button
                 key={space.id}
                 type="button"
                 className={space.id === spaceId
-                  ? "rounded-full bg-[#03624c] px-4 py-1.5 text-sm font-semibold text-white"
-                  : "rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700"}
+                  ? "rounded-full bg-[#03624c] px-4 py-1.5 text-sm font-semibold text-white shadow-sm"
+                  : "rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-800"}
                 onClick={() => setSpaceId(space.id)}
               >
                 {space.name}
@@ -1211,88 +2118,256 @@ export default function WorkBoard({
                 <button type="button" className="btn-secondary" onClick={() => { setAdding(false); setSpaceName(""); }}>Vazgeç</button>
               </form>
             ) : (
-              <button type="button" className="rounded-full border border-dashed border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-600" onClick={() => setAdding(true)}>
+              <button type="button" className="rounded-full border border-dashed border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-500 hover:border-slate-400 hover:text-slate-700" onClick={() => setAdding(true)}>
                 + Alan ekle
               </button>
             )}
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {QUICK_FILTERS.map((item) => {
+              const active = filtre === item.key;
+              return (
+                <Link
+                  key={item.key}
+                  href={active ? "/is-takibi" : `/is-takibi?filtre=${item.key}`}
+                  className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-medium no-underline transition-colors ${active ? "bg-slate-900 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"}`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+            <div className="relative" ref={assigneeMenuRef}>
+              <button
+                type="button"
+                aria-expanded={assigneeOpen}
+                className={`inline-flex h-8 items-center gap-2 rounded-full px-2.5 text-xs font-medium transition-colors ${assigneeFilter ? "bg-slate-900 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"}`}
+                onClick={() => setAssigneeOpen((open) => !open)}
+              >
+                {assigneePerson ? (
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: colors.get(assigneePerson.id) ?? "#03624c" }}>
+                    {initials(assigneePerson.name)}
+                  </span>
+                ) : (
+                  <UserRound size={13} aria-hidden="true" />
+                )}
+                {assigneePerson ? assigneePerson.name.split(" ")[0] : "Atanan"}
+              </button>
+              {assigneeOpen ? (
+                <div className="absolute left-0 top-full z-20 mt-1.5 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                    onClick={() => {
+                      setAssigneeFilter("");
+                      setAssigneeOpen(false);
+                    }}
+                  >
+                    Herkes
+                  </button>
+                  {data.people.map((person) => (
+                    <button
+                      key={person.id}
+                      type="button"
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-slate-50 ${assigneeFilter === person.id ? "bg-slate-50 text-[#03624c]" : "text-slate-700"}`}
+                      onClick={() => {
+                        setAssigneeFilter(person.id);
+                        setAssigneeOpen(false);
+                      }}
+                    >
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: colors.get(person.id) ?? "#03624c" }}>
+                        {initials(person.name)}
+                      </span>
+                      {person.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            {filtre && WORK_FILTERS[filtre] && !QUICK_FILTERS.some((item) => item.key === filtre) ? (
+              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                {WORK_FILTERS[filtre]}
+                <Link href="/is-takibi" className="text-[#03624c] no-underline">Kaldır</Link>
+              </span>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {searchOpen ? (
+            <div className="inline-flex h-8 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <Link
+                href="/is-takibi"
+                className="inline-flex h-7 items-center rounded-md bg-white px-2.5 text-xs font-medium text-slate-800 no-underline shadow-sm"
+              >
+                Kartlar
+              </Link>
+              <Link
+                href="/is-takibi?sekme=calisma"
+                className="inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium text-slate-500 no-underline hover:text-slate-700"
+              >
+                Çalışma
+              </Link>
+              <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
+              <button
+                type="button"
+                aria-pressed={view === "board"}
+                aria-label="Pano görünümü"
+                title="Pano"
+                className={`inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors ${view === "board" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                onClick={() => setView("board")}
+              >
+                <LayoutGrid size={13} aria-hidden="true" />
+                Pano
+              </button>
+              <button
+                type="button"
+                aria-pressed={view === "list"}
+                aria-label="Liste görünümü"
+                title="Liste"
+                className={`inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors ${view === "list" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                onClick={() => setView("list")}
+              >
+                <List size={13} aria-hidden="true" />
+                Liste
+              </button>
+            </div>
+            <label className="relative inline-flex h-8 items-center">
+              <Search size={14} className="pointer-events-none absolute left-2.5 text-slate-400" aria-hidden="true" />
               <input
                 ref={searchRef}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="field w-56"
-                placeholder="Kart, kişi veya yorum"
+                className="field h-8 w-52 pl-8 text-sm"
+                placeholder="Kart ara..."
                 aria-label="Kart ara"
               />
-            ) : null}
-            <button
-              type="button"
-              className="btn-secondary gap-1.5"
-              aria-expanded={searchOpen}
-              aria-label={searchOpen ? "Aramayı kapat" : "Ara"}
-              onClick={() => {
-                if (searchOpen) {
-                  setQuery("");
-                  setSearchOpen(false);
-                  return;
-                }
-                setSearchOpen(true);
-              }}
-            >
-              <Search size={16} aria-hidden="true" />
-              {searchOpen ? "Kapat" : "Ara"}
-            </button>
+            </label>
           </div>
         </div>
-        {message ? <div className="mt-3"><Notice tone="err">{message}</Notice></div> : null}
+        {message ? <Notice tone="err">{message}</Notice> : null}
       </header>
-      <div className="flex h-[calc(100dvh-7rem)] shrink-0 gap-2.5 overflow-x-auto px-4 pb-4 sm:px-6 lg:px-8">
+
+      {view === "list" ? (
+        <div className="px-4 pb-4 sm:px-6 lg:px-8">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="grid grid-cols-[minmax(0,1.6fr)_120px_110px_120px_100px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <span>Görev</span>
+              <span>Durum</span>
+              <span>Öncelik</span>
+              <span>Tarih</span>
+              <span>Atanan</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {visibleTasks().length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-slate-500">Bu filtreye uyan kart yok.</p>
+              ) : (
+                visibleTasks().map((task) => {
+                  const priority = PRIORITY[task.priority] ?? PRIORITY.NORMAL;
+                  const when = dueTone(task, data.today, data.now);
+                  const progress = revisionProgress(task);
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      className="grid w-full grid-cols-[minmax(0,1.6fr)_120px_110px_120px_100px] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                      onClick={() => setEditor({ id: task.id, column: task.column })}
+                    >
+                      <span className="min-w-0">
+                        <span className={`block truncate text-sm font-semibold ${isDone(task) ? "text-slate-400 line-through" : "text-slate-800"}`}>{task.title}</span>
+                        {progress ? (
+                          <span className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                            <ListTodo size={12} aria-hidden="true" />
+                            <span className="tabular-nums">{progress.doneCount}/{progress.total}</span>
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="truncate text-xs font-medium text-slate-500">{columnName(task.column)}</span>
+                      <span className={`inline-flex w-fit ${priority.className}`}>{priority.short}</span>
+                      <span className={when ? `inline-flex w-fit ${when.className}` : "text-xs text-slate-400"}>
+                        {when ? <><Clock size={11} />{when.label}</> : "—"}
+                      </span>
+                      <span className="flex -space-x-1.5">
+                        {task.assigneeIds.map((id) => (
+                          <span key={id} title={names.get(id)} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[9px] font-semibold text-white" style={{ background: colors.get(id) ?? "#03624c" }}>
+                            {initials(names.get(id) ?? "")}
+                          </span>
+                        ))}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+      <div className="flex h-[calc(100dvh-11rem)] shrink-0 gap-3 overflow-x-auto px-4 pb-4 sm:px-6 lg:px-8">
         {COLUMNS.map((column) => {
           const cards = columnTasks(column.code);
           return (
             <section
               key={column.code}
-              className={`flex h-full w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 ${over === column.code ? "ring-2 ring-[#03624c]" : ""}`}
+              className={`flex h-full w-[18.5rem] shrink-0 flex-col overflow-hidden rounded-2xl border transition-all duration-150 ${over === column.code ? "border-emerald-300 bg-slate-100/80 shadow-md ring-2 ring-emerald-500/20" : "border-slate-200 bg-slate-50/90"}`}
               onDragOver={(event) => {
                 event.preventDefault();
                 setOver(column.code);
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setOver(null);
               }}
               onDrop={(event) => {
                 event.preventDefault();
                 dropOnColumn(column.code);
               }}
             >
-              <header className="border-b border-slate-200 bg-white px-3 py-2.5">
-                <div className={`mb-2 h-1 rounded-full ${column.bar}`} />
+              <header className="border-b border-slate-200/80 bg-white/95 px-3.5 py-3 backdrop-blur">
+                <div className={`mb-2.5 h-1 rounded-full ${column.bar}`} />
                 <div className="flex items-center gap-2">
-                  <h2 className="flex-1 text-sm font-bold leading-tight tracking-tight text-slate-800">{column.name}</h2>
-                  <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">{cards.length}</span>
+                  <h2 className="min-w-0 flex-1 truncate text-sm font-bold leading-tight tracking-tight text-slate-800">{column.name}</h2>
+                  <span className="inline-flex min-w-6 items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                    {cards.length}
+                  </span>
                 </div>
+                {column.code === "DONE" && data.viewerRole === "ADMIN" && cards.length > 0 ? (
+                  <button
+                    type="button"
+                    disabled={archiving}
+                    className="mt-2 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                    onClick={() => void archiveDoneCards()}
+                  >
+                    <Archive size={12} />
+                    {archiving ? "Arşivleniyor…" : "Tamamlananları Arşivle"}
+                  </button>
+                ) : null}
               </header>
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
+              <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">
                 {cards.map((task) => {
-                  const done = isDone(task);
-                  const deadline = taskDeadline(task);
-                  const kind = deadline ? reminderKind(deadline, new Date(data.now)) : null;
-                  const late = Boolean(!done && ((task.dueOn && task.dueOn < data.today) || (deadline && Date.parse(deadline) <= Date.parse(data.now))));
-                  const when = scheduleLabel(task);
                   const unread = clearedComments[task.id] === task.commentCount ? 0 : (task.unreadComments ?? 0);
                   const live = nowList.filter((item) => item.taskId === task.id);
                   const mine = live.some((item) => item.userId === data.viewerId);
                   const pausedMine = pausedList.some((item) => item.taskId === task.id && item.userId === data.viewerId);
-                  const openRevisions = (task.revisions ?? []).filter((item) => !item.done);
-                  const shownRevisions = openRevisions.slice(0, 2);
-                  const detail = String(task.detail ?? "").trim();
-                  const priority = PRIORITY[task.priority] ?? PRIORITY.NORMAL;
                   return (
-                    <article
+                    <TaskCard
                       key={task.id}
-                      draggable
+                      task={task}
+                      column={column.code}
+                      today={data.today}
+                      nowIso={data.now}
+                      colors={colors}
+                      names={names}
+                      focusing={focusing}
+                      live={live}
+                      mine={mine}
+                      pausedMine={pausedMine}
+                      unread={unread}
+                      spaceLabel=""
+                      onOpen={() => {
+                        if (moved.current) return;
+                        setEditor({ id: task.id, column: task.column });
+                      }}
+                      onFocus={() => void chooseFocus(task.id)}
                       onDragStart={(event) => {
-                        if ((event.target ).closest("[data-no-drag]")) {
+                        if (event.target.closest("[data-no-drag]")) {
                           event.preventDefault();
                           return;
                         }
@@ -1315,116 +2390,21 @@ export default function WorkBoard({
                         event.stopPropagation();
                         dropOnColumn(column.code, task.id);
                       }}
-                      onClick={(event) => {
-                        if ((event.target ).closest("[data-no-drag]")) return;
-                        if (moved.current) return;
-                        setEditor({ id: task.id, column: task.column });
-                      }}
-                      className={`cursor-grab rounded-xl border bg-white p-2.5 shadow-sm active:cursor-grabbing ${live.length > 0 ? "border-[#03624c] ring-2 ring-[#03624c]/25" : pausedMine ? "border-amber-400 ring-2 ring-amber-200" : "border-slate-200"}`}
-                    >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="flex min-w-0 items-center gap-1">
-                          <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-bold leading-none ${priority.className}`}>{priority.short}</span>
-                          {task.revisionCount > 0 ? (
-                            <span className="inline-flex rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-orange-800">Revize {task.revisionCount}</span>
-                          ) : null}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-0.5">
-                          {done ? null : (
-                            <button type="button" data-no-drag disabled={focusing} aria-label={mine ? "Bu işi durdur" : pausedMine ? "Bu işe devam et" : "Şu an bu kartta çalışıyorum"} className={`rounded-md p-1 ${mine ? "bg-[#03624c] text-white" : pausedMine ? "border border-amber-400 bg-amber-50 text-amber-700" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`} onClick={(event) => {
-                                event.stopPropagation();
-                                void chooseFocus(task.id);
-                              }}>
-                              {mine ? <Pause size={13} /> : <Play size={13} />}
-                            </button>
-                          )}
-                          <button type="button" data-no-drag aria-label="Kartı düzenle" className="rounded-md p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600" onClick={() => setEditor({ id: task.id, column: task.column })}>
-                            <MoreVertical size={13} />
-                          </button>
-                        </span>
-                      </div>
-                      <div className="mt-1.5 flex items-start gap-1.5">
-                        {data.viewerRole === "ADMIN" ? (
-                          <button
-                            type="button"
-                            data-no-drag
-                            aria-label={done ? "Tamamlandı işaretini kaldır" : "Tamamlandı işaretle"}
-                            className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${done ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white"}`}
-                            onClick={() => void toggleComplete(task)}
-                          >
-                            {done ? <Check size={10} strokeWidth={3} /> : null}
-                          </button>
-                        ) : done ? (
-                          <span aria-hidden className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 text-white">
-                            <Check size={10} strokeWidth={3} />
-                          </span>
-                        ) : null}
-                        <div className="min-w-0 flex-1">
-                          <p className={`text-sm font-semibold leading-snug line-clamp-2 ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>{task.title}</p>
-                          {detail ? <p className="mt-0.5 text-[11px] leading-snug text-slate-500 line-clamp-2">{detail}</p> : null}
-                        </div>
-                      </div>
-                      {shownRevisions.length > 0 ? (
-                        <ul className="mt-1.5 space-y-0.5">
-                          {shownRevisions.map((item) => (
-                            <li key={item.id}>
-                              <label data-no-drag className="flex items-start gap-1.5 text-[11px] leading-snug" onClick={(event) => event.stopPropagation()}>
-                                <input type="checkbox" className="mt-0.5" checked={item.done} onChange={() => void toggleRevision(task.id, item)} />
-                                <span className={`line-clamp-1 ${item.done ? "text-slate-400 line-through" : "text-slate-600"}`}>{item.body}</span>
-                              </label>
-                            </li>
-                          ))}
-                          {openRevisions.length > shownRevisions.length ? (
-                            <li className="pl-5 text-[10px] font-semibold text-slate-400">+{openRevisions.length - shownRevisions.length} madde</li>
-                          ) : null}
-                        </ul>
-                      ) : null}
-                      {task.images.length > 0 ? (
-                        <div className="mt-1.5 flex gap-1">
-                          {task.images.slice(0, 3).map((image) => (
-                            <img key={image.id} src={`/api/is-gorsel/${image.id}`} alt="" className="h-8 w-8 rounded-md object-cover" />
-                          ))}
-                        </div>
-                      ) : null}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        {unread > 0 ? (
-                          <span className="inline-flex items-center gap-0.5 rounded-md bg-[#dc2626] px-1 py-0.5 text-[10px] font-bold text-white" aria-label={`${unread} yeni yorum`}>
-                            <Bell size={11} />
-                            {unread}
-                          </span>
-                        ) : null}
-                        {when ? (
-                          <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${done ? "text-emerald-600" : late || kind ? "text-red-500" : "text-slate-400"}`}>
-                            <Clock size={11} />
-                            {when}
-                          </span>
-                        ) : null}
-                        {task.commentCount > 0 ? (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-400">
-                            <MessageCircle size={11} />
-                            {task.commentCount}
-                          </span>
-                        ) : null}
-                        <div className="ml-auto flex -space-x-1">
-                          {task.assigneeIds.map((id) => {
-                            const name = names.get(id) ?? "";
-                            return (
-                              <span key={id} title={name} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[9px] font-semibold text-white" style={{ background: colors.get(id) ?? "#03624c" }}>
-                                {initials(name)}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </article>
+                    />
                   );
                 })}
               </div>
-              {column.code === "DONE" && data.viewerRole !== "ADMIN" ? null : (
+              {column.code === "DONE" && data.viewerRole !== "ADMIN" ? null : composing === column.code ? (
+                <InlineComposer
+                  column={column.code}
+                  onSubmit={createQuickCard}
+                  onCancel={() => setComposing(null)}
+                />
+              ) : (
                 <button
                   type="button"
-                  className="mx-2 mb-2 shrink-0 rounded-xl border border-[#03624c]/25 bg-[#03624c]/5 px-3 py-2 text-sm font-semibold text-[#03624c]"
-                  onClick={() => setEditor({ id: null, column: column.code })}
+                  className="mx-2.5 mb-2.5 w-[calc(100%-1.25rem)] shrink-0 rounded-lg border border-dashed border-slate-300 py-2 text-xs font-medium text-slate-500 transition-all hover:border-slate-400 hover:bg-white/50 hover:text-slate-700"
+                  onClick={() => setComposing(column.code)}
                 >
                   + Kart ekle
                 </button>
@@ -1433,9 +2413,10 @@ export default function WorkBoard({
           );
         })}
       </div>
-      {editor ? (
+      )}
+      {editor?.id ? (
         <TaskDialog
-          key={editor.id ?? editor.column}
+          key={editor.id}
           task={openTask}
           column={editor.column}
           spaceId={spaceId}
@@ -1445,6 +2426,10 @@ export default function WorkBoard({
           onClose={() => setEditor(null)}
           onAskRevision={(payload) => setRevision({ mode: "save", payload })}
           onToggleRevision={(taskId, item) => void toggleRevision(taskId, item)}
+          onMoveColumn={(taskId, column) => {
+            const at = columnTasks(column).filter((task) => task.id !== taskId).length;
+            return place(taskId, column, at);
+          }}
           patchTask={patchTask}
           report={setMessage}
           viewerName={viewerName}

@@ -60,6 +60,7 @@ export async function getWorkBoard(actor) {
   const board = await remember("work:board", () => withDatabase(async (db) => {
     const [tasks, assignees, comments, reactions, commentImages, links, images, revisions, moves, people, spaces, sessions] = await Promise.all([
       db.workTask.findMany({
+        where: { archived: false },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         select: {
           id: true,
@@ -73,6 +74,7 @@ export async function getWorkBoard(actor) {
           endsAt: true,
           dueOn: true,
           completed: true,
+          archived: true,
           sortOrder: true,
           enforced: true,
           revisionCount: true,
@@ -215,6 +217,7 @@ export async function getWorkBoard(actor) {
         endsAt: task.endsAt,
         dueOn: task.dueOn ? toIsoDate(task.dueOn) : null,
         completed: task.completed,
+        archived: task.archived,
         sortOrder: task.sortOrder,
         assigneeIds: (assigneesByTask.get(task.id) ?? []).map((assignee) => assignee.userId),
         createdById: task.createdById,
@@ -391,10 +394,12 @@ export async function saveWorkTask(actor, input) {
       const previous = new Map(current.assignees.map((item) => [item.userId, item.assignedAt]));
       const added = workNoticeRecipients(assigneeIds.filter((id) => !previous.has(id)));
       await db.workTaskAssignee.deleteMany({ where: { taskId: data.id } });
+      const completed = data.column === "DONE" ? true : current.column === "DONE" ? false : undefined;
       const updated = await db.workTask.update({
         where: { id: data.id },
         data: {
           ...payload,
+          ...(completed === undefined ? {} : { completed }),
           assignees: {
             create: assigneeIds.map((userId) => ({ userId, assignedAt: previous.get(userId) ?? new Date() })),
           },
@@ -414,8 +419,9 @@ export async function saveWorkTask(actor, input) {
       });
       return updated;
     }
-    if (assigneeIds.length === 0 || !data.dueOn) {
-      throw new AppError(FIELD_GATE, "VALIDATION", 400);
+    const ready = assigneeIds.length > 0 && Boolean(data.dueOn);
+    if (data.column === "DOING") {
+      assertDoingReady(data.dueOn, assigneeIds.length);
     }
     if (data.column === "REVISION") {
       assertRevisionEntry(actor, items);
@@ -428,11 +434,12 @@ export async function saveWorkTask(actor, input) {
     }
     const space = await db.workSpace.findUnique({ where: { id: data.spaceId }, select: { id: true, name: true } });
     if (!space) throw new AppError("İş alanı bulunamadı.", "NOT_FOUND", 404);
-    const last = await db.workTask.aggregate({ where: { spaceId: space.id, column: data.column }, _max: { sortOrder: true } });
+    const last = await db.workTask.aggregate({ where: { spaceId: space.id, column: data.column, archived: false }, _max: { sortOrder: true } });
     const created = await db.workTask.create({
       data: {
         ...payload,
-        enforced: true,
+        completed: data.column === "DONE",
+        enforced: ready,
         revisionCount: data.column === "REVISION" ? 1 : 0,
         spaceId: space.id,
         sortOrder: (last._max.sortOrder ?? 0) + 1,
@@ -442,13 +449,36 @@ export async function saveWorkTask(actor, input) {
         ...(data.column === "REVISION" ? { revisions: { create: items.map((body, index) => ({ body, sortOrder: index })) } } : {}),
       },
     });
-    await pushWorkNotice(db, {
-      kind: "work.open",
-      eventId: created.id,
-      userIds: workNoticeRecipients(assigneeIds),
-      textFor: () => workCardNotice(actor.name, `${space.name} · ${data.title}`),
-    });
+    if (assigneeIds.length > 0) {
+      await pushWorkNotice(db, {
+        kind: "work.open",
+        eventId: created.id,
+        userIds: workNoticeRecipients(assigneeIds),
+        textFor: () => workCardNotice(actor.name, `${space.name} · ${data.title}`),
+      });
+    }
     return created;
+  });
+}
+
+export async function archiveDoneWorkTasks(actor, input = {}) {
+  invalidate("work");
+  invalidate("alerts");
+  guard(actor, "task:write");
+  if (actor.role !== "ADMIN") {
+    throw new AppError("Tamamlananları yalnızca yönetici arşivleyebilir.", "FORBIDDEN", 403);
+  }
+  const spaceId = typeof input?.spaceId === "string" ? input.spaceId.trim() : "";
+  return withDatabase(async (db) => {
+    const result = await db.workTask.updateMany({
+      where: {
+        column: "DONE",
+        archived: false,
+        ...(spaceId ? { spaceId } : {}),
+      },
+      data: { archived: true },
+    });
+    return { count: result.count };
   });
 }
 
@@ -570,6 +600,21 @@ export async function setRevisionItem(actor, input) {
     const item = await db.workRevisionItem.findUnique({ where: { id: data.id }, select: { id: true } });
     if (!item) throw new AppError("Revize maddesi bulunamadı.", "NOT_FOUND", 404);
     await db.workRevisionItem.update({ where: { id: data.id }, data: { done: data.done } });
+  });
+}
+
+export async function addWorkRevisionItems(actor, input) {
+  invalidate("work");
+  guard(actor, "task:write");
+  const taskId = typeof input?.taskId === "string" ? input.taskId.trim() : "";
+  const items = cleanItems(input?.items);
+  if (!taskId) throw new AppError("Kart bulunamadı.", "VALIDATION", 400);
+  if (items.length === 0) throw new AppError("En az bir madde yazın.", "VALIDATION", 400);
+  return withDatabase(async (db) => {
+    const task = await db.workTask.findUnique({ where: { id: taskId }, select: { id: true } });
+    if (!task) throw new AppError("Kart bulunamadı.", "NOT_FOUND", 404);
+    await addRevisionRound(db, taskId, items);
+    return { ok: true };
   });
 }
 

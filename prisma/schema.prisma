@@ -1028,6 +1028,7 @@ model WorkTask {
   endsAt      String?
   dueOn       DateTime?          @db.Date
   completed     Boolean            @default(false)
+  archived      Boolean            @default(false)
   sortOrder     Int                @default(0)
   revisionCount Int                @default(0)
   enforced      Boolean            @default(false)

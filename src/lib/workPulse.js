@@ -1,4 +1,6 @@
 export const WORK_FILTERS = {
+  bana: "Bana atananlar",
+  acil: "Acil (P1)",
   geciken: "Geciken işler",
   bugun: "Bugün teslim",
   kontrol: "Kontrolümü bekleyen",
@@ -13,8 +15,12 @@ export const COLUMN_LABEL = {
   DONE: "Tamamlandı",
 };
 
-export function matchesWorkFilter(task, filtre, today) {
+export function matchesWorkFilter(task, filtre, today, viewerId = "") {
   if (!filtre || !WORK_FILTERS[filtre]) return true;
+  if (filtre === "bana") return Boolean(viewerId) && task.assigneeIds.includes(viewerId) && task.column !== "DONE";
+  if (filtre === "acil") {
+    return task.column !== "DONE" && task.priority === "HIGH";
+  }
   if (filtre === "geciken") return task.column !== "DONE" && Boolean(task.dueOn) && task.dueOn < today;
   if (filtre === "bugun") return task.column !== "DONE" && task.dueOn === today;
   if (filtre === "kontrol") return task.column === "REVIEW";
