@@ -49,6 +49,7 @@ function guard(actor, action) {
 const assignableUser = {
   active: true,
   mealOnly: false,
+  hidden: false,
 };
 
 // Modül yenilenince eski pano önbelleği silinen gün kayıtlarını tutmasın.
@@ -80,7 +81,7 @@ export async function getWorkBoard(actor) {
           revisionCount: true,
           createdById: true,
           createdAt: true,
-          createdBy: { select: { name: true } },
+          createdBy: { select: { name: true, hidden: true } },
         },
       }),
       db.workTaskAssignee.findMany({ select: { taskId: true, userId: true } }),
@@ -92,12 +93,12 @@ export async function getWorkBoard(actor) {
           authorId: true,
           body: true,
           createdAt: true,
-          author: { select: { name: true } },
+          author: { select: { name: true, hidden: true } },
         },
       }),
       db.workCommentReaction.findMany({
         orderBy: { createdAt: "asc" },
-        select: { commentId: true, emoji: true, userId: true, user: { select: { name: true } } },
+        select: { commentId: true, emoji: true, userId: true, user: { select: { name: true, hidden: true } } },
       }),
       db.workCommentImage.findMany({
         orderBy: { createdAt: "asc" },
@@ -122,12 +123,12 @@ export async function getWorkBoard(actor) {
           taskId: true,
           column: true,
           createdAt: true,
-          actor: { select: { name: true } },
+          actor: { select: { name: true, hidden: true } },
         },
       }),
       db.user.findMany({
         where: assignableUser,
-        select: { id: true, name: true, role: true },
+        select: { id: true, name: true, role: true, hidden: true },
         orderBy: { name: "asc" },
       }),
       db.workSpace.findMany({
@@ -142,7 +143,7 @@ export async function getWorkBoard(actor) {
             { endedAt: { gte: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000) } },
           ],
         },
-        include: { user: { select: { name: true } }, task: { select: { title: true, spaceId: true } } },
+        include: { user: { select: { name: true, hidden: true } }, task: { select: { title: true, spaceId: true } } },
         orderBy: { startedAt: "desc" },
         take: 2000,
       }),
@@ -165,16 +166,20 @@ export async function getWorkBoard(actor) {
       }
       return grouped;
     };
-    const assigneesByTask = byTask(assignees);
-    const commentsByTask = byTask(comments);
-    const reactionsByComment = byComment(reactions);
+    const visiblePeople = people.filter((person) => !person.hidden);
+    const visibleIds = new Set(visiblePeople.map((person) => person.id));
+    const visibleSessions = sessions.filter((session) => !session.user?.hidden);
+    const visibleComments = comments.filter((comment) => !comment.author?.hidden);
+    const assigneesByTask = byTask(assignees.filter((row) => visibleIds.has(row.userId)));
+    const commentsByTask = byTask(visibleComments);
+    const reactionsByComment = byComment(reactions.filter((row) => !row.user?.hidden));
     const imagesByComment = byComment(commentImages);
     const linksByTask = byTask(links);
     const imagesByTask = byTask(images);
     const revisionsByTask = byTask(revisions);
-    const movesByTask = byTask(moves);
+    const movesByTask = byTask(moves.filter((move) => !move.actor?.hidden));
     const today = istanbulToday();
-    const day = workDayView(sessions.map((session) => ({
+    const day = workDayView(visibleSessions.map((session) => ({
       id: session.id,
       userId: session.userId,
       userName: session.user.name,
@@ -195,7 +200,7 @@ export async function getWorkBoard(actor) {
         earlier: day.earlier.map(({ startedAt, pausedAt, endedAt, ...item }) => item),
         log: day.log.map(({ startedAt, pausedAt, endedAt, ...item }) => item),
       },
-      timeLog: sessions.map((session) => ({
+      timeLog: visibleSessions.map((session) => ({
         userId: session.userId,
         taskId: session.taskId,
         title: session.task?.title || session.taskTitle,
@@ -204,7 +209,7 @@ export async function getWorkBoard(actor) {
         pausedMs: session.pausedMs ?? 0,
       })),
       spaces,
-      people,
+      people: visiblePeople,
       tasks: tasks.map((task) => ({
         id: task.id,
         spaceId: task.spaceId,
@@ -220,8 +225,8 @@ export async function getWorkBoard(actor) {
         archived: task.archived,
         sortOrder: task.sortOrder,
         assigneeIds: (assigneesByTask.get(task.id) ?? []).map((assignee) => assignee.userId),
-        createdById: task.createdById,
-        createdByName: task.createdBy.name,
+        createdById: task.createdBy?.hidden ? "" : task.createdById,
+        createdByName: task.createdBy?.hidden ? "" : task.createdBy.name,
         createdAt: formatMysqlDateTime(task.createdAt),
         commentCount: (commentsByTask.get(task.id) ?? []).length,
         comments: (commentsByTask.get(task.id) ?? []).map((comment) => ({

@@ -84,7 +84,7 @@ function clientKnowsChatProfile(client) {
   return userFields.has("bio") && userFields.has("photoKey") && threadFields.has("photoKey");
 }
 
-const POOL_VERSION = 17;
+const POOL_VERSION = 18;
 
 function hideTester(args) {
   return { ...args, where: { AND: [args.where ?? {}, { hidden: false }] } };
@@ -95,6 +95,9 @@ function withHiddenUsersExcluded(client) {
     query: {
       user: {
         findMany({ args, query }) {
+          return query(hideTester(args));
+        },
+        findFirst({ args, query }) {
           return query(hideTester(args));
         },
         count({ args, query }) {

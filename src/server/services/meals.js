@@ -687,7 +687,7 @@ export async function getAdminMealView(
         where: { date: day },
         include: { items: menuItemInclude, orders: { select: { id: true } } },
       }),
-      db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      db.user.findMany({ where: { active: true, hidden: false }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
       db.mealGuestOrder.findMany({
         where: { menu: { date: day } },
         orderBy: { guestName: "asc" },

@@ -32,8 +32,8 @@ async function loadPulseBoard(actor) {
         },
       }),
       db.user.findMany({
-        where: { active: true, mealOnly: false },
-        select: { id: true, name: true, role: true },
+        where: { active: true, mealOnly: false, hidden: false },
+        select: { id: true, name: true, role: true, hidden: true },
         orderBy: { name: "asc" },
       }),
       db.workSpace.findMany({ select: { id: true, name: true } }),
@@ -53,15 +53,18 @@ async function loadPulseBoard(actor) {
           pausedAt: true,
           endedAt: true,
           pausedMs: true,
-          user: { select: { name: true } },
+          user: { select: { name: true, hidden: true } },
           task: { select: { title: true, spaceId: true } },
         },
         orderBy: { startedAt: "desc" },
         take: 2000,
       }),
     ]);
+    const visiblePeople = people.filter((person) => !person.hidden);
+    const visibleIds = new Set(visiblePeople.map((person) => person.id));
+    const visibleSessions = sessions.filter((session) => !session.user?.hidden);
     const today = istanbulToday();
-    const day = workDayView(sessions.map((session) => ({
+    const day = workDayView(visibleSessions.map((session) => ({
       userId: session.userId,
       userName: session.user.name,
       taskId: session.taskId,
@@ -79,7 +82,7 @@ async function loadPulseBoard(actor) {
         earlier: day.earlier.map(({ startedAt, pausedAt, endedAt, ...item }) => item),
         log: day.log.map(({ startedAt, pausedAt, endedAt, ...item }) => item),
       },
-      timeLog: sessions.map((session) => ({
+      timeLog: visibleSessions.map((session) => ({
         userId: session.userId,
         taskId: session.taskId,
         title: session.task?.title || session.taskTitle,
@@ -88,7 +91,7 @@ async function loadPulseBoard(actor) {
         pausedMs: session.pausedMs ?? 0,
       })),
       spaces,
-      people,
+      people: visiblePeople,
       tasks: tasks.map((task) => ({
         id: task.id,
         spaceId: task.spaceId,
@@ -96,7 +99,7 @@ async function loadPulseBoard(actor) {
         column: task.column,
         priority: task.priority,
         dueOn: task.dueOn ? toIsoDate(task.dueOn) : null,
-        assigneeIds: task.assignees.map((assignee) => assignee.userId),
+        assigneeIds: task.assignees.map((assignee) => assignee.userId).filter((id) => visibleIds.has(id)),
         createdAt: formatMysqlDateTime(task.createdAt),
         revisions: task.revisions,
         moves: task.moves.map((move) => ({

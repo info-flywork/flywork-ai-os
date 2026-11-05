@@ -257,7 +257,7 @@ async function loadJoinedLeaveRequests(db, filter = {}) {
       ORDER BY createdAt DESC
       LIMIT ${Prisma.raw(String(take))}
     ) r
-    JOIN \`User\` u ON u.id = r.userId
+    JOIN \`User\` u ON u.id = r.userId AND (${filter.userId ? Prisma.sql`u.hidden = 0 OR u.id = ${filter.userId}` : Prisma.sql`u.hidden = 0`})
     LEFT JOIN \`User\` reviewer ON reviewer.id = r.reviewerId
     LEFT JOIN \`LeaveDocument\` doc ON doc.requestId = r.id
     LEFT JOIN \`LeaveAudit\` a ON a.requestId = r.id
@@ -479,6 +479,7 @@ export async function getAdminLeaveView(actor, filters) {
         where: {
           active: true,
           mealOnly: false,
+          hidden: false,
           NOT: { role: "ADMIN", approver: false },
         },
         orderBy: { name: "asc" },
@@ -494,7 +495,7 @@ export async function getAdminLeaveView(actor, filters) {
       db.$queryRaw`
         SELECT r.type AS type, r.status AS status, r.dayCount AS dayCount, u.name AS employeeName
         FROM \`LeaveRequest\` r
-        JOIN \`User\` u ON u.id = r.userId
+        JOIN \`User\` u ON u.id = r.userId AND u.hidden = 0
         WHERE ${Prisma.join(reportFilter, " AND ")}
       `.then((rows) => rows.map((row) => ({
         type: row.type,
@@ -523,7 +524,7 @@ export async function getAdminLeaveView(actor, filters) {
           u.id AS userId,
           u.name AS employeeName
         FROM \`LeaveBalance\` b
-        JOIN \`User\` u ON u.id = b.userId
+        JOIN \`User\` u ON u.id = b.userId AND u.hidden = 0
         WHERE b.type = 'ANNUAL' AND b.year >= ${firstYear} AND b.year <= ${lastYear}
         ORDER BY b.year ASC, u.name ASC
       `.then((rows) => rows.map((row) => ({
