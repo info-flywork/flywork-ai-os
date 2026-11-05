@@ -84,7 +84,7 @@ function clientKnowsChatProfile(client) {
   return userFields.has("bio") && userFields.has("photoKey") && threadFields.has("photoKey");
 }
 
-const POOL_VERSION = 16;
+const POOL_VERSION = 17;
 
 function hideTester(args) {
   return { ...args, where: { AND: [args.where ?? {}, { hidden: false }] } };
@@ -179,11 +179,21 @@ export function normalizeDatabaseError(error) {
     );
   }
 
+  if (error instanceof Prisma.PrismaClientValidationError) {
+    console.error(redact(`Veritabanı doğrulama hatası. ${error.message}`));
+    return new AppError(
+      "Veritabanı şeması uygulaması eksik. Sunucuda prisma generate çalıştır.",
+      "DATABASE_UNAVAILABLE",
+      503,
+    );
+  }
+
   const name = error instanceof Error ? error.name : "Error";
   const code = error && typeof error === "object" && "code" in error
     ? String((error ).code ?? "")
     : "";
-  console.error(redact(`Veritabanı işlemi başarısız. ${name}${code ? ` ${code}` : ""}`));
+  const detail = error instanceof Error ? error.message : "";
+  console.error(redact(`Veritabanı işlemi başarısız. ${name}${code ? ` ${code}` : ""}${detail ? ` ${detail}` : ""}`));
   return new AppError(
     "Veritabanı işlemi tamamlanamadı.",
     "DATABASE_UNAVAILABLE",
