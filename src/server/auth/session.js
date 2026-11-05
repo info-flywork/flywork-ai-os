@@ -95,8 +95,7 @@ export async function readCurrentUser() {
     !session ||
     session.revokedAt ||
     session.expiresAt.getTime() <= Date.now() ||
-    !session.user.active ||
-    session.user.hidden
+    !session.user.active
   ) {
     return null;
   }
@@ -133,7 +132,7 @@ export async function loginWithPassword(input) {
     user?.passwordHash ?? DUMMY_PASSWORD_HASH,
   );
 
-  if (!user || !user.active || user.hidden || !passwordMatches) {
+  if (!user || !user.active || !passwordMatches) {
     throw new AppError("E-posta veya şifre hatalı.", "UNAUTHENTICATED", 401);
   }
 
