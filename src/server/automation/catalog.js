@@ -76,4 +76,22 @@ export const JOB_DEFINITIONS = [
     minute: 0,
     initialState: "ACTIVE",
   },
+  {
+    key: "ops.work-week-friday",
+    name: "Haftalık çalışma raporu (Cuma 19:00)",
+    agent: "operations",
+    weekdays: [5],
+    hour: 19,
+    minute: 0,
+    initialState: "ACTIVE",
+  },
+  {
+    key: "ops.work-week-saturday",
+    name: "Haftalık çalışma raporu (Cumartesi 08:00)",
+    agent: "operations",
+    weekdays: [6],
+    hour: 8,
+    minute: 0,
+    initialState: "ACTIVE",
+  },
 ];

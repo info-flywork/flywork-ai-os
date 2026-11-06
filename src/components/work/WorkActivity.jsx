@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { refreshQuiet } from "@/client/refreshQuiet";
 import Notice from "@/components/Notice";
 import { finishWorkAction, setWorkFocusAction } from "@/app/(panel)/is-takibi/actions";
-import { dayReport, formatWorkDuration, shiftIsoDate, shortDayLabel, taskHistoryReport } from "@/lib/workTime";
+import { appHistoryReport, dayReport, formatWorkDuration, shiftIsoDate, shortDayLabel, taskHistoryReport } from "@/lib/workTime";
 
 function initials(name) {
   const parts = String(name ?? "").trim().split(/\s+/);
@@ -83,16 +83,39 @@ export default function WorkActivity({ data }) {
   const [lookingAt, setLookingAt] = useState(data.today);
   const [view, setView] = useState("gun");
   const [jobQuery, setJobQuery] = useState("");
+  const productApps = useMemo(() => [...(data.apps ?? [])], [data.apps]);
+  const arconModules = useMemo(() => [...(data.arconModules ?? [])], [data.arconModules]);
+  const otherWorkApp = data.otherWorkApp || "Diğer işler";
+  const [appName, setAppName] = useState(productApps[0] ?? arconModules[0] ?? otherWorkApp);
+  const [appMenuOpen, setAppMenuOpen] = useState(null);
   const [focusing, setFocusing] = useState(false);
   const [message, setMessage] = useState(null);
   const [sessionNow, setSessionNow] = useState(null);
   const [sessionPaused, setSessionPaused] = useState(null);
   const [tick, setTick] = useState(0);
+  const appSource = arconModules.includes(appName) ? "arcon" : appName === otherWorkApp ? "other" : "apps";
 
   useEffect(() => {
     setSessionNow(null);
     setSessionPaused(null);
   }, [data.day]);
+
+  useEffect(() => {
+    const known = new Set([...productApps, ...arconModules, otherWorkApp]);
+    if (!known.has(appName)) {
+      setAppName(productApps[0] ?? arconModules[0] ?? otherWorkApp);
+    }
+  }, [productApps, arconModules, otherWorkApp, appName]);
+
+  useEffect(() => {
+    if (!appMenuOpen) return undefined;
+    function onPointer(event) {
+      if (event.target instanceof Element && event.target.closest("[data-app-menu]")) return;
+      setAppMenuOpen(null);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [appMenuOpen]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -117,6 +140,7 @@ export default function WorkActivity({ data }) {
   const entries = data.timeLog ?? [];
   const byPerson = useMemo(() => dayReport(people, entries, lookingAt, new Date()), [people, entries, lookingAt, tick]);
   const byTask = useMemo(() => taskHistoryReport(people, entries, new Date()), [people, entries, tick]);
+  const byApp = useMemo(() => appHistoryReport(people, entries, appName, new Date()), [people, entries, appName, tick]);
   const jobNeedle = jobQuery.trim().toLocaleLowerCase("tr");
   const shownJobs = useMemo(
     () => (jobNeedle ? byTask.filter((task) => task.title.toLocaleLowerCase("tr").includes(jobNeedle)) : byTask),
@@ -125,6 +149,7 @@ export default function WorkActivity({ data }) {
   const workedPeople = byPerson.filter((person) => person.minutes > 0);
   const totalMinutes = byPerson.reduce((sum, person) => sum + person.minutes, 0);
   const jobMinutes = shownJobs.reduce((sum, task) => sum + task.minutes, 0);
+  const appMinutes = byApp.reduce((sum, task) => sum + task.minutes, 0);
   const viewerName = data.people.find((person) => person.id === data.viewerId)?.name ?? "";
 
   function moveDay(step) {
@@ -349,9 +374,88 @@ export default function WorkActivity({ data }) {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={view === "gun" ? "btn-primary" : "btn-secondary"} onClick={() => setView("gun")}>Gün gün</button>
-            <button type="button" className={view === "is" ? "btn-primary" : "btn-secondary"} onClick={() => setView("is")}>İş iş</button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className={view === "gun" ? "btn-primary" : "btn-secondary"} onClick={() => { setView("gun"); setAppMenuOpen(null); }}>Gün gün</button>
+            <button type="button" className={view === "is" ? "btn-primary" : "btn-secondary"} onClick={() => { setView("is"); setAppMenuOpen(null); }}>İş iş</button>
+            <div className="relative" data-app-menu="">
+              <button
+                type="button"
+                className={`${view === "uygulama" && appSource === "apps" ? "btn-primary" : "btn-secondary"} inline-flex items-center gap-1.5`}
+                aria-expanded={appMenuOpen === "apps"}
+                onClick={() => {
+                  setView("uygulama");
+                  setAppMenuOpen((value) => (value === "apps" ? null : "apps"));
+                }}
+              >
+                {view === "uygulama" && appSource === "apps" && appName ? appName : "Uygulama"}
+                <ChevronDown size={14} className={appMenuOpen === "apps" ? "rotate-180 transition-transform" : "transition-transform"} />
+              </button>
+              {appMenuOpen === "apps" ? (
+                <div className="absolute left-0 top-full z-20 mt-1 max-h-72 min-w-[14rem] overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                  {productApps.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-slate-500">Uygulama yok.</p>
+                  ) : productApps.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      className={`block w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${name === appName ? "font-semibold text-[#03624c]" : "text-slate-700"}`}
+                      onClick={() => {
+                        setAppName(name);
+                        setView("uygulama");
+                        setAppMenuOpen(null);
+                      }}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="relative" data-app-menu="">
+              <button
+                type="button"
+                className={`${view === "uygulama" && appSource === "arcon" ? "btn-primary" : "btn-secondary"} inline-flex items-center gap-1.5`}
+                aria-expanded={appMenuOpen === "arcon"}
+                onClick={() => {
+                  setView("uygulama");
+                  setAppMenuOpen((value) => (value === "arcon" ? null : "arcon"));
+                }}
+              >
+                {view === "uygulama" && appSource === "arcon" && appName ? appName : "ARCON"}
+                <ChevronDown size={14} className={appMenuOpen === "arcon" ? "rotate-180 transition-transform" : "transition-transform"} />
+              </button>
+              {appMenuOpen === "arcon" ? (
+                <div className="absolute left-0 top-full z-20 mt-1 max-h-72 min-w-[14rem] overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                  {arconModules.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-slate-500">Modül yok.</p>
+                  ) : arconModules.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      className={`block w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${name === appName ? "font-semibold text-[#03624c]" : "text-slate-700"}`}
+                      onClick={() => {
+                        setAppName(name);
+                        setView("uygulama");
+                        setAppMenuOpen(null);
+                      }}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className={view === "uygulama" && appSource === "other" ? "btn-primary" : "btn-secondary"}
+              onClick={() => {
+                setAppName(otherWorkApp);
+                setView("uygulama");
+                setAppMenuOpen(null);
+              }}
+            >
+              Diğer işler
+            </button>
           </div>
           {view === "gun" ? (
             <div className="flex items-center gap-1">
@@ -375,6 +479,12 @@ export default function WorkActivity({ data }) {
                 }}
               />
             </div>
+          ) : view === "uygulama" ? (
+            <p className="text-sm text-slate-500">
+              {appName || "Uygulama"}
+              {" · "}
+              {byApp.length} kart · {formatWorkDuration(appMinutes)}
+            </p>
           ) : (
             <p className="text-sm text-slate-500">{shownJobs.length} iş · {formatWorkDuration(jobMinutes)}</p>
           )}
@@ -452,6 +562,63 @@ export default function WorkActivity({ data }) {
               ))}
             </ul>
           </>
+        ) : view === "uygulama" ? (
+          <ul className="mt-4 divide-y divide-slate-100">
+            {!appName ? (
+              <li className="py-3 text-sm text-slate-500">Uygulama seç.</li>
+            ) : byApp.length === 0 ? (
+              <li className="py-3 text-sm text-slate-500">{appName} için çalışma kaydı yok.</li>
+            ) : byApp.map((task) => {
+              const workers = [...new Map(
+                task.days.flatMap((row) => row.stints.map((stint) => [stint.userId, stint.name])),
+              ).entries()];
+              return (
+                <li key={task.taskId ?? task.title} className="py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      {task.taskId ? (
+                        <Link href={cardHref(task.taskId)} className="text-sm font-semibold text-slate-900 hover:underline">{task.title}</Link>
+                      ) : (
+                        <span className="text-sm font-semibold text-slate-900">{task.title}</span>
+                      )}
+                      <p className="mt-1 text-xs text-slate-500">
+                        {workers.map(([, name]) => name).join(", ") || "Kimse"}
+                        {" · "}
+                        {task.days.length} gün
+                        {task.running ? " · sürüyor" : ""}
+                        {" · "}
+                        {task.days.map((row) => shortDayLabel(row.day)).join(", ")}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-semibold text-slate-900">{formatWorkDuration(task.minutes)}</span>
+                  </div>
+                  <ul className="mt-3 space-y-2">
+                    {task.days.map((row) => (
+                      <li key={row.day} className="rounded-xl bg-slate-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                            {row.day === data.today ? "Bugün" : shortDayLabel(row.day)}
+                            <span className="ml-2 font-medium normal-case tracking-normal text-slate-400">{dayLabel(row.day)}</span>
+                          </span>
+                          <span className="text-sm font-semibold text-slate-700">{formatWorkDuration(row.minutes)}</span>
+                        </div>
+                        <ul className="mt-2 space-y-1">
+                          {row.stints.map((stint, index) => (
+                            <li key={`${stint.userId}-${stint.from}-${index}`} className="flex items-center gap-3 text-sm">
+                              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white" style={{ background: colors.get(stint.userId) ?? "#03624c" }}>{initials(stint.name)}</span>
+                              <span className="min-w-0 flex-1 truncate font-medium text-slate-700">{stint.name}</span>
+                              <span className="shrink-0 text-slate-400">{stint.from}–{stint.running ? "şimdi" : stint.to}</span>
+                              <span className="w-20 shrink-0 text-right text-slate-600">{formatWorkDuration(stint.minutes)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
           <ul className="mt-4 divide-y divide-slate-100">
             {byTask.length === 0 ? (

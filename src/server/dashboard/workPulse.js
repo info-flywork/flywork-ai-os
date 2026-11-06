@@ -54,7 +54,7 @@ async function loadPulseBoard(actor) {
           endedAt: true,
           pausedMs: true,
           user: { select: { name: true, hidden: true } },
-          task: { select: { title: true, spaceId: true } },
+          task: { select: { title: true, spaceId: true, appName: true } },
         },
         orderBy: { startedAt: "desc" },
         take: 2000,
@@ -85,6 +85,8 @@ async function loadPulseBoard(actor) {
       timeLog: visibleSessions.map((session) => ({
         userId: session.userId,
         taskId: session.taskId,
+        spaceId: session.task?.spaceId ?? null,
+        appName: session.task?.appName ?? null,
         title: session.task?.title || session.taskTitle,
         start: session.startedAt.getTime(),
         stop: session.endedAt ? session.endedAt.getTime() : session.pausedAt ? session.pausedAt.getTime() : null,

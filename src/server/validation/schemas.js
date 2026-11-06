@@ -465,6 +465,7 @@ export const workTaskSchema = z.object({
   spaceId: z.string().min(1).optional(),
   title: z.string().trim().min(2, "Kart başlığı en az 2 karakter olmalı.").max(160),
   detail: z.string().trim().max(2000).optional(),
+  appName: z.string().trim().min(2, "Uygulama adı en az 2 karakter olmalı.").max(80).nullable().optional(),
   column: workColumn,
   priority: workPriority,
   startsOn: isoDate.nullable().optional(),
@@ -473,6 +474,8 @@ export const workTaskSchema = z.object({
   dueOn: isoDate.nullable().optional(),
   assigneeIds: z.array(z.string().min(1)).max(12),
   items: z.array(z.string().trim().min(1).max(300)).max(30).optional(),
+  /** Autosave: update fields without changing column (prevents stale saves reverting moves). */
+  fieldsOnly: z.boolean().optional(),
 }).superRefine((value, context) => {
   if (value.startsOn && value.dueOn && value.startsOn > value.dueOn) {
     context.addIssue({ code: "custom", message: "Başlangıç tarihi bitiş tarihinden sonra olamaz.", path: ["startsOn"] });

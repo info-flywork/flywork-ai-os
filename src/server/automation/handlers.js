@@ -15,6 +15,7 @@ import { pushPendingLeaveApprovals } from "@/server/telegram/leaveDigest";
 import { pushMealRoster, rosterPeople } from "@/server/telegram/mealPush";
 import { pushRenewalReminders } from "@/server/telegram/renewals";
 import { writeRenewalNotices } from "@/server/technology/notices";
+import { sendWeeklyWorkReport } from "@/server/work/weeklyReport";
 
  
 
@@ -402,6 +403,10 @@ async function skipMailSummary() {
   return { state: "SUCCEEDED", summary: "Posta özeti kapalı. Yalnızca faturalar taranır." };
 }
 
+async function runWeeklyWorkReport(db, now) {
+  return sendWeeklyWorkReport(db, now);
+}
+
 export const JOB_HANDLERS = {
   "gmail.morning": skipMailSummary,
   "gmail.evening": skipMailSummary,
@@ -410,4 +415,6 @@ export const JOB_HANDLERS = {
   "ops.meal-roster": (db, now) => runMealRoster(db, now),
   "ops.leave-pending": (db, now) => runLeavePending(db, now),
   "ops.renewals": (db, now) => runRenewalCheck(db, now),
+  "ops.work-week-friday": (db, now) => runWeeklyWorkReport(db, now),
+  "ops.work-week-saturday": (db, now) => runWeeklyWorkReport(db, now),
 };

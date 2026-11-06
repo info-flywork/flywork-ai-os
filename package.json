@@ -17,6 +17,8 @@
     "check:production": "JITI_TSCONFIG_PATHS=true jiti scripts/checkProductionEnv.js",
     "admin:create": "JITI_TSCONFIG_PATHS=true jiti scripts/createAdmin.js",
     "automation:worker": "JITI_TSCONFIG_PATHS=true jiti scripts/automationWorker.js",
+    "work:weekly-report": "JITI_TSCONFIG_PATHS=true jiti scripts/sendWeeklyWorkReport.js",
+    "work:weekly-report:preview": "JITI_TSCONFIG_PATHS=true jiti scripts/sendWeeklyWorkReport.js --preview",
     "telegram:webhook": "JITI_TSCONFIG_PATHS=true jiti scripts/registerTelegramWebhook.js"
   },
   "dependencies": {
@@ -28,6 +30,7 @@
     "lucide-react": "^1.61.0",
     "mariadb": "^3.5.4",
     "next": "16.4.2",
+    "nodemailer": "^10.3.1",
     "pdfjs-dist": "^5.4.296",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -38,6 +41,7 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^24.19.2",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

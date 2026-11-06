@@ -72,6 +72,7 @@ const TAG_STYLES = {
   revize: `${BADGE} border border-violet-200 bg-violet-50 text-violet-700`,
   done: `${BADGE} border border-emerald-200 bg-emerald-50 text-emerald-700`,
   space: `${BADGE} border border-slate-200 bg-slate-50 text-slate-600`,
+  app: `${BADGE} border border-teal-200 bg-teal-50 text-teal-800`,
 };
 
 function initials(name) {
@@ -85,6 +86,7 @@ function matchesSearch(task, needle, names) {
   if (!needle) return true;
   const bits = [
     task.title,
+    task.appName,
     task.detail,
     task.createdByName,
     ...task.assigneeIds.map((id) => names.get(id) ?? ""),
@@ -277,72 +279,26 @@ function MentionChoices({ suggestions, activeMention, people, onHover, onPick })
   );
 }
 
-function InlineComposer({ column, onSubmit, onCancel }) {
-  const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(false);
-  const rootRef = useRef(null);
-  const inputRef = useRef(null);
+const OTHER_WORK_FALLBACK = "Diğer işler";
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    function onKey(event) {
-      if (event.key === "Escape") onCancel();
-    }
-    function onPointer(event) {
-      if (!rootRef.current?.contains(event.target)) onCancel();
-    }
-    window.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onPointer);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onPointer);
-    };
-  }, [onCancel]);
-
-  async function submit() {
-    const body = title.trim();
-    if (!body || busy) return;
-    setBusy(true);
-    const ok = await onSubmit(body, column);
-    if (!ok) setBusy(false);
-  }
-
-  return (
-    <div ref={rootRef} className="mx-2.5 mb-2.5 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-      <input
-        ref={inputRef}
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void submit();
-          }
-        }}
-        placeholder="Kart başlığı yazın..."
-        aria-label="Yeni kart başlığı"
-        disabled={busy}
-        className="w-full rounded-lg border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
-      />
-      <div className="mt-1.5 flex items-center gap-2 px-1">
-        <button type="button" className="btn-primary h-7 px-2.5 text-xs" disabled={busy || !title.trim()} onClick={() => void submit()}>
-          {busy ? "Ekleniyor…" : "Ekle"}
-        </button>
-        <button type="button" className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700" onClick={onCancel}>
-          Vazgeç
-        </button>
-      </div>
-    </div>
-  );
+function initialAppMode(taskApp, apps, arconModules, otherWorkApp) {
+  const name = String(taskApp ?? "").trim();
+  if (name && name === otherWorkApp) return "other";
+  if (name && arconModules.includes(name)) return "arcon";
+  if (name && apps.includes(name)) return "pick";
+  if (name) return "new";
+  if (apps.length) return "pick";
+  if (arconModules.length) return "arcon";
+  return "new";
 }
 
 function TaskDialog({
   task,
   column,
   spaceId,
+  apps = [],
+  arconModules = [],
+  otherWorkApp = OTHER_WORK_FALLBACK,
   people,
   viewerAdmin,
   viewerId,
@@ -357,6 +313,13 @@ function TaskDialog({
   const router = useRouter();
   const [title, setTitle] = useState(task?.title ?? "");
   const [detail, setDetail] = useState(task?.detail ?? "");
+  const [appName, setAppName] = useState(task?.appName ?? "");
+  const [appMode, setAppMode] = useState(() => initialAppMode(task?.appName, apps, arconModules, otherWorkApp));
+  const [customApp, setCustomApp] = useState(() => {
+    const name = String(task?.appName ?? "").trim();
+    if (!name || apps.includes(name) || arconModules.includes(name) || name === otherWorkApp) return "";
+    return name;
+  });
   const [priority, setPriority] = useState(task?.priority ?? "NORMAL");
   const [startsOn, setStartsOn] = useState(task?.startsOn ?? "");
   const [startsAt, setStartsAt] = useState(task?.startsAt ?? "");
@@ -377,6 +340,9 @@ function TaskDialog({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [emojiFor, setEmojiFor] = useState(null);
   const [checklistDraft, setChecklistDraft] = useState("");
+  const [draftRevisions, setDraftRevisions] = useState([]);
+  const [draftLinks, setDraftLinks] = useState([]);
+  const [draftImages, setDraftImages] = useState([]);
   const [shown, setShown] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
@@ -384,6 +350,7 @@ function TaskDialog({
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const commentRef = useRef(null);
   const saveTimer = useRef(null);
+  const liveRef = useRef({});
   const editRef = useRef(null);
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -394,7 +361,11 @@ function TaskDialog({
   const mentionQuery = mentionSource.match(/(^|\s)@([^\n@]*)$/)?.[2] ?? null;
   const suggestions = mentionQuery === null ? [] : people.filter((person) => person.name.toLocaleLowerCase("tr").includes(mentionQuery.toLocaleLowerCase("tr"))).slice(0, 6);
   const activeMention = suggestions.length === 0 ? 0 : Math.min(mentionIndex, suggestions.length - 1);
-  const checklist = task?.revisions ?? [];
+  const checklist = task?.revisions ?? draftRevisions;
+  const shownLinks = task?.links ?? draftLinks;
+  const shownImages = task?.images ?? draftImages;
+  const shownMoves = task?.moves ?? [];
+  const shownComments = task?.comments ?? [];
   const checklistDone = checklist.filter((item) => item.done).length;
   const checklistPercent = checklist.length === 0 ? 0 : Math.round((checklistDone / checklist.length) * 100);
 
@@ -432,14 +403,18 @@ function TaskDialog({
 
   function addChecklistItem() {
     const body = checklistDraft.trim();
-    if (!task || !body) return;
+    if (!body) return;
     const local = { id: `local-rev-${Date.now()}`, body, done: false };
+    setChecklistDraft("");
+    if (!task) {
+      setDraftRevisions((current) => [...current, local]);
+      return;
+    }
     patchTask(task.id, (current) => ({
       ...current,
       revisions: [...(current.revisions ?? []), local],
       revisionCount: (current.revisionCount ?? 0) + 1,
     }));
-    setChecklistDraft("");
     void addRevisionItemsAction({ taskId: task.id, items: [body] }).then((result) => {
       if (!result.ok) {
         report(result.message);
@@ -501,12 +476,34 @@ function TaskDialog({
     }
   }
 
-  const required = !task || task.enforced;
+  const required = task ? Boolean(task.enforced) : target === "DOING";
   const missingOwner = selected.length === 0 || !dueOn;
+  const chosenApp = (appMode === "new" ? customApp : appMode === "other" ? otherWorkApp : appName).trim();
+  const appChoices = appMode === "arcon" ? arconModules : apps;
+  liveRef.current = {
+    title,
+    detail,
+    appName: chosenApp || null,
+    column: target,
+    priority,
+    startsOn: startsOn || null,
+    startsAt: startsAt || null,
+    endsAt: endsAt || null,
+    dueOn: dueOn || null,
+    assigneeIds: selected,
+  };
 
   async function save() {
+    if (!title.trim()) {
+      setState({ ok: false, message: "Kart başlığı gerekli." });
+      return;
+    }
+    if (!chosenApp) {
+      setState({ ok: false, message: "Uygulama seç veya yeni uygulama adı yaz." });
+      return;
+    }
     if (required && missingOwner) {
-      setState({ ok: false, message: FIELD_GATE });
+      setState({ ok: false, message: target === "DOING" ? DOING_GATE : FIELD_GATE });
       return;
     }
     if (target === "DOING" && task?.column !== "DOING" && missingOwner) {
@@ -531,6 +528,7 @@ function TaskDialog({
         ...(task ? { id: task.id } : { spaceId }),
         title,
         detail,
+        appName: chosenApp || null,
         column: target,
         priority,
         startsOn: startsOn || null,
@@ -545,6 +543,7 @@ function TaskDialog({
       ...(task ? { id: task.id } : { spaceId }),
       title,
       detail,
+      appName: chosenApp || null,
       column: target,
       priority,
       startsOn: startsOn || null,
@@ -584,6 +583,7 @@ function TaskDialog({
         spaceId,
         title,
         detail,
+        appName: chosenApp || "",
         column: target,
         priority,
         startsOn: startsOn || null,
@@ -592,15 +592,17 @@ function TaskDialog({
         dueOn: dueOn || null,
         assigneeIds: selected,
         completed: target === "DONE",
+        archived: false,
         sortOrder: Date.now(),
         createdByName: viewerName || "",
         createdById: viewerId,
-        commentCount: 0,
+        createdAt: new Date().toISOString(),
+        commentCount: comment.trim() || commentFiles.length > 0 ? 1 : 0,
         comments: [],
-        links: [],
-        images: [],
-        revisions: [],
-        revisionCount: 0,
+        links: draftLinks,
+        images: draftImages.map(({ id, localUrl }) => ({ id, localUrl })),
+        revisions: draftRevisions,
+        revisionCount: draftRevisions.length,
         unreadComments: 0,
         enforced: false,
         moves: [],
@@ -613,8 +615,13 @@ function TaskDialog({
       refreshQuiet(router);
       return;
     }
-    const posted = await postComment();
-    if (!posted.ok) report(posted.message);
+    if (task) {
+      const posted = await postComment();
+      if (!posted.ok) report(posted.message);
+    } else {
+      const extras = await attachCreateExtras(result.id);
+      if (!extras.ok) report(extras.message);
+    }
     refreshQuiet(router);
   }
 
@@ -635,6 +642,7 @@ function TaskDialog({
   async function changeStatus(nextColumn) {
     if (!task || !onMoveColumn) return;
     if (nextColumn === task.column) return;
+    window.clearTimeout(saveTimer.current);
     if (!viewerAdmin && nextColumn === "DONE" && task.column !== "DONE") {
       setTarget(task.column);
       setState({ ok: false, message: DONE_GATE });
@@ -660,6 +668,7 @@ function TaskDialog({
         id: task.id,
         title,
         detail,
+        appName: chosenApp || null,
         column: nextColumn,
         priority,
         startsOn: startsOn || null,
@@ -671,43 +680,57 @@ function TaskDialog({
       return;
     }
     setStatusBusy(true);
-    const result = await onMoveColumn(task.id, nextColumn);
-    setStatusBusy(false);
-    if (result && !result.ok) {
-      setTarget(task.column);
-      setState({ ok: false, message: result.message || "Durum değiştirilemedi." });
-      return;
+    try {
+      const result = await onMoveColumn(task.id, nextColumn);
+      if (result && !result.ok) {
+        setTarget(task.column);
+        setState({ ok: false, message: result.message || "Durum değiştirilemedi." });
+        return;
+      }
+      setTarget(nextColumn);
+      liveRef.current.column = nextColumn;
+      setState(null);
+    } finally {
+      setStatusBusy(false);
     }
-    setState(null);
   }
 
   function buildPayload(overrides = {}) {
+    const live = liveRef.current;
     return {
       ...(task ? { id: task.id } : { spaceId }),
-      title,
-      detail,
-      column: target,
-      priority,
-      startsOn: startsOn || null,
-      startsAt: startsAt || null,
-      endsAt: endsAt || null,
-      dueOn: dueOn || null,
-      assigneeIds: selected,
+      title: live.title,
+      detail: live.detail,
+      appName: live.appName,
+      column: live.column,
+      priority: live.priority,
+      startsOn: live.startsOn,
+      startsAt: live.startsAt,
+      endsAt: live.endsAt,
+      dueOn: live.dueOn,
+      assigneeIds: live.assigneeIds,
       ...overrides,
     };
   }
 
   function persistFields(overrides = {}) {
     if (!task) return;
-    const payload = buildPayload(overrides);
-    if (required && (payload.assigneeIds.length === 0 || !payload.dueOn)) return;
+    const optimistic = buildPayload(overrides);
+    if (required && (optimistic.assigneeIds.length === 0 || !optimistic.dueOn)) return;
     patchTask(task.id, (current) => ({
       ...current,
-      ...payload,
-      completed: payload.column === "DONE" ? true : current.column === "DONE" && payload.column !== "DONE" ? false : current.completed,
+      ...optimistic,
+      // Sütun taşıması yalnız move/place ile yapılır; gecikmiş autosave eski sütunu geri yazmasın.
+      column: current.column,
+      completed: current.column === "DONE" ? true : current.completed,
     }));
     window.clearTimeout(saveTimer.current);
+    const taskId = task.id;
     saveTimer.current = window.setTimeout(() => {
+      const payload = {
+        ...buildPayload(overrides),
+        fieldsOnly: true,
+      };
       void saveTaskAction(payload).then((result) => {
         if (!result.ok) {
           report(result.message);
@@ -720,8 +743,12 @@ function TaskDialog({
   }
 
   async function sendComposerComment() {
-    if (!task || commentBusy) return;
+    if (commentBusy) return;
     if (!comment.trim() && commentFiles.length === 0) return;
+    if (!task) {
+      setState({ ok: false, message: "Yorum göndermek için önce kartı oluşturun." });
+      return;
+    }
     const note = comment.trim();
     const attachments = commentFiles;
     const optimistic = {
@@ -781,13 +808,41 @@ function TaskDialog({
     });
   }
 
-  async function postComment() {
-    if (!task || (!comment.trim() && commentFiles.length === 0)) return { ok: true, skipped: true };
+  async function postComment(taskId = task?.id) {
+    if (!taskId || (!comment.trim() && commentFiles.length === 0)) return { ok: true, skipped: true };
     const form = new FormData();
-    form.set("taskId", task.id);
+    form.set("taskId", taskId);
     form.set("body", comment);
     for (const item of commentFiles) form.append(item.kind === "file" ? "file" : "image", item.file);
     return addCommentAction(form);
+  }
+
+  async function attachCreateExtras(taskId) {
+    if (!taskId) return { ok: true };
+    if (draftRevisions.length > 0) {
+      const result = await addRevisionItemsAction({
+        taskId,
+        items: draftRevisions.map((item) => item.body),
+      });
+      if (!result.ok) return result;
+    }
+    for (const link of draftLinks) {
+      const result = await addLinkAction({
+        taskId,
+        url: link.url,
+        label: link.label || undefined,
+      });
+      if (!result.ok) return result;
+    }
+    for (const image of draftImages) {
+      if (!image.file) continue;
+      const form = new FormData();
+      form.set("taskId", taskId);
+      form.set("file", image.file);
+      const result = await addImageAction(form);
+      if (!result.ok) return result;
+    }
+    return postComment(taskId);
   }
 
   function leaveReaction(commentId, emoji) {
@@ -820,16 +875,20 @@ function TaskDialog({
   }
 
   function sendLink() {
-    if (!task) return;
     const url = linkUrl.trim();
     if (!url) return;
     const label = linkLabel.trim();
-    patchTask(task.id, (current) => ({
-      ...current,
-      links: [...(current.links ?? []), { id: `local-link-${Date.now()}`, url, label: label || "" }],
-    }));
+    const local = { id: `local-link-${Date.now()}`, url, label: label || "" };
     setLinkUrl("");
     setLinkLabel("");
+    if (!task) {
+      setDraftLinks((current) => [...current, local]);
+      return;
+    }
+    patchTask(task.id, (current) => ({
+      ...current,
+      links: [...(current.links ?? []), local],
+    }));
     void addLinkAction({ taskId: task.id, url, label: label || undefined }).then((result) => {
       if (!result.ok) report(result.message);
       refreshQuiet(router);
@@ -837,13 +896,17 @@ function TaskDialog({
   }
 
   function sendImages(files) {
-    if (!task || files.length === 0) return;
-    const taskId = task.id;
+    if (files.length === 0) return;
     const added = files.map((file) => ({
       id: `local-image-${file.name}-${file.size}-${Date.now()}`,
       localUrl: URL.createObjectURL(file),
       file,
     }));
+    if (!task) {
+      setDraftImages((current) => [...current, ...added.map(({ id, localUrl, file }) => ({ id, localUrl, file }))]);
+      return;
+    }
+    const taskId = task.id;
     patchTask(taskId, (current) => ({ ...current, images: [...current.images, ...added.map(({ id, localUrl }) => ({ id, localUrl }))] }));
     void (async () => {
       for (const item of added) {
@@ -898,16 +961,19 @@ function TaskDialog({
           <div className="mt-2 flex items-center gap-2">
             <select
               value={target}
-              disabled={!task || statusBusy}
+              disabled={Boolean(task) && statusBusy}
               onChange={(event) => {
                 const next = event.target.value;
                 setTarget(next);
-                void changeStatus(next);
+                if (task) void changeStatus(next);
               }}
               className="h-7 appearance-none rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 shadow-sm outline-none hover:bg-slate-100 disabled:opacity-60"
               aria-label="Sütun durumu"
             >
-              {COLUMNS.filter((item) => viewerAdmin || item.code !== "DONE" || task?.column === "DONE").map((item) => (
+              {(task
+                ? COLUMNS.filter((item) => viewerAdmin || item.code !== "DONE" || task.column === "DONE")
+                : COLUMNS.filter((item) => item.code === "POOL" || item.code === "DOING")
+              ).map((item) => (
                 <option key={item.code} value={item.code}>{item.name}</option>
               ))}
             </select>
@@ -925,6 +991,89 @@ function TaskDialog({
                 <option key={value} value={value}>{item.short} — {item.label.split("—")[1]?.trim() || item.label}</option>
               ))}
             </select>
+          </div>
+          <div className="mt-3 space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Uygulama</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${appMode === "pick" ? "bg-[#03624c] text-white" : "bg-slate-100 text-slate-600"}`}
+                onClick={() => {
+                  setAppMode("pick");
+                  if (appName && !apps.includes(appName)) setAppName(apps[0] ?? "");
+                }}
+                disabled={apps.length === 0}
+              >
+                Mevcut
+              </button>
+              <button
+                type="button"
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${appMode === "new" ? "bg-[#03624c] text-white" : "bg-slate-100 text-slate-600"}`}
+                onClick={() => setAppMode("new")}
+              >
+                Yeni uygulama
+              </button>
+              <button
+                type="button"
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${appMode === "arcon" ? "bg-[#03624c] text-white" : "bg-slate-100 text-slate-600"}`}
+                onClick={() => {
+                  setAppMode("arcon");
+                  if (!arconModules.includes(appName)) setAppName(arconModules[0] ?? "");
+                }}
+                disabled={arconModules.length === 0}
+              >
+                ARCON
+              </button>
+              <button
+                type="button"
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${appMode === "other" ? "bg-[#03624c] text-white" : "bg-slate-100 text-slate-600"}`}
+                onClick={() => {
+                  setAppMode("other");
+                  setAppName(otherWorkApp);
+                  persistFields({ appName: otherWorkApp });
+                }}
+              >
+                Diğer işler
+              </button>
+            </div>
+            {appMode === "new" ? (
+              <input
+                value={customApp}
+                onChange={(event) => setCustomApp(event.target.value)}
+                onBlur={() => {
+                  const next = customApp.trim();
+                  if (!next) return;
+                  setAppName(next);
+                  persistFields({ appName: next });
+                }}
+                placeholder="Örn. Friendify"
+                className="field w-full py-2.5 leading-normal"
+                aria-label="Yeni uygulama adı"
+              />
+            ) : appMode === "other" ? (
+              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+                Bu kart <span className="font-semibold text-slate-800">{otherWorkApp}</span> olarak kaydedilir.
+              </p>
+            ) : (
+              <select
+                value={appName}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setAppName(next);
+                  persistFields({ appName: next || null });
+                }}
+                className="field w-full py-2.5 leading-normal"
+                aria-label={appMode === "arcon" ? "ARCON modülü seç" : "Uygulama seç"}
+              >
+                <option value="">{appMode === "arcon" ? "Modül seç" : "Uygulama seç"}</option>
+                {appName && !appChoices.includes(appName) ? (
+                  <option value={appName}>{appName}</option>
+                ) : null}
+                {appChoices.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            )}
           </div>
         </header>
 
@@ -1088,13 +1237,7 @@ function TaskDialog({
             </div>
           </div>
         </div>
-        {!task ? (
-          <div className="mt-5">
-            <button type="button" className="btn-primary" disabled={pending} onClick={() => void save()}>{pending ? "Kaydediliyor…" : "Kaydet"}</button>
-          </div>
-        ) : null}
-        {task ? (
-          <div className="mt-6 space-y-5 border-t border-slate-200 pt-4">
+        <div className="mt-6 space-y-5 border-t border-slate-200 pt-4">
             <section>
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold">Kontrol listesi</h3>
@@ -1114,7 +1257,18 @@ function TaskDialog({
                 {checklist.map((item) => (
                   <li key={item.id}>
                     <label className="flex items-start gap-2.5 rounded-lg px-1 py-1 text-sm hover:bg-slate-50">
-                      <input type="checkbox" className="mt-0.5" checked={item.done} onChange={() => onToggleRevision(task.id, item)} />
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={item.done}
+                        onChange={() => {
+                          if (!task) {
+                            setDraftRevisions((current) => current.map((row) => row.id === item.id ? { ...row, done: !row.done } : row));
+                            return;
+                          }
+                          onToggleRevision(task.id, item);
+                        }}
+                      />
                       <span className={item.done ? "text-slate-400 line-through" : "text-slate-800"}>{item.body}</span>
                     </label>
                   </li>
@@ -1138,11 +1292,11 @@ function TaskDialog({
             </section>
             <section>
               <h3 className="text-sm font-semibold text-slate-800">Aktivite</h3>
-              {(task.moves ?? []).length === 0 ? (
+              {shownMoves.length === 0 ? (
                 <p className="mt-2 text-xs text-slate-500">Henüz sütun hareketi yok.</p>
               ) : (
                 <ol className="mt-3 space-y-2 border-l-2 border-slate-200 pl-3 text-xs text-slate-500">
-                  {task.moves.map((move) => (
+                  {shownMoves.map((move) => (
                     <li key={move.id} className="relative">
                       <span className="absolute -left-[1.1875rem] top-1.5 h-2 w-2 rounded-full border-2 border-white bg-slate-300 ring-1 ring-slate-200" aria-hidden="true" />
                       <p className="leading-relaxed">
@@ -1160,7 +1314,7 @@ function TaskDialog({
             <section>
               <h3 className="text-sm font-semibold">Linkler</h3>
               <ul className="mt-2 space-y-2">
-                {task.links.map((link) => {
+                {shownLinks.map((link) => {
                   const rawLabel = String(link.label ?? "").trim();
                   const customTitle = rawLabel && rawLabel !== link.url ? rawLabel : "";
                   return (
@@ -1184,6 +1338,10 @@ function TaskDialog({
                         type="button"
                         className="shrink-0 text-xs font-semibold text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-slate-700"
                         onClick={() => {
+                          if (!task) {
+                            setDraftLinks((current) => current.filter((item) => item.id !== link.id));
+                            return;
+                          }
                           patchTask(task.id, (current) => ({ ...current, links: (current.links ?? []).filter((item) => item.id !== link.id) }));
                           void removeLinkAction(link.id).then((result) => {
                             if (!result.ok) report(result.message);
@@ -1206,7 +1364,7 @@ function TaskDialog({
             <section>
               <h3 className="text-sm font-semibold">Görseller</h3>
               <div className="mt-2 flex flex-col gap-3">
-                {(task.images ?? []).map((image) => (
+                {shownImages.map((image) => (
                   <figure key={image.id} className="relative">
                     {brokenImages[image.id] ? (
                       <div className="flex min-h-24 items-center rounded-xl bg-slate-100 px-3 py-4 text-sm text-slate-500">Görsel dosyası bulunamadı. Yeniden ekleyin.</div>
@@ -1220,7 +1378,29 @@ function TaskDialog({
                         />
                       </a>
                     )}
-                    {viewerAdmin ? <button type="button" className="absolute right-2 top-2 rounded-full bg-white px-2 py-0.5 text-xs font-semibold shadow" onClick={() => { patchTask(task.id, (current) => ({ ...current, images: (current.images ?? []).filter((item) => item.id !== image.id) })); void removeImageAction(image.id).then((result) => { if (!result.ok) report(result.message); else refreshQuiet(router); }); }}>Sil</button> : null}
+                    {(viewerAdmin || !task) ? (
+                      <button
+                        type="button"
+                        className="absolute right-2 top-2 rounded-full bg-white px-2 py-0.5 text-xs font-semibold shadow"
+                        onClick={() => {
+                          if (!task) {
+                            setDraftImages((current) => {
+                              const found = current.find((item) => item.id === image.id);
+                              if (found?.localUrl) URL.revokeObjectURL(found.localUrl);
+                              return current.filter((item) => item.id !== image.id);
+                            });
+                            return;
+                          }
+                          patchTask(task.id, (current) => ({ ...current, images: (current.images ?? []).filter((item) => item.id !== image.id) }));
+                          void removeImageAction(image.id).then((result) => {
+                            if (!result.ok) report(result.message);
+                            else refreshQuiet(router);
+                          });
+                        }}
+                      >
+                        Sil
+                      </button>
+                    ) : null}
                   </figure>
                 ))}
               </div>
@@ -1235,8 +1415,11 @@ function TaskDialog({
             </section>
             <section>
               <h3 className="text-sm font-semibold">Yorumlar</h3>
+              {!task ? (
+                <p className="mt-2 text-xs text-slate-500">Yorum alanına yazdıklarınız kart oluşturulunca kaydedilir.</p>
+              ) : null}
               <ul className="mt-2 space-y-3">
-                {task.comments.map((item) => (
+                {shownComments.map((item) => (
                   <li key={item.id} className="group rounded-xl bg-slate-50 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-slate-500">{item.authorName} · {createdStamp(item.createdAt)}</p>
@@ -1392,14 +1575,18 @@ function TaskDialog({
                       </div>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    disabled={pending || commentBusy || (!comment.trim() && commentFiles.length === 0)}
-                    onClick={() => void sendComposerComment()}
-                    className="inline-flex h-8 items-center rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
-                  >
-                    {commentBusy ? "Gönderiliyor…" : "Gönder"}
-                  </button>
+                  {task ? (
+                    <button
+                      type="button"
+                      disabled={pending || commentBusy || (!comment.trim() && commentFiles.length === 0)}
+                      onClick={() => void sendComposerComment()}
+                      className="inline-flex h-8 items-center rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      {commentBusy ? "Gönderiliyor…" : "Gönder"}
+                    </button>
+                  ) : (
+                    <span className="text-[11px] font-medium text-slate-400">Kartla kaydedilir</span>
+                  )}
                 </div>
                 <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(event) => {
                   const files = [...(event.target.files ?? [])];
@@ -1424,7 +1611,6 @@ function TaskDialog({
               ) : null}
             </section>
           </div>
-        ) : null}
         </div>
 
         <footer className="sticky bottom-0 flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white p-4">
@@ -1443,9 +1629,16 @@ function TaskDialog({
               <span />
             )}
           </div>
-          <button type="button" className="btn-secondary" onClick={onClose}>
-            Kapat
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              Kapat
+            </button>
+            {!task ? (
+              <button type="button" className="btn-primary" disabled={pending} onClick={() => void save()}>
+                {pending ? "Kaydediliyor…" : "Kartı oluştur"}
+              </button>
+            ) : null}
+          </div>
         </footer>
       </div>
     </div>
@@ -1511,31 +1704,41 @@ function TaskCard({
               </span>
             ) : null}
             {done ? <span className={TAG_STYLES.done}>Tamam</span> : null}
+            {task.appName ? (
+              <span className={`${TAG_STYLES.app} max-w-[7.5rem] truncate`} title={task.appName}>{task.appName}</span>
+            ) : null}
             {spaceLabel ? (
               <span className={`${TAG_STYLES.space} max-w-[7rem] truncate`}>{spaceLabel}</span>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            {!done && (mine || pausedMine) ? (
+          <div className="flex shrink-0 items-center gap-1">
+            {!done ? (
               <button
                 type="button"
                 data-no-drag
                 disabled={focusing}
-                aria-label={mine ? "Bu işi durdur" : "Bu işe devam et"}
-                className={`rounded-md p-1 ${mine ? "bg-[#03624c] text-white" : "border border-amber-300 bg-amber-50 text-amber-700"}`}
+                aria-label={mine ? "Bu işi durdur" : pausedMine ? "Bu işe devam et" : "Bu işe başla"}
+                title={mine ? "Durdur" : pausedMine ? "Devam et" : "Başla"}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${
+                  mine
+                    ? "bg-[#03624c] text-white shadow-sm"
+                    : pausedMine
+                      ? "border border-amber-300 bg-amber-50 text-amber-700"
+                      : "border border-slate-200 bg-slate-50 text-[#03624c] hover:border-[#03624c]/40 hover:bg-emerald-50"
+                }`}
                 onClick={(event) => {
                   event.stopPropagation();
                   onFocus();
                 }}
               >
-                {mine ? <Pause size={13} /> : <Play size={13} />}
+                {mine ? <Pause size={13} /> : <Play size={13} className="translate-x-px" />}
               </button>
             ) : null}
             <button
               type="button"
               data-no-drag
               aria-label="Kart işlemleri"
-              className="rounded-md p-1 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-slate-600"
+              className="rounded-md p-1 text-slate-400 hover:text-slate-600"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpen();
@@ -1642,7 +1845,6 @@ export default function WorkBoard({
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [view, setView] = useState("board");
-  const [composing, setComposing] = useState(null);
   const [archiving, setArchiving] = useState(false);
   const dragging = useRef(null);
   const moveLock = useRef(0);
@@ -1659,6 +1861,20 @@ export default function WorkBoard({
     if (moveLock.current > 0) return;
     setTasks(data.tasks);
   }, [incoming, data.tasks]);
+
+  useEffect(() => {
+    function clearDragFlags() {
+      moved.current = false;
+      dragging.current = null;
+      setOver(null);
+    }
+    window.addEventListener("dragend", clearDragFlags);
+    window.addEventListener("mouseup", clearDragFlags);
+    return () => {
+      window.removeEventListener("dragend", clearDragFlags);
+      window.removeEventListener("mouseup", clearDragFlags);
+    };
+  }, []);
 
   useEffect(() => {
     if (!data.spaces.some((space) => space.id === spaceId)) {
@@ -1898,23 +2114,18 @@ export default function WorkBoard({
       if (!result?.ok) {
         setTasks(previous);
         setMessage(result?.message || "Kart taşınamadı.");
-        moveLock.current = Math.max(0, moveLock.current - 1);
         return result;
       }
-      if (columnChanged) {
-        refreshQuiet(router);
-        window.setTimeout(() => {
-          moveLock.current = Math.max(0, moveLock.current - 1);
-        }, 1200);
-      } else {
-        moveLock.current = Math.max(0, moveLock.current - 1);
-      }
+      moved.current = false;
+      dragging.current = null;
+      if (columnChanged) refreshQuiet(router);
       return result;
     } catch (error) {
       setTasks(previous);
       setMessage("Kart taşınamadı. Yeniden deneyin.");
-      moveLock.current = Math.max(0, moveLock.current - 1);
       return { ok: false, message: "Kart taşınamadı. Yeniden deneyin." };
+    } finally {
+      moveLock.current = Math.max(0, moveLock.current - 1);
     }
   }
 
@@ -1966,71 +2177,6 @@ export default function WorkBoard({
     const list = columnTasks(column).filter((task) => task.id !== taskId);
     const found = targetId ? list.findIndex((task) => task.id === targetId) : list.length;
     void place(taskId, column, found < 0 ? list.length : found);
-  }
-
-  async function createQuickCard(title, column) {
-    if (column === "DONE" && data.viewerRole !== "ADMIN") {
-      setMessage(DONE_GATE);
-      return false;
-    }
-    if (column === "DOING") {
-      setMessage(DOING_GATE);
-      return false;
-    }
-    if (column === "REVISION") {
-      setMessage("Revize sütununa kart eklemek için önce kontrol listesi gerekir. Kartı İş Havuzu'na ekleyip taşıyın.");
-      return false;
-    }
-    const localId = `local-${Date.now()}`;
-    const optimistic = {
-      id: localId,
-      spaceId,
-      title,
-      detail: "",
-      column,
-      priority: "NORMAL",
-      startsOn: null,
-      startsAt: null,
-      endsAt: null,
-      dueOn: null,
-      assigneeIds: [],
-      completed: column === "DONE",
-      archived: false,
-      sortOrder: Date.now(),
-      createdByName: viewerName || "",
-      createdById: data.viewerId,
-      createdAt: new Date().toISOString(),
-      commentCount: 0,
-      comments: [],
-      links: [],
-      images: [],
-      revisions: [],
-      revisionCount: 0,
-      unreadComments: 0,
-      enforced: false,
-      moves: [],
-    };
-    setTasks((current) => [...current, optimistic]);
-    setComposing(null);
-    const result = await saveTaskAction({
-      spaceId,
-      title,
-      detail: "",
-      column,
-      priority: "NORMAL",
-      startsOn: null,
-      startsAt: null,
-      endsAt: null,
-      dueOn: null,
-      assigneeIds: [],
-    });
-    if (!result.ok) {
-      setTasks((current) => current.filter((task) => task.id !== localId));
-      setMessage(result.message);
-      return false;
-    }
-    refreshQuiet(router);
-    return true;
   }
 
   async function archiveDoneCards() {
@@ -2274,6 +2420,9 @@ export default function WorkBoard({
                     >
                       <span className="min-w-0">
                         <span className={`block truncate text-sm font-semibold ${isDone(task) ? "text-slate-400 line-through" : "text-slate-800"}`}>{task.title}</span>
+                        {task.appName ? (
+                          <span className="mt-1 block truncate text-xs text-teal-700">{task.appName}</span>
+                        ) : null}
                         {progress ? (
                           <span className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                             <ListTodo size={12} aria-hidden="true" />
@@ -2362,7 +2511,10 @@ export default function WorkBoard({
                       unread={unread}
                       spaceLabel=""
                       onOpen={() => {
-                        if (moved.current) return;
+                        if (moved.current) {
+                          moved.current = false;
+                          return;
+                        }
                         setEditor({ id: task.id, column: task.column });
                       }}
                       onFocus={() => void chooseFocus(task.id)}
@@ -2376,9 +2528,10 @@ export default function WorkBoard({
                       }}
                       onDragEnd={() => {
                         setOver(null);
+                        dragging.current = null;
                         window.setTimeout(() => {
                           moved.current = false;
-                        }, 0);
+                        }, 50);
                       }}
                       onDragOver={(event) => {
                         event.preventDefault();
@@ -2394,41 +2547,42 @@ export default function WorkBoard({
                   );
                 })}
               </div>
-              {column.code === "DONE" && data.viewerRole !== "ADMIN" ? null : composing === column.code ? (
-                <InlineComposer
-                  column={column.code}
-                  onSubmit={createQuickCard}
-                  onCancel={() => setComposing(null)}
-                />
-              ) : (
+              {column.code === "POOL" || column.code === "DOING" ? (
                 <button
                   type="button"
                   className="mx-2.5 mb-2.5 w-[calc(100%-1.25rem)] shrink-0 rounded-lg border border-dashed border-slate-300 py-2 text-xs font-medium text-slate-500 transition-all hover:border-slate-400 hover:bg-white/50 hover:text-slate-700"
-                  onClick={() => setComposing(column.code)}
+                  onClick={() => setEditor({ id: null, column: column.code })}
                 >
                   + Kart ekle
                 </button>
-              )}
+              ) : null}
             </section>
           );
         })}
       </div>
       )}
-      {editor?.id ? (
+      {editor ? (
         <TaskDialog
-          key={editor.id}
+          key={editor.id ?? `new-${editor.column}`}
           task={openTask}
           column={editor.column}
           spaceId={spaceId}
+          apps={data.apps ?? []}
+          arconModules={data.arconModules ?? []}
+          otherWorkApp={data.otherWorkApp ?? OTHER_WORK_FALLBACK}
           people={data.people}
           viewerAdmin={data.viewerRole === "ADMIN"}
           viewerId={data.viewerId}
           onClose={() => setEditor(null)}
           onAskRevision={(payload) => setRevision({ mode: "save", payload })}
           onToggleRevision={(taskId, item) => void toggleRevision(taskId, item)}
-          onMoveColumn={(taskId, column) => {
+          onMoveColumn={async (taskId, column) => {
             const at = columnTasks(column).filter((task) => task.id !== taskId).length;
-            return place(taskId, column, at);
+            const result = await place(taskId, column, at);
+            if (result?.ok && !result.pendingRevision) {
+              setEditor((current) => (current?.id === taskId ? { ...current, column } : current));
+            }
+            return result;
           }}
           patchTask={patchTask}
           report={setMessage}

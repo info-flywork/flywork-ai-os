@@ -132,6 +132,17 @@ export function taskDayReport(people, entries, day, now = new Date()) {
     .sort((left, right) => right.minutes - left.minutes || left.title.localeCompare(right.title, "tr"));
 }
 
+export function appHistoryReport(people, entries, appName, now = new Date()) {
+  const needle = String(appName ?? "").trim();
+  if (!needle) return [];
+  const lower = needle.toLocaleLowerCase("tr");
+  const scoped = entries.filter((entry) => {
+    const tagged = String(entry.appName ?? "").toLocaleLowerCase("tr").trim();
+    return tagged === lower;
+  });
+  return taskHistoryReport(people, scoped, now);
+}
+
 export function taskHistoryReport(people, entries, now = new Date()) {
   const names = new Map(people.map((person) => [person.userId, person.name]));
   const allowed = new Set(people.map((person) => person.userId));

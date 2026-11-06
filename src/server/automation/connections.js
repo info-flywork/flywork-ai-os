@@ -1,12 +1,7 @@
 import { aiDocumentEnv } from "@/server/finance/documentAi";
 import { googleConnectionReport } from "@/server/finance/google";
+import { smtpReport } from "@/server/mail/smtp";
 import { telegramStatus } from "@/server/telegram/config";
-
-const EMAIL = ["SMTP_HOST", "SMTP_FROM"] ;
-
-function missing(names) {
-  return names.filter((name) => !process.env[name]);
-}
 
  
 
@@ -39,6 +34,6 @@ export function connectionReport(link) {
     },
     ai: aiDocumentEnv(),
     telegram: { ...telegramStatus(), delivered: false },
-    email: { connected: false, delivered: false, missing: missing(EMAIL) },
+    email: { ...smtpReport(), delivered: false },
   };
 }

@@ -1021,6 +1021,7 @@ model WorkTask {
   space       WorkSpace          @relation(fields: [spaceId], references: [id], onDelete: Restrict)
   title       String             @db.VarChar(255)
   detail      String?            @db.Text
+  appName     String?            @db.VarChar(80)
   column      WorkColumn         @default(POOL)
   priority    WorkPriority       @default(NORMAL)
   startsOn    DateTime?          @db.Date

@@ -39,6 +39,12 @@ function clientKnowsWorkTaskArchived(client) {
   return names.has("archived");
 }
 
+function clientKnowsWorkTaskAppName(client) {
+  const model = client._runtimeDataModel?.models?.WorkTask;
+  const names = new Set(model?.fields?.map((field) => field.name) ?? []);
+  return names.has("appName");
+}
+
 function clientMatchesLoadedSchema(client) {
   return (
     typeof client?.user?.findMany === "function" &&
@@ -64,6 +70,7 @@ function clientMatchesLoadedSchema(client) {
     "workSession" in client &&
     clientKnowsWorkPause(client) &&
     clientKnowsWorkTaskArchived(client) &&
+    clientKnowsWorkTaskAppName(client) &&
     "feedbackNote" in client &&
     "telegramLinkRequest" in client &&
     "telegramWorkReply" in client &&

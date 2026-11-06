@@ -15,6 +15,7 @@ import { pauseGapMillis } from "@/lib/workTime";
 import { unreadCommentCount } from "@/lib/workComments";
 import { commentNoticeRecipients, pushWorkNotice, workAssignNotice, workCardNotice, workCommentNotice, workNoticeRecipients } from "@/server/work/notify";
 import { groupCommentReactions } from "@/lib/commentReactions";
+import { cleanWorkAppName, listArconModules, listWorkAppNames, OTHER_WORK_APP, rememberWorkApp } from "@/server/products/workApps";
 import { moveWorkTaskSchema, parseInput, workCommentReactionSchema, workCommentSchema, workCommentUpdateSchema, workCompletedSchema, workLinkSchema, workRevisionSchema, workSpaceSchema, workTaskSchema } from "@/server/validation/schemas";
 
 const COLUMNS = ["POOL", "DOING", "REVIEW", "REVISION", "DONE"] ;
@@ -68,6 +69,7 @@ export async function getWorkBoard(actor) {
           spaceId: true,
           title: true,
           detail: true,
+          appName: true,
           column: true,
           priority: true,
           startsOn: true,
@@ -143,7 +145,7 @@ export async function getWorkBoard(actor) {
             { endedAt: { gte: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000) } },
           ],
         },
-        include: { user: { select: { name: true, hidden: true } }, task: { select: { title: true, spaceId: true } } },
+        include: { user: { select: { name: true, hidden: true } }, task: { select: { title: true, spaceId: true, appName: true } } },
         orderBy: { startedAt: "desc" },
         take: 2000,
       }),
@@ -203,11 +205,16 @@ export async function getWorkBoard(actor) {
       timeLog: visibleSessions.map((session) => ({
         userId: session.userId,
         taskId: session.taskId,
+        spaceId: session.task?.spaceId ?? null,
+        appName: session.task?.appName ?? null,
         title: session.task?.title || session.taskTitle,
         start: session.startedAt.getTime(),
         stop: session.endedAt ? session.endedAt.getTime() : session.pausedAt ? session.pausedAt.getTime() : null,
         pausedMs: session.pausedMs ?? 0,
       })),
+      apps: listWorkAppNames(),
+      arconModules: listArconModules(),
+      otherWorkApp: OTHER_WORK_APP,
       spaces,
       people: visiblePeople,
       tasks: tasks.map((task) => ({
@@ -215,6 +222,7 @@ export async function getWorkBoard(actor) {
         spaceId: task.spaceId,
         title: task.title,
         detail: task.detail ?? "",
+        appName: task.appName ?? "",
         column: task.column,
         priority: task.priority,
         startsOn: task.startsOn ? toIsoDate(task.startsOn) : null,
@@ -356,11 +364,14 @@ export async function saveWorkTask(actor, input) {
   invalidate("alerts");
   guard(actor, "task:write");
   const data = parseInput(workTaskSchema, input);
+  const appName = data.appName ? cleanWorkAppName(data.appName) : null;
+  if (appName) await rememberWorkApp(appName);
   return withDatabase(async (db) => {
     const assigneeIds = await eligibleIds(db, data.assigneeIds);
     const payload = {
       title: data.title,
       detail: data.detail || null,
+      appName,
       column: data.column,
       priority: data.priority,
       startsOn: data.startsOn ? dateOnly(data.startsOn) : null,
@@ -370,6 +381,7 @@ export async function saveWorkTask(actor, input) {
     };
     const items = cleanItems(data.items);
     if (data.id) {
+      const fieldsOnly = Boolean(data.fieldsOnly);
       const current = await db.workTask.findUnique({
         where: { id: data.id },
         select: {
@@ -384,36 +396,42 @@ export async function saveWorkTask(actor, input) {
       if (current.enforced && (assigneeIds.length === 0 || !data.dueOn)) {
         throw new AppError(FIELD_GATE, "VALIDATION", 400);
       }
-      if (data.column === "DOING" && current.column !== "DOING") {
-        assertDoingReady(data.dueOn, assigneeIds.length);
-      }
-      if (data.column === "REVIEW" && current.column !== "REVIEW") {
-        assertReviewReady(current.revisions);
-      }
-      if (data.column === "REVISION" && current.column !== "REVISION") {
-        assertRevisionEntry(actor, items);
-      }
-      if (data.column === "DONE" && current.column !== "DONE") {
-        assertManagerCloses(actor);
+      if (!fieldsOnly) {
+        if (data.column === "DOING" && current.column !== "DOING") {
+          assertDoingReady(data.dueOn, assigneeIds.length);
+        }
+        if (data.column === "REVIEW" && current.column !== "REVIEW") {
+          assertReviewReady(current.revisions);
+        }
+        if (data.column === "REVISION" && current.column !== "REVISION") {
+          assertRevisionEntry(actor, items);
+        }
+        if (data.column === "DONE" && current.column !== "DONE") {
+          assertManagerCloses(actor);
+        }
       }
       const previous = new Map(current.assignees.map((item) => [item.userId, item.assignedAt]));
       const added = workNoticeRecipients(assigneeIds.filter((id) => !previous.has(id)));
       await db.workTaskAssignee.deleteMany({ where: { taskId: data.id } });
-      const completed = data.column === "DONE" ? true : current.column === "DONE" ? false : undefined;
+      const completed = fieldsOnly
+        ? undefined
+        : data.column === "DONE" ? true : current.column === "DONE" ? false : undefined;
+      const { column: nextColumn, ...fieldPayload } = payload;
       const updated = await db.workTask.update({
         where: { id: data.id },
         data: {
-          ...payload,
+          ...fieldPayload,
+          ...(fieldsOnly ? {} : { column: nextColumn }),
           ...(completed === undefined ? {} : { completed }),
           assignees: {
             create: assigneeIds.map((userId) => ({ userId, assignedAt: previous.get(userId) ?? new Date() })),
           },
         },
       });
-      if (data.column === "REVISION" && current.column !== "REVISION") {
+      if (!fieldsOnly && data.column === "REVISION" && current.column !== "REVISION") {
         await addRevisionRound(db, data.id, items);
       }
-      if (data.column !== current.column) {
+      if (!fieldsOnly && data.column !== current.column) {
         await db.workTaskMove.create({ data: { taskId: data.id, column: data.column, actorId: actor.id } });
       }
       await pushWorkNotice(db, {

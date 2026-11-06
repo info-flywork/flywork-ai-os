@@ -28,9 +28,13 @@ export async function saveTaskAction(input) {
   try {
     const actor = await requireUser();
     const record = input && typeof input === "object" ? input  : {};
-    await saveWorkTask(actor, input);
+    const saved = await saveWorkTask(actor, input);
     revalidatePath("/is-takibi");
-    return { ok: true, message: record.id ? "Kart güncellendi." : "Kart eklendi." };
+    return {
+      ok: true,
+      id: saved?.id ?? record.id ?? null,
+      message: record.id ? "Kart güncellendi." : "Kart eklendi.",
+    };
   } catch (error) {
     return finish(error);
   }
