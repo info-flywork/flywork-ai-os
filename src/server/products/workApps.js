@@ -73,6 +73,8 @@ export const ARCON_MODULES = [
   "Adaptly",
   "Analytica",
   "ARCON AI",
+  "Arcon Club",
+  "Arconnect",
   "CustomerSuccess",
   "CV Analiz",
   "Deklarasyon",
