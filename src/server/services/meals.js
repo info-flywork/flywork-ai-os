@@ -451,6 +451,14 @@ const menuItemInclude = {
   include: { dish: { include: { category: { select: { name: true } } } } },
 };
 
+function sqlDateIso(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return toIsoDate(value);
+  }
+  const match = String(value ?? "").match(/\d{4}-\d{2}-\d{2}/);
+  return match?.[0] ?? "";
+}
+
 function sqlBool(value, fallback = false) {
   if (value == null) {
     return fallback;
@@ -474,7 +482,7 @@ function groupMealMenus(rows) {
     if (!menu) {
       menu = {
         id: row.menuId,
-        date: dateOnly(String(row.menuDate).slice(0, 10)),
+        date: dateOnly(sqlDateIso(row.menuDate ?? row.menudate)),
         note: row.menuNote,
         published: sqlBool(row.published, true),
         items: [],
@@ -517,7 +525,7 @@ function groupMealOrders(rows) {
     soupItem: row.soupName ? { name: row.soupName } : null,
     sideItem: row.sideName ? { name: row.sideName } : null,
     dessertItem: row.dessertName ? { name: row.dessertName } : null,
-    menu: { date: dateOnly(String(row.menuDate).slice(0, 10)) },
+    menu: { date: dateOnly(sqlDateIso(row.menuDate ?? row.menudate)) },
   }));
 }
 
@@ -526,8 +534,8 @@ export async function getEmployeeMealView(actor, now = new Date()) {
   const clock = istanbulClock(now);
 
   return remember(`meal:employee:${actor.id}:${clock.date}`, () => withDatabase(async (db) => {
-    const from = dateOnly(clock.date);
-    const to = dateOnly(addIsoDays(clock.date, 14));
+    const from = clock.date;
+    const to = addIsoDays(clock.date, 14);
     const [settingsRow, menuRows, orderRows] = await Promise.all([
       db.mealSettings.findUnique({ where: { id: MEAL_SETTINGS_ID } }),
       db.$queryRaw`
