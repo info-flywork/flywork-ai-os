@@ -20,7 +20,7 @@ import {
   orderWindow,
   reportRange,
   orderableMealDates,
-
+  upcomingMealDates,
 } from "@/server/meals/schedule";
 import { publicHoliday } from "@/server/meals/holidays";
 import { LEAVE_ABSENCE_NOTE, markMenuAbsentForApprovedLeave } from "@/server/meals/leaveAbsence";
@@ -529,6 +529,65 @@ function groupMealOrders(rows) {
   }));
 }
 
+export async function ensureStandingMenus(db, dates) {
+  const settingsRow = await db.mealSettings.findUnique({ where: { id: MEAL_SETTINGS_ID } });
+  const weekdays = settingsRow ? numberList(settingsRow.weekdays) : [...DEFAULT_MEAL_WEEKDAYS];
+  const unique = [...new Set(dates.filter((date) => {
+    if (!date) return false;
+    const weekday = istanbulClock(new Date(`${date}T12:00:00+03:00`)).weekday;
+    return weekdays.includes(weekday);
+  }))];
+  if (unique.length === 0) {
+    return;
+  }
+  const existing = await db.mealMenu.findMany({
+    where: { date: { in: unique.map((date) => dateOnly(date)) } },
+    select: { date: true },
+  });
+  const have = new Set(existing.map((row) => toIsoDate(row.date)));
+  const missing = unique.filter((date) => !have.has(date));
+  if (missing.length === 0) {
+    return;
+  }
+  const template = await db.mealMenu.findFirst({
+    where: { published: true, items: { some: {} } },
+    orderBy: { date: "desc" },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!template?.items.length) {
+    return;
+  }
+  for (const date of missing) {
+    try {
+      const menu = await db.mealMenu.create({
+        data: {
+          date: dateOnly(date),
+          note: template.note,
+          published: true,
+          items: {
+            create: template.items.map((item) => ({
+              dishId: item.dishId,
+              name: item.name,
+              slot: item.slot,
+              price: item.price,
+              choiceKey: item.choiceKey,
+              description: item.description,
+              sortOrder: item.sortOrder,
+              available: item.available,
+            })),
+          },
+        },
+        select: { id: true },
+      });
+      await markMenuAbsentForApprovedLeave(db, { id: menu.id, date });
+    } catch (error) {
+      if (error?.code !== "P2002") {
+        throw error;
+      }
+    }
+  }
+}
+
 export async function getEmployeeMealView(actor, now = new Date()) {
   assertCan(actor, "mealMenu:read");
   const clock = istanbulClock(now);
@@ -536,8 +595,18 @@ export async function getEmployeeMealView(actor, now = new Date()) {
   return remember(`meal:employee:${actor.id}:${clock.date}`, () => withDatabase(async (db) => {
     const from = clock.date;
     const to = addIsoDays(clock.date, 14);
-    const [settingsRow, menuRows, orderRows] = await Promise.all([
-      db.mealSettings.findUnique({ where: { id: MEAL_SETTINGS_ID } }),
+    const settingsRow = await db.mealSettings.findUnique({ where: { id: MEAL_SETTINGS_ID } });
+    const settings = settingsRow
+      ? { ...settingsRow, weekdays: numberList(settingsRow.weekdays) }
+      : {
+          opensAt: DEFAULT_OPENS_AT,
+          closesAt: DEFAULT_CLOSES_AT,
+          weekdays: [...DEFAULT_MEAL_WEEKDAYS],
+          catererPhone: null,
+        };
+    const dates = orderableMealDates(now, settings, 6);
+    await ensureStandingMenus(db, dates);
+    const [menuRows, orderRows] = await Promise.all([
       db.$queryRaw`
         SELECT
           m.id AS menuId,
@@ -589,15 +658,6 @@ export async function getEmployeeMealView(actor, now = new Date()) {
         LIMIT 40
       `,
     ]);
-    const settings = settingsRow
-      ? { ...settingsRow, weekdays: numberList(settingsRow.weekdays) }
-      : {
-          opensAt: DEFAULT_OPENS_AT,
-          closesAt: DEFAULT_CLOSES_AT,
-          weekdays: [...DEFAULT_MEAL_WEEKDAYS],
-          catererPhone: null,
-        };
-    const dates = orderableMealDates(now, settings, 6);
     const menus = groupMealMenus(menuRows).filter((menu) => dates.includes(toIsoDate(menu.date)));
     const allOrders = groupMealOrders(orderRows);
     const history = allOrders.slice(0, 30);
@@ -688,6 +748,7 @@ export async function getAdminMealView(
   const dayEnd = addIsoDays(date, 1);
 
   return remember(`meal:admin:${actor.id}:${date}:${mode}`, () => withDatabase(async (db) => {
+    await ensureStandingMenus(db, [date, ...upcomingMealDates(date, [...DEFAULT_MEAL_WEEKDAYS], 6)]);
     const day = dateOnly(date);
     const [settingsRow, menu, people, guestOrders, dayOrders, reportOrders] = await Promise.all([
       db.mealSettings.findUnique({ where: { id: MEAL_SETTINGS_ID } }),

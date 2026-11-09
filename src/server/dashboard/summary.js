@@ -6,6 +6,7 @@ import { withDatabase } from "@/server/db";
 import { isOwnCompanyName } from "@/server/finance/ownCompany";
 import { numberList } from "@/server/jsonList";
 import { istanbulClock, MEAL_SETTINGS_ID } from "@/server/meals/schedule";
+import { ensureStandingMenus } from "@/server/services/meals";
 
  
 
@@ -118,6 +119,7 @@ export async function getDashboardSummary(actor, now = new Date()) {
   const serviceDay = istanbulClock(now).weekday;
 
   return withDatabase(async (db) => {
+    await ensureStandingMenus(db, [todayIso]);
     const [expenses, monthRows, orders, menu, awayToday, pendingCount, pendingRequests, renewals, overdueRenewals, invoicesPending, recentRuns, settings] =
       await Promise.all([
         db.expense.groupBy({
