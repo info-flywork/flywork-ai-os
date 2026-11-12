@@ -19,6 +19,22 @@ import { cleanWorkAppName, listArconModules, listWorkAppNames, OTHER_WORK_APP, r
 import { moveWorkTaskSchema, parseInput, workCommentReactionSchema, workCommentSchema, workCommentUpdateSchema, workCompletedSchema, workLinkSchema, workRevisionSchema, workSpaceSchema, workTaskSchema } from "@/server/validation/schemas";
 
 const COLUMNS = ["POOL", "DOING", "REVIEW", "REVISION", "DONE"] ;
+/** Remote MariaDB + Prisma sequential $transaction breaks past ~20 ops (masked as path.sep TypeError). */
+const WORK_MOVE_CHUNK = 12;
+
+async function applyWorkColumnOrder(db, column, orderedIds) {
+  for (let offset = 0; offset < orderedIds.length; offset += WORK_MOVE_CHUNK) {
+    const slice = orderedIds.slice(offset, offset + WORK_MOVE_CHUNK);
+    await db.$transaction(
+      slice.map((id, index) =>
+        db.workTask.update({
+          where: { id },
+          data: { column, sortOrder: offset + index },
+        }),
+      ),
+    );
+  }
+}
  
 
 
@@ -555,20 +571,32 @@ export async function moveWorkTask(actor, input) {
       });
     }
     const nextSort = moving.revisions.reduce((max, item) => Math.max(max, item.sortOrder), -1) + 1;
+    const at = data.orderedIds.indexOf(data.taskId);
     await db.$transaction([
-      ...data.orderedIds.map((id, index) => db.workTask.update({
-        where: { id },
-        data: { column: data.column, sortOrder: index },
-      })),
-      ...(completed === undefined ? [] : [db.workTask.update({ where: { id: data.taskId }, data: { completed } })]),
-      ...(columnChanged && data.column === "REVISION" ? [
-        db.workTask.update({ where: { id: data.taskId }, data: { revisionCount: { increment: 1 } } }),
-        ...items.map((body, index) => db.workRevisionItem.create({
+      db.workTask.update({
+        where: { id: data.taskId },
+        data: {
+          column: data.column,
+          sortOrder: at,
+          ...(completed === undefined ? {} : { completed }),
+          ...(columnChanged && data.column === "REVISION" ? { revisionCount: { increment: 1 } } : {}),
+        },
+      }),
+      ...(columnChanged && data.column === "REVISION"
+        ? items.map((body, index) => db.workRevisionItem.create({
           data: { taskId: data.taskId, body, sortOrder: nextSort + index },
-        })),
-      ] : []),
+        }))
+        : []),
       ...(columnChanged ? [db.workTaskMove.create({ data: { taskId: data.taskId, column: data.column, actorId: actor.id } })] : []),
     ]);
+    const siblings = data.orderedIds.filter((id) => id !== data.taskId);
+    if (siblings.length > 0) {
+      await applyWorkColumnOrder(
+        db,
+        data.column,
+        data.orderedIds,
+      );
+    }
     if (columnChanged) {
       const due = moving.dueOn ? toIsoDate(moving.dueOn) : "";
       const keys = [];
